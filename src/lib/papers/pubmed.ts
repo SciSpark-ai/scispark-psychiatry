@@ -103,7 +103,7 @@ interface PubmedArticleSetResponse {
 }
 
 interface EsearchResponse {
-  esearchresult?: { idlist?: string[] }
+  esearchresult?: { idlist?: string[]; count?: string }
 }
 
 export interface PubmedQuery {
@@ -290,6 +290,12 @@ async function searchPubmedRecords(q: PubmedQuery, deps: PubmedDeps): Promise<Pa
   const esearchBody = (await esearchResponse.json()) as EsearchResponse
   const pmids = esearchBody.esearchresult?.idlist ?? []
   if (pmids.length === 0) return []
+  return fetchPubmedRecords(pmids, deps)
+}
+
+/** efetch one batch of pmids and map them to PaperRecords (shared by search and enumeration). */
+async function fetchPubmedRecords(pmids: string[], deps: PubmedDeps): Promise<PaperRecord[]> {
+  const fetchFn = deps.fetchFn ?? sourceFetch("pubmed")
 
   let efetchResponse: Response
   try {
@@ -307,4 +313,57 @@ async function searchPubmedRecords(q: PubmedQuery, deps: PubmedDeps): Promise<Pa
   const readable = pubmedOrderedText(xml)
   if (readable.length !== articles.length) throw new PaperSourceError("PubMed text and metadata records do not align")
   return articles.map((entry, index) => mapArticle(entry, readable[index]))
+}
+
+export interface PubmedEnumerateQuery {
+  query: string
+  /** Upper bound on records returned; esearch itself allows at most 10,000. */
+  maxRecords: number
+}
+
+export interface PubmedEnumerateResult {
+  records: PaperRecord[]
+  /** Total matches PubMed reports for the query. */
+  total: number
+  /** True when `total` exceeds the records returned. */
+  truncated: boolean
+}
+
+const ENUMERATE_FETCH_BATCH = 100
+const ESEARCH_HARD_LIMIT = 10_000
+
+/**
+ * Enumerates every match of a PubMed query up to `maxRecords` (clinical fork): one esearch for the
+ * pmid list, then efetch in batches of 100. Unlike `searchPubmed`, which is bounded by MAX_LIMIT
+ * for interactive search, this is for journal-scoped enumeration, where the caller needs the
+ * whole window and needs to know when it was cut short.
+ */
+export async function enumeratePubmed(q: PubmedEnumerateQuery, deps: PubmedDeps = {}): Promise<PubmedEnumerateResult> {
+  return withSourceDeadline(deps.signal, async (signal) => {
+    const scoped = { ...deps, signal }
+    const fetchFn = deps.fetchFn ?? sourceFetch("pubmed")
+    const url = new URL(ESEARCH_URL)
+    url.searchParams.set("db", "pubmed")
+    url.searchParams.set("term", q.query)
+    url.searchParams.set("retmax", String(Math.min(ESEARCH_HARD_LIMIT, Math.max(1, Math.floor(q.maxRecords)))))
+    url.searchParams.set("retmode", "json")
+    url.searchParams.set("sort", "pub_date")
+    if (deps.apiKey) url.searchParams.set("api_key", deps.apiKey)
+    let response: Response
+    try {
+      response = await fetchFn(url.toString(), { signal })
+    } catch (err) {
+      signal?.throwIfAborted()
+      throw new PaperSourceError(err instanceof Error ? err.message : "PubMed esearch request failed")
+    }
+    if (!response.ok) throw new PaperSourceError(`PubMed esearch request failed with status ${response.status}`, response.status)
+    const body = (await response.json()) as EsearchResponse
+    const pmids = body.esearchresult?.idlist ?? []
+    const total = Number(body.esearchresult?.count ?? pmids.length)
+    const records: PaperRecord[] = []
+    for (let i = 0; i < pmids.length; i += ENUMERATE_FETCH_BATCH) {
+      records.push(...(await fetchPubmedRecords(pmids.slice(i, i + ENUMERATE_FETCH_BATCH), scoped)))
+    }
+    return { records, total: Number.isFinite(total) ? total : pmids.length, truncated: total > pmids.length }
+  })
 }
