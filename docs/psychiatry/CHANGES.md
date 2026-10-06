@@ -15,3 +15,4 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/lib/vault/index-builder.ts, src/components/wiki/Tree.tsx, src/components/viz/FilterBar.tsx, src/lib/wiki/dashboard.ts | `condition` label / section | §7.2 (4) | 5 |
 | src/lib/skills/ingest.ts | no automatic author skeleton pages | D14 | 5 |
 | src/lib/vault/__tests__/scaffold.test.ts, src/lib/skills/__tests__/ingest.test.ts | expectations follow the clinical default schema and D14 | F2 | 5 |
+| src/app/layout.tsx | page title and description from the copy file | §8.3 | 6 |

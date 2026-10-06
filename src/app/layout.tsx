@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { geistSans, geistMono, halant } from "@/lib/fonts";
 import { AppShell } from "@/components/layout/AppShell";
+import { CLINICAL_COPY } from "@/lib/clinical/copy";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -9,8 +10,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "SciSpark",
-  description: "AI-powered research radar and knowledge base. Personalized papers daily, AI-digested, grounded in sources.",
+  title: CLINICAL_COPY.appName,
+  description: CLINICAL_COPY.metaDescription,
 };
 
 // Module-level, referentially stable — React 19.2 re-applies
