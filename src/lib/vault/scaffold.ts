@@ -1,6 +1,6 @@
 import type { VaultStorage } from "./storage"
-import { PAGE_TYPES } from "./types"
 import { appendLog } from "./index-builder"
+import { enabledPageTypes } from "../clinical/page-types"
 
 export class VaultExistsError extends Error {}
 
@@ -8,7 +8,7 @@ const TYPE_DIRS: Record<string, string> = {
   paper: "wiki/papers", concept: "wiki/concepts", method: "wiki/methods",
   finding: "wiki/findings", comparison: "wiki/comparisons", author: "wiki/authors",
   topic: "wiki/topics", note: "wiki/notes", query: "wiki/queries",
-  idea: "wiki/ideas", project: "wiki/projects",
+  idea: "wiki/ideas", project: "wiki/projects", condition: "wiki/conditions",
 }
 
 export async function createVault(
@@ -17,7 +17,7 @@ export async function createVault(
 ): Promise<void> {
   if ((await storage.read("schema.md")) !== null) throw new VaultExistsError("vault already initialized")
 
-  const rows = PAGE_TYPES.map((t) => `| ${t} | ${TYPE_DIRS[t]} |`).join("\n")
+  const rows = enabledPageTypes().map((t) => `| ${t} | ${TYPE_DIRS[t]} |`).join("\n")
   await storage.write(
     "schema.md",
     `# Vault Schema

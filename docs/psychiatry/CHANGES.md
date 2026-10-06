@@ -9,3 +9,9 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | File | Change | Why (spec) | Task |
 |---|---|---|---|
 | `package.json` | name | repository identity (D24) | 1 |
+| src/lib/vault/types.ts | add `condition` to PAGE_TYPES | §7.3 | 5 |
+| src/lib/vault/scaffold.ts | `condition` directory; schema.md lists enabled types only | §7.2 | 5 |
+| src/lib/wiki/schema-routing.ts | DEFAULT_ROUTING = clinical default (no method/finding/comparison/idea; adds condition) | §7.2 | 5 |
+| src/lib/vault/index-builder.ts, src/components/wiki/Tree.tsx, src/components/viz/FilterBar.tsx, src/lib/wiki/dashboard.ts | `condition` label / section | §7.2 (4) | 5 |
+| src/lib/skills/ingest.ts | no automatic author skeleton pages | D14 | 5 |
+| src/lib/vault/__tests__/scaffold.test.ts, src/lib/skills/__tests__/ingest.test.ts | expectations follow the clinical default schema and D14 | F2 | 5 |

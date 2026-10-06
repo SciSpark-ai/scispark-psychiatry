@@ -21,6 +21,7 @@ const TYPE_LABELS: Record<PageType, string> = {
   query: "Saved answer",
   idea: "Idea",
   project: "Project",
+  condition: "Condition",
 }
 
 interface FilterBarProps {

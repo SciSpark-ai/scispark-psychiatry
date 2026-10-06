@@ -4,7 +4,7 @@ import type { Bundle } from "./bundle"
 const TYPE_HEADINGS: Record<string, string> = {
   paper: "Papers", concept: "Concepts", method: "Methods", finding: "Findings",
   comparison: "Comparisons", author: "Authors", topic: "Topics", note: "Notes",
-  query: "Saved answers", idea: "Ideas", project: "Projects",
+  query: "Saved answers", idea: "Ideas", project: "Projects", condition: "Conditions",
 }
 
 const logWriteQueues = new WeakMap<VaultStorage, Promise<void>>()

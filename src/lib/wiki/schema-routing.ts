@@ -1,23 +1,21 @@
 import type { VaultStorage } from "../vault/storage"
 
 /**
- * Built-in type -> directory map, mirroring the private TYPE_DIRS table that
- * scaffold.ts writes into a freshly-created vault's schema.md. Kept in sync
+ * Built-in type -> directory map, mirroring the clinical default schema.md that
+ * scaffold.ts writes into a freshly-created vault (enabled page types only; the
+ * method, finding, comparison and idea types stay in code but are off by default). Kept in sync
  * manually (scaffold.test.ts's scaffold-parity assertions plus this module's
  * own scaffold-parity test both break if the two drift apart).
  */
 export const DEFAULT_ROUTING: Record<string, string> = {
   paper: "wiki/papers",
   concept: "wiki/concepts",
-  method: "wiki/methods",
-  finding: "wiki/findings",
-  comparison: "wiki/comparisons",
   author: "wiki/authors",
   topic: "wiki/topics",
   note: "wiki/notes",
   query: "wiki/queries",
-  idea: "wiki/ideas",
   project: "wiki/projects",
+  condition: "wiki/conditions",
 }
 
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/

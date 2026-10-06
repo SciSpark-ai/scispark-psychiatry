@@ -67,7 +67,7 @@ const SAMPLE_ANALYSIS: AnalysisResult = {
 }
 
 const CONCEPT_PATH = "wiki/concepts/sparse-attention.md"
-const FINDING_PATH = "wiki/findings/sparse-attention-cuts-training-time.md"
+const FINDING_PATH = "wiki/concepts/sparse-attention-cuts-training-time.md"
 
 function sampleGeneration(): GenerationResult {
   return {
@@ -82,7 +82,7 @@ function sampleGeneration(): GenerationResult {
       },
       {
         path: FINDING_PATH,
-        type: "finding",
+        type: "concept",
         title: "Sparse attention cuts training time",
         tags: ["efficiency"],
         related: ["sparse-attention"],
@@ -227,12 +227,13 @@ describe("ingestSkill happy path", () => {
     expect(paperPage.frontmatter.type).toBe("paper")
     expect(paperPage.frontmatter.sources).toEqual(["arxiv:2406.01234"])
     expect(paperPage.frontmatter.full_text).toBe(false)
-    expect(await storage.read("wiki/authors/ada-lovelace.md")).not.toBeNull()
-    expect(await storage.read("wiki/authors/alan-turing.md")).not.toBeNull()
+    // Clinical fork (D14): no automatic author pages.
+    expect(await storage.read("wiki/authors/ada-lovelace.md")).toBeNull()
+    expect(await storage.read("wiki/authors/alan-turing.md")).toBeNull()
 
     // index.md rebuilt over the fresh bundle: lists every page.
     const index = (await storage.read("index.md")) as string
-    for (const slug of [PAPER_SLUG, "sparse-attention", "sparse-attention-cuts-training-time", "ada-lovelace", "alan-turing", "transformer-architecture"]) {
+    for (const slug of [PAPER_SLUG, "sparse-attention", "sparse-attention-cuts-training-time", "transformer-architecture"]) {
       expect(index).toContain(`[[${slug}]]`)
     }
 
@@ -256,11 +257,11 @@ describe("ingestSkill happy path", () => {
     expect(csRaw).not.toBeNull()
     const cs = JSON.parse(csRaw as string)
     expect(cs.skill).toBe("ingest")
-    expect(cs.changes).toHaveLength(5)
+    expect(cs.changes).toHaveLength(3)
 
     // created/updated lists: everything new here.
     expect(output.pages.created.sort()).toEqual(
-      [PAPER_PAGE_PATH, CONCEPT_PATH, FINDING_PATH, "wiki/authors/ada-lovelace.md", "wiki/authors/alan-turing.md"].sort(),
+      [PAPER_PAGE_PATH, CONCEPT_PATH, FINDING_PATH].sort(),
     )
     expect(output.pages.updated).toEqual([])
     expect(provider.calls).toHaveLength(2)
@@ -679,7 +680,7 @@ describe("ingestSkill deterministic-page ownership", () => {
     expect(paperRaw).toContain(PAPER.abstract as string)
   })
 
-  it("drops an LLM file that collides with an author skeleton path", async () => {
+  it("creates no author skeleton (D14), so an LLM-written author page is kept as written", async () => {
     const storage = new MemoryVaultStorage()
     await seedVault(storage)
     const gen = sampleGeneration()
@@ -697,9 +698,8 @@ describe("ingestSkill deterministic-page ownership", () => {
 
     expectOk(run.output)
     const author = (await storage.read("wiki/authors/ada-lovelace.md")) as string
-    expect(author).not.toContain("LLM AUTHOR PAGE")
-    expect(author).toContain("## Papers")
-    expect(author).toContain(`[[${PAPER_SLUG}]]`)
+    expect(author).toContain("LLM AUTHOR PAGE")
+    expect(author).not.toContain("## Papers")
   })
 })
 
@@ -855,8 +855,8 @@ describe("dedupeAuthorFiles (F8 — author page dedup)", () => {
   it("rewrites body wikilinks and related refs from the dropped name slug to the canonical id slug", () => {
     const dup = gen({ path: "wiki/authors/edmund-c-lalor.md", type: "author", title: "Edmund C. Lalor" })
     const concept = gen({
-      path: "wiki/methods/trf-estimation.md",
-      type: "method",
+      path: "wiki/concepts/trf-estimation.md",
+      type: "concept",
       title: "TRF Estimation",
       related: ["edmund-c-lalor", "ridge-regularization"],
       body: "# TRF Estimation\n\nPopularized by [[edmund-c-lalor]] and used with [[edmund-c-lalor|Ed Lalor]].\n",
@@ -864,7 +864,7 @@ describe("dedupeAuthorFiles (F8 — author page dedup)", () => {
     const out = dedupeAuthorFiles([dup, concept], [lalorSkeleton])
     expect(out).toHaveLength(1)
     const kept = out[0]
-    expect(kept.path).toBe("wiki/methods/trf-estimation.md")
+    expect(kept.path).toBe("wiki/concepts/trf-estimation.md")
     expect(kept.body).toContain("[[a5074790393]]")
     expect(kept.body).toContain("[[a5074790393|Ed Lalor]]")
     expect(kept.body).not.toContain("edmund-c-lalor")

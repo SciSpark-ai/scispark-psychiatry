@@ -55,6 +55,7 @@ const SHELF_STATUSES: PaperShelfStatus[] = ["saved", "enriched", "ingested"]
 const KNOWLEDGE_TYPES = new Set(["concept", "method", "finding", "comparison", "topic"])
 
 const SECTION_ORDER: Array<{ type: string; label: string }> = [
+  { type: "condition", label: "Conditions" },
   { type: "concept", label: "Concepts" },
   { type: "method", label: "Methods" },
   { type: "finding", label: "Findings" },

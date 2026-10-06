@@ -33,6 +33,7 @@ import {
   type AnalysisResult,
 } from "./ingest-analysis"
 import { defineSkill } from "./types"
+import { AUTO_AUTHOR_PAGES } from "../clinical/page-types"
 
 /**
  * What the generation LLM call is allowed to produce. Deliberately narrower than a full
@@ -498,12 +499,13 @@ export const ingestSkill = defineSkill<IngestInput, IngestOutput>({
     if (existingPaperPage) {
       paperDraft.frontmatter = mergePaperPageFrontmatter(paperDraft.frontmatter, existingPaperPage.frontmatter)
     }
-    const authorDrafts = buildAuthorSkeletons(paper, {
+    // Clinical fork (D14): author pages are never created automatically.
+    const authorDrafts = AUTO_AUTHOR_PAGES ? buildAuthorSkeletons(paper, {
       existingIds: new Set(bundle.pages.keys()),
       today,
       paperPageSlug: slug,
       dir: authorDir,
-    })
+    }) : []
     const deterministic = [paperDraft, ...authorDrafts]
 
     let prepared = await prepareFiles(storage, generation, deterministic, routing, { today, sources })

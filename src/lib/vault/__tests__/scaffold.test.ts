@@ -10,12 +10,13 @@ describe("createVault", () => {
     expect(schema).toContain("## Page Types")
     for (const row of [
       "| paper | wiki/papers |",
-      "| idea | wiki/ideas |",
+      "| condition | wiki/conditions |",
       "| query | wiki/queries |",
       "| project | wiki/projects |",
     ]) {
       expect(schema).toContain(row)
     }
+    for (const disabled of ["method", "finding", "comparison", "idea"]) expect(schema).not.toContain(`| ${disabled} |`)
     expect(await s.read("purpose.md")).toContain("Track TRD neuromodulation research.")
     expect(await s.read("index.md")).toContain("# Index")
     expect(await s.read("log.md")).toContain("## [2026-07-11] init | vault created")

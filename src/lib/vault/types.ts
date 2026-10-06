@@ -1,6 +1,6 @@
 export const PAGE_TYPES = [
   "paper", "concept", "method", "finding", "comparison",
-  "author", "topic", "note", "query", "idea", "project",
+  "author", "topic", "note", "query", "idea", "project", "condition",
 ] as const
 export type PageType = (typeof PAGE_TYPES)[number]
 
