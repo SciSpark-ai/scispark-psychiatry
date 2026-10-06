@@ -1,0 +1,124 @@
+import type { LLMProvider, Tier } from "../../llm/types"
+import type { LLMSettings } from "../../llm/settings"
+import { addCosts } from "../../llm/pricing"
+import type { VaultStorage } from "../../vault/storage"
+import { DESIGN_TIER, designGate } from "../filter/gate"
+import { domainFilter } from "../filter/prefilter"
+import { gradeStageA } from "../grade/stage-a"
+import { MODES, windowFor } from "../modes"
+import type { SpecialtyPack } from "../pack/schema"
+import { planQueries } from "../plan/skill"
+import { retrieve, type EnumerateFn } from "../retrieve/pool"
+import { scoreCandidate } from "../score/score"
+import { selectFeed, SHORTLIST_GRADE } from "../select/select"
+import type { ClinicalStage, Candidate, DropRecord, GatedCandidate, StageAGrade } from "../types"
+import { assembleContext } from "./context"
+import { saveRunLog, type PoolRef, type RunLog } from "./run-log"
+import { loadClinicalFeed, saveClinicalFeed, toSafetyRef, toStoredItem, type StoredFeed } from "./stored"
+
+export interface ClinicalFeedDeps {
+  pack: SpecialtyPack
+  enumerate: EnumerateFn
+  settings?: LLMSettings
+  providerOverride?: Partial<Record<Tier, LLMProvider>>
+  now?: () => Date
+  onStage?: (stage: ClinicalStage) => void
+}
+
+const ref = (candidate: Candidate): PoolRef => ({ key: candidate.key, pmid: candidate.paper.ids.pmid, doi: candidate.paper.ids.doi })
+
+/** Step 4 cap: keep the candidates most likely to matter when the pool exceeds the mode's cap. */
+export function capCandidates(candidates: GatedCandidate[], cap: number): { kept: GatedCandidate[]; drops: DropRecord[] } {
+  if (candidates.length <= cap) return { kept: candidates, drops: [] }
+  const entryHits = (candidate: GatedCandidate) => candidate.provenance.filter((p) => p.tier === "entry").length
+  const ranked = [...candidates].sort((a, b) =>
+    entryHits(b) - entryHits(a) || DESIGN_TIER[b.design] - DESIGN_TIER[a.design] || (b.paper.date ?? "").localeCompare(a.paper.date ?? ""))
+  return {
+    kept: ranked.slice(0, cap),
+    drops: ranked.slice(cap).map((candidate) => ({ key: candidate.key, title: candidate.paper.title, step: "cap", reason: `over-cap:${cap}` })),
+  }
+}
+
+/**
+ * One recall-first run (spec 6.9, steps 0–5 and 9–10; stage A only). Writes the stored list and a run log.
+ * A run that fails, or finds nothing while a previous list exists, leaves the previous list untouched.
+ */
+export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedDeps): Promise<StoredFeed> {
+  const now = deps.now ?? (() => new Date())
+  const runOpts = { storage, settings: deps.settings, providerOverride: deps.providerOverride, now }
+  const warnings: string[] = []
+  let costUsd: number | null = 0
+
+  deps.onStage?.("context")
+  const context = await assembleContext(storage)
+  const mode = context.settings.mode
+  const window = windowFor(mode, now(), context.settings.catchUpMonths)
+
+  deps.onStage?.("plan")
+  const planned = await planQueries(deps.pack, context.entries, window, runOpts)
+  warnings.push(...planned.warnings)
+  costUsd = addCosts(costUsd, planned.costUsd)
+
+  deps.onStage?.("retrieve")
+  const retrieved = await retrieve(deps.enumerate, planned.plan, { exclude: context.exclude })
+  for (const entry of retrieved.queryLog) {
+    if (entry.error) warnings.push(`A PubMed query failed: ${entry.error}`)
+    if (entry.truncated) warnings.push(`A query matched ${entry.total} records and only ${entry.returned} were read (${entry.rationale}).`)
+  }
+
+  deps.onStage?.("filter")
+  const domain = domainFilter(deps.pack, retrieved.candidates)
+  const gate = designGate(deps.pack, context.entries, domain.kept, context.settings.strictness)
+  const capped = capCandidates(gate.gated, MODES[mode].candidateCap)
+
+  deps.onStage?.("grade")
+  const graded = await gradeStageA(capped.kept, context.entries, context.exemplars, runOpts)
+  costUsd = addCosts(costUsd, graded.costUsd)
+  if (graded.failedBatches > 0) warnings.push(`${graded.failedBatches} grading batch(es) failed; those papers are shown ungraded.`)
+
+  deps.onStage?.("select")
+  const scored = capped.kept.map((candidate) =>
+    scoreCandidate({ candidate, grade: graded.grades.get(candidate.key) as StageAGrade, mode, now: now(), journals: deps.pack.journals }))
+  const selected = selectFeed(scored, context.entries)
+
+  const generatedAt = now().toISOString()
+  const feed: StoredFeed = {
+    version: 1, generatedAt, mode, strictness: context.settings.strictness,
+    items: selected.items.map(toStoredItem),
+    lowerConfidence: selected.lowerConfidence.map(toStoredItem),
+    safetySignals: gate.safety.map(toSafetyRef),
+    stats: { retrieved: retrieved.candidates.length, domain: domain.kept.length, gated: gate.gated.length, graded: capped.kept.length, listed: selected.items.length },
+    costUsd, warnings,
+  }
+
+  const log: RunLog = {
+    generatedAt, mode, queryLog: retrieved.queryLog,
+    drops: [...retrieved.drops, ...domain.drops, ...gate.drops, ...capped.drops, ...selected.drops],
+    pool: {
+      retrieved: retrieved.candidates.map(ref), domain: domain.kept.map(ref), gated: gate.gated.map(ref),
+      shortlisted: scored.filter((s) => s.grade.entryId !== null && s.grade.grade >= SHORTLIST_GRADE).map((s) => ref(s.candidate)),
+      listed: selected.items.map((item) => ref(item.candidate)),
+    },
+    grades: [...graded.grades.values()],
+  }
+  await saveRunLog(storage, log)
+
+  const previous = await loadClinicalFeed(storage)
+  // An earlier empty feed is not worth protecting; only a feed with papers in it is.
+  if (feed.items.length === 0 && previous && previous.items.length > 0) {
+    throw new Error("No papers matched your watch entries well enough. Your previous feed is still shown.")
+  }
+  await saveClinicalFeed(storage, feed)
+  return feed
+}
+
+const inFlight = new WeakMap<VaultStorage, Promise<StoredFeed>>()
+
+/** A second refresh while one is running joins it instead of paying for duplicate work. */
+export function runClinicalFeedSingleFlight(storage: VaultStorage, deps: ClinicalFeedDeps): Promise<StoredFeed> {
+  const existing = inFlight.get(storage)
+  if (existing) return existing
+  const run = runClinicalFeed(storage, deps).finally(() => inFlight.delete(storage))
+  inFlight.set(storage, run)
+  return run
+}
