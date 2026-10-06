@@ -1,0 +1,26 @@
+{
+ "roles": [
+  "Psychiatrist",
+  "Resident",
+  "Clinical researcher",
+  "Psychologist"
+ ],
+ "subspecialties": [
+  "General adult",
+  "Child and adolescent",
+  "Geriatric",
+  "Addiction",
+  "Consultation-liaison",
+  "Forensic",
+  "Neuromodulation",
+  "Psychotherapy",
+  "Research"
+ ],
+ "populations": [
+  "Adults",
+  "Children and adolescents",
+  "Older adults",
+  "Perinatal",
+  "Any"
+ ]
+}

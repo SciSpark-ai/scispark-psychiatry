@@ -1,0 +1,14 @@
+{ "version": "0.1.0",
+  "journals": [
+    {"name": "New England Journal of Medicine", "issn": "0028-4793", "eissn": "1533-4406", "tier": "B", "state": "normal"},
+    {"name": "The Lancet", "issn": "0140-6736", "eissn": "1474-547X", "tier": "B", "state": "normal"},
+    {"name": "JAMA", "issn": "0098-7484", "eissn": "1538-3598", "tier": "B", "state": "normal"},
+    {"name": "BMJ", "issn": "0959-8138", "eissn": "1756-1833", "tier": "B", "state": "normal"},
+    {"name": "JAMA Internal Medicine", "issn": "2168-6106", "eissn": "2168-6114", "tier": "B", "state": "normal"},
+    {"name": "JAMA Network Open", "eissn": "2574-3805", "tier": "B", "state": "normal"},
+    {"name": "Annals of Internal Medicine", "issn": "0003-4819", "eissn": "1539-3704", "tier": "B", "state": "normal"},
+    {"name": "PLOS Medicine", "issn": "1549-1277", "eissn": "1549-1676", "tier": "B", "state": "normal"},
+    {"name": "CMAJ", "issn": "0820-3946", "eissn": "1488-2329", "tier": "B", "state": "normal"},
+    {"name": "Cochrane Database of Systematic Reviews", "issn": "1469-493X", "eissn": "1361-6137", "tier": "B", "state": "normal"}
+  ]
+}

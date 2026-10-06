@@ -1,0 +1,11 @@
+{
+ "id": "psychiatry",
+ "version": "0.1.0",
+ "name": "Psychiatry",
+ "files": {
+  "taxonomy": "taxonomy.json",
+  "journals": "journals.json",
+  "onboarding": "onboarding.json",
+  "textWords": "textwords.json"
+ }
+}
