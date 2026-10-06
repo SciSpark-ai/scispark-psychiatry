@@ -1,0 +1,96 @@
+import { z } from "zod"
+import type { PaperRecord } from "../papers/types"
+
+export const FEED_MODES = ["whats-new", "catch-up"] as const
+export type FeedMode = (typeof FEED_MODES)[number]
+
+export const GATE_STRICTNESS = ["strict", "standard", "open"] as const
+export type GateStrictness = (typeof GATE_STRICTNESS)[number]
+
+/** How far back Catch up looks (D35). Six months by default. */
+export const CATCH_UP_MONTHS = [3, 6, 12] as const
+export type CatchUpMonths = (typeof CATCH_UP_MONTHS)[number]
+
+export const PRIORITIES = ["high", "normal", "paused"] as const
+export type Priority = (typeof PRIORITIES)[number]
+
+/** A tracked topic: a condition, a treatment, or both. Population and outcome are modifiers. */
+export const WatchEntrySchema = z
+  .object({
+    id: z.string().min(1),
+    condition: z.string().min(1).optional(),
+    treatment: z.string().min(1).optional(),
+    population: z.string().min(1).optional(),
+    outcome: z.string().min(1).optional(),
+    priority: z.enum(PRIORITIES).default("normal"),
+    /** Case reports for this topic are shown in a collapsed "Safety signals" area. */
+    safetySignal: z.boolean().default(false),
+  })
+  .refine((entry) => entry.condition !== undefined || entry.treatment !== undefined, {
+    message: "a watch entry needs a condition or a treatment",
+  })
+export type WatchEntry = z.infer<typeof WatchEntrySchema>
+
+export const ClinicalSettingsSchema = z.object({
+  mode: z.enum(FEED_MODES).default("whats-new"),
+  strictness: z.enum(GATE_STRICTNESS).default("standard"),
+  catchUpMonths: z.union([z.literal(3), z.literal(6), z.literal(12)]).default(6),
+  defaultPopulation: z.string().min(1).optional(),
+})
+export type ClinicalSettings = z.infer<typeof ClinicalSettingsSchema>
+
+export const DESIGNS = [
+  "meta-analysis", "systematic-review", "randomized-trial", "guideline", "cohort",
+  "clinical-trial", "review", "case-report", "editorial", "erratum", "retraction", "other", "unknown",
+] as const
+export type Design = (typeof DESIGNS)[number]
+export type DesignSource = "publication-type" | "text-rule" | "none"
+
+/** Where a candidate came from; kept for the recall audit. */
+export interface Provenance {
+  query: string
+  entryId?: string
+  tier: "A" | "B" | "entry"
+}
+
+export interface Candidate {
+  paper: PaperRecord
+  key: string
+  provenance: Provenance[]
+  /** Soft quality flags (never a gate). */
+  flags: string[]
+}
+
+export interface GatedCandidate extends Candidate {
+  design: Design
+  designSource: DesignSource
+}
+
+export type DropStep = "retrieve" | "prefilter" | "gate" | "cap" | "grade" | "select"
+
+export interface DropRecord {
+  key: string
+  title: string
+  step: DropStep
+  reason: string
+}
+
+export interface StageAGrade {
+  key: string
+  /** Best-matching watch entry, or null when the paper matches none. */
+  entryId: string | null
+  /** 0–4 match grade against `entryId`; 0 when entryId is null. */
+  grade: number
+  /** 0–4 general topic grade (psychiatric relevance). */
+  topicGrade: number
+  quote: string
+  /** False when the model's quote does not appear in the cleaned text; both grades are then 0. */
+  quoteVerified: boolean
+  /** True when the grading call failed or skipped this candidate; it is kept, ungraded. */
+  ungraded: boolean
+}
+
+export type ClinicalStage = "context" | "plan" | "retrieve" | "filter" | "grade" | "select"
+
+export const PAGE_SIZE = 12
+export const LIST_CAP = 48
