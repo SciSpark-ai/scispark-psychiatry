@@ -16,7 +16,7 @@ vi.mock("@/lib/recommendation/client", () => ({ loadRecommendationFeedback: asyn
 vi.mock("@/components/companion/useCompanion", () => ({ useCompanion: () => {} }))
 vi.mock("@/components/feed/FeedRefreshBar", () => ({ FeedRefreshBar: () => <button>Refresh feed</button> }))
 vi.mock("@/components/feed/RealFeedCard", () => ({ RealFeedCard: () => <div>Paper</div> }))
-import HomePage from "../page"
+import HomePage from "@/components/feed/UpstreamHome"
 
 function recommendation(overrides: Partial<RecommendationRun> = {}): RecommendationRun {
   return { version: "weighted-v2", preferences: { ...DEFAULT_RECOMMENDATION_PREFERENCES, diversity: "focused" },

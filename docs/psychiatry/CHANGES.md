@@ -17,3 +17,6 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/lib/vault/__tests__/scaffold.test.ts, src/lib/skills/__tests__/ingest.test.ts | expectations follow the clinical default schema and D14 | F2 | 5 |
 | src/app/layout.tsx | page title and description from the copy file | §8.3 | 6 |
 | src/lib/papers/pubmed.ts | add enumeratePubmed; efetch half of the search extracted | §6.8 enumeration, F1 | 8 |
+| src/app/page.tsx | Home is ClinicalHome; upstream Home moved to components/feed/UpstreamHome.tsx | §8.2 | 17 |
+| src/components/layout/Sidebar.tsx | Watch list added; Trending, Projects, Idea Spark, History hidden | D32 | 17 |
+| src/components/layout/__tests__/Sidebar.test.tsx, src/app/__tests__/home-feed-notices.test.tsx | follow the above | D32 | 17 |

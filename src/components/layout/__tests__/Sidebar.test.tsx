@@ -25,12 +25,15 @@ const html = () => renderToStaticMarkup(<Sidebar collapsed={false} />)
 describe("Sidebar nav map (SP1)", () => {
   it("shows the grouped real-surface map", () => {
     const out = html()
-    for (const label of ["Discover", "Knowledge", "Tools", "Home", "Sparky", "Trending", "Wiki", "Graph", "Projects", "Idea Spark", "History"]) {
+    for (const label of ["Discover", "Knowledge", "Home", "Sparky", "Watch list", "Wiki", "Graph"]) {
       expect(out, label).toContain(label)
     }
-    for (const href of ["/wiki", "/viz", "/spark", "/chat", "/projects", "/trending", "/history"]) {
+    for (const href of ["/", "/watch", "/wiki", "/viz", "/chat"]) {
       expect(out, href).toContain(`href="${href}"`)
     }
+    // Clinical edition (D32): Trending, Idea Spark and the fork-mock pages are hidden.
+    for (const label of ["Trending", "Idea Spark", "Projects", "History"]) expect(out, label).not.toContain(label)
+    for (const href of ["/spark", "/projects", "/trending", "/history"]) expect(out, href).not.toContain(`href="${href}"`)
     expect(out).not.toContain('href="/papers"')
   })
   it("drops the fork-era items and settings from the rail", () => {

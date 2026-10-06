@@ -5,13 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   Home,
-  TrendingUp,
   BookOpen,
   Network,
-  FolderOpen,
-  Sparkles,
+  ListChecks,
   MessageSquarePlus,
-  Clock,
   PanelLeftClose,
   X,
   type LucideIcon,
@@ -63,7 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: "home", label: "Home", href: "/", icon: Home },
       { key: "chat", label: "Sparky", href: "/chat", icon: MessageSquarePlus },
-      { key: "trending", label: "Trending", href: "/trending", icon: TrendingUp },
+      { key: "watch", label: "Watch list", href: "/watch", icon: ListChecks },
     ],
   },
   {
@@ -71,18 +68,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: "wiki", label: "Wiki", href: "/wiki", icon: BookOpen },
       { key: "graph", label: "Graph", href: "/viz", icon: Network },
-      { key: "projects", label: "Projects", href: "/projects", icon: FolderOpen },
-    ],
-  },
-  {
-    heading: "Tools",
-    items: [
-      { key: "spark", label: "Idea Spark", href: "/spark", icon: Sparkles },
     ],
   },
 ];
-
-const HISTORY_ITEM: NavItem = { key: "history", label: "History", href: "/history", icon: Clock };
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -227,7 +215,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           </div>
         ))}
         <hr className="border-border-warm mx-[10px] my-[14px]" />
-        {renderItem(HISTORY_ITEM)}
         {!collapsed && recentSessions.length > 0 && (
           <ul aria-label="Recent chats">
             {recentSessions.map((session) => (
