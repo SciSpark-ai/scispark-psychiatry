@@ -25,7 +25,7 @@ export function ClinicalFeedback({ storage, paperKey, title, initial, onVote }: 
       setCurrent(kind)
       onVote?.(kind)
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Your vote could not be saved.")
+      setError(failure instanceof Error ? failure.message : CLINICAL_COPY.feedback.saveFailed)
     }
   }
 

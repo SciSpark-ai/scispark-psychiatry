@@ -61,7 +61,14 @@ export function selectFeed(
   const { kept, drops } = suppressDuplicates(sorted)
 
   const shortlist = kept.filter((item) => item.grade.entryId !== null && item.grade.grade >= SHORTLIST_GRADE)
-  const lowerConfidence = kept.filter((item) => !shortlist.includes(item)).slice(0, opts.lowerCap ?? LOWER_CONFIDENCE_CAP)
+  // Graded non-matches are capped; a paper the grader failed on or skipped is always kept (spec 6.9 step 5).
+  const lowerCap = opts.lowerCap ?? LOWER_CONFIDENCE_CAP
+  const rest = kept.filter((item) => !shortlist.includes(item))
+  const gradedRest = rest.filter((item) => !item.grade.ungraded)
+  const lowerConfidence = [...gradedRest.slice(0, lowerCap), ...rest.filter((item) => item.grade.ungraded)]
+  const cut = (item: ScoredItem, reason: string) =>
+    drops.push({ key: item.candidate.key, title: item.candidate.paper.title, step: "select", reason })
+  for (const item of gradedRest.slice(lowerCap)) cut(item, "lower-confidence-cap")
 
   const active = entries
     .filter((entry) => entry.priority !== "paused")
@@ -95,5 +102,6 @@ export function selectFeed(
     }
     items.push(...page.sort((a, b) => b.score - a.score))
   }
+  for (const item of pool) cut(item, "list-cap")
   return { items, lowerConfidence, drops }
 }

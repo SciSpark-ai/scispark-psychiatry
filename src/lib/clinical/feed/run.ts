@@ -15,6 +15,7 @@ import type { ClinicalStage, Candidate, DropRecord, GatedCandidate, StageAGrade 
 import { assembleContext } from "./context"
 import { saveRunLog, type PoolRef, type RunLog } from "./run-log"
 import { loadClinicalFeed, saveClinicalFeed, toSafetyRef, toStoredItem, type StoredFeed } from "./stored"
+import { CLINICAL_COPY } from "../copy"
 
 export interface ClinicalFeedDeps {
   pack: SpecialtyPack
@@ -62,8 +63,15 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   deps.onStage?.("retrieve")
   const retrieved = await retrieve(deps.enumerate, planned.plan, { exclude: context.exclude })
   for (const entry of retrieved.queryLog) {
-    if (entry.error) warnings.push(`A PubMed query failed: ${entry.error}`)
-    if (entry.truncated) warnings.push(`A query matched ${entry.total} records and only ${entry.returned} were read (${entry.rationale}).`)
+    if (entry.error) warnings.push(CLINICAL_COPY.run.queryFailed(entry.error))
+    if (entry.truncated) warnings.push(CLINICAL_COPY.run.truncated(entry.total, entry.returned, entry.rationale))
+  }
+  // A run in which half or more of the searches failed would replace a full list with a thin one.
+  // Stop here, before any grading is paid for, when there is a list worth protecting.
+  const previous = await loadClinicalFeed(storage)
+  const failedQueries = retrieved.queryLog.filter((entry) => entry.error).length
+  if (previous && previous.items.length > 0 && failedQueries * 2 >= retrieved.queryLog.length) {
+    throw new Error(CLINICAL_COPY.run.tooManyQueriesFailed(failedQueries, retrieved.queryLog.length))
   }
 
   deps.onStage?.("filter")
@@ -74,7 +82,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   deps.onStage?.("grade")
   const graded = await gradeStageA(capped.kept, context.entries, context.exemplars, runOpts)
   costUsd = addCosts(costUsd, graded.costUsd)
-  if (graded.failedBatches > 0) warnings.push(`${graded.failedBatches} grading batch(es) failed; those papers are shown ungraded.`)
+  if (graded.failedBatches > 0) warnings.push(CLINICAL_COPY.run.gradingBatchesFailed(graded.failedBatches))
 
   deps.onStage?.("select")
   const scored = capped.kept.map((candidate) =>
@@ -103,10 +111,9 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   }
   await saveRunLog(storage, log)
 
-  const previous = await loadClinicalFeed(storage)
   // An earlier empty feed is not worth protecting; only a feed with papers in it is.
   if (feed.items.length === 0 && previous && previous.items.length > 0) {
-    throw new Error("No papers matched your watch entries well enough. Your previous feed is still shown.")
+    throw new Error(CLINICAL_COPY.run.nothingMatched)
   }
   await saveClinicalFeed(storage, feed)
   return feed

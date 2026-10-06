@@ -5,6 +5,7 @@ import { loadBundle } from "../../vault/bundle"
 import { dismissedKeys, exemplarTitles, loadFeedback } from "../feedback/store"
 import { loadClinicalSettings, loadWatchEntries } from "../watch/store"
 import type { ClinicalSettings, WatchEntry } from "../types"
+import { CLINICAL_COPY } from "../copy"
 
 export interface RunContext {
   entries: WatchEntry[]
@@ -17,7 +18,7 @@ export interface RunContext {
 /** Step 0: everything the run needs from the vault. */
 export async function assembleContext(storage: VaultStorage): Promise<RunContext> {
   const entries = (await loadWatchEntries(storage)).filter((entry) => entry.priority !== "paused")
-  if (entries.length === 0) throw new Error("Add at least one watch entry before refreshing the feed.")
+  if (entries.length === 0) throw new Error(CLINICAL_COPY.run.noEntries)
   const feedback = await loadFeedback(storage)
   const bundle = await loadBundle(storage)
   const saved = [...bundle.pages.values()]

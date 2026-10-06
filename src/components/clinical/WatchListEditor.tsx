@@ -51,20 +51,20 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
     if (!storage) return
     setError(null)
     try { await saveWatchEntries(storage, next); setEntries(next) }
-    catch (failure) { setError(failure instanceof Error ? failure.message : "Your watch list could not be saved.") }
+    catch (failure) { setError(failure instanceof Error ? failure.message : W.saveFailed) }
   }
 
   async function persistSettings(next: ClinicalSettings) {
     if (!storage) return
     setError(null)
     try { await saveClinicalSettings(storage, next); setSettings(next) }
-    catch (failure) { setError(failure instanceof Error ? failure.message : "Your settings could not be saved.") }
+    catch (failure) { setError(failure instanceof Error ? failure.message : W.settingsSaveFailed) }
   }
 
   async function add() {
     const condition = draft.condition.trim()
     const treatment = draft.treatment.trim()
-    if (!condition && !treatment) { setError("Enter a condition, a treatment, or both."); return }
+    if (!condition && !treatment) { setError(W.needFacet); return }
     const entry: WatchEntry = {
       id: newEntryId(), priority: draft.priority, safetySignal: draft.safetySignal,
       ...(condition ? { condition } : {}), ...(treatment ? { treatment } : {}),
@@ -76,14 +76,14 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
 
   const update = (id: string, patch: Partial<WatchEntry>) => persist(entries.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)))
 
-  if (!storage || !settings) return <div className="p-7"><p className="text-[14px] text-muted-text">{error ?? "Loading…"}</p></div>
+  if (!storage || !settings) return <div className="p-7"><p className="text-[14px] text-muted-text">{error ?? CLINICAL_COPY.loading}</p></div>
 
   return (
     <div className="p-7">
       <PageHeader title={W.heading} description={W.intro} />
       {error && <p role="alert" className="mb-4 text-[13px] text-red-600">{error}</p>}
 
-      <ul className="mb-6 space-y-3" aria-label="Watch entries">
+      <ul className="mb-6 space-y-3" aria-label={W.entriesLabel}>
         {entries.map((entry) => (
           <li key={entry.id}>
             <Card className="flex flex-wrap items-center gap-3 p-3">

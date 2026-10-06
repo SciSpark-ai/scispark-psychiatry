@@ -20,3 +20,5 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/app/page.tsx | Home is ClinicalHome; upstream Home moved to components/feed/UpstreamHome.tsx | §8.2 | 17 |
 | src/components/layout/Sidebar.tsx | Watch list added; Trending, Projects, Idea Spark, History hidden | D32 | 17 |
 | src/components/layout/__tests__/Sidebar.test.tsx, src/app/__tests__/home-feed-notices.test.tsx | follow the above | D32 | 17 |
+| src/lib/papers/pubmed.ts | `enumeratePubmed`: a deadline per request instead of one for the whole enumeration; batches already read are kept when a later batch fails (reported as truncated); `PubmedDeps.timeoutMs` | review of Slices 0–1, finding 1 | review |
+| src/components/layout/Sidebar.tsx | the Watch list label comes from the copy file | §8.1, review finding 5 | review |

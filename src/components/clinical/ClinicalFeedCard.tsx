@@ -34,7 +34,7 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
     setSaving(true)
     setError(null)
     try { await savePaper(storage, paper); onSave(item.key) }
-    catch (failure) { setError(failure instanceof Error ? failure.message : "This paper could not be saved.") }
+    catch (failure) { setError(failure instanceof Error ? failure.message : CLINICAL_COPY.feed.saveFailed) }
     finally { setSaving(false) }
   }
 
@@ -42,9 +42,9 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
     <Card className="flex flex-col gap-3 p-4" data-testid="clinical-feed-card">
       <div className="flex flex-wrap items-center gap-2">
         <Chip tone="accent" title={CLINICAL_COPY.designNote}>{CLINICAL_COPY.designLabels[item.design]}</Chip>
-        {entryLabel && <Chip>{entryLabel}{item.entryId ? ` · match ${item.grade}/4` : ""}</Chip>}
-        {item.flags.includes("title-only") && <Chip>No abstract</Chip>}
-        {item.ungraded && <Chip>Not graded</Chip>}
+        {entryLabel && <Chip>{entryLabel}{item.entryId ? ` · ${CLINICAL_COPY.feed.match(item.grade)}` : ""}</Chip>}
+        {item.flags.includes("title-only") && <Chip>{CLINICAL_COPY.feed.noAbstract}</Chip>}
+        {item.ungraded && <Chip>{CLINICAL_COPY.feed.notGraded}</Chip>}
       </div>
       <button type="button" onClick={() => router.push(`/paper/${paperSlug(paper)}`)} className="text-left">
         <h3 className="font-heading text-[19px] leading-snug tracking-heading-card text-espresso">{displayTitle(paper.title)}</h3>
@@ -54,7 +54,7 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
       <div className="flex flex-wrap items-end justify-between gap-2 border-t border-border-warm/60 pt-3">
         <div className="min-w-0 flex-1 text-[11px] leading-relaxed text-muted-text">
           {meta && <p className="truncate" title={meta}>{meta}</p>}
-          <p>{paper.date ? `Published ${paper.date.slice(0, 10)}` : "Publication date unavailable"}</p>
+          <p>{paper.date ? CLINICAL_COPY.feed.published(paper.date.slice(0, 10)) : CLINICAL_COPY.feed.noDate}</p>
         </div>
         <PaperSaveButton saved={saved} busy={saving} onSave={() => void handleSave()} />
       </div>

@@ -7,6 +7,7 @@ import type { VaultStorage } from "../../vault/storage"
 import type { SpecialtyPack } from "../pack/schema"
 import type { WatchEntry } from "../types"
 import { DESIGN_HINT, deterministicPlan, isPlausiblePubmedQuery, windowClause, type DateWindow, type PlannedQuery } from "./queries"
+import { CLINICAL_COPY } from "../copy"
 
 const MAX_EXTRA_PER_ENTRY = 3
 const MAX_EXTRA_TOTAL = 24
@@ -60,7 +61,7 @@ export async function planQueries(
   const active = entries.filter((entry) => entry.priority !== "paused")
   const run = await runSkill({ skill: planSkill, input: { entries: active }, ...opts })
   if (run.status !== "ok" || !run.output) {
-    return { plan: base, costUsd: run.costUsd, warnings: ["AI query planning did not complete; used the standard queries only."] }
+    return { plan: base, costUsd: run.costUsd, warnings: [CLINICAL_COPY.run.planningFailed] }
   }
   const known = new Set(active.map((entry) => entry.id))
   const perEntry = new Map<string, number>()

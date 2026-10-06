@@ -23,6 +23,7 @@ import { Chip } from "@/components/ui/Chip";
 import { ThemeToggle } from "./ThemeToggle";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { logoutLocalProfile } from "@/lib/local-profile-client";
+import { CLINICAL_COPY } from "@/lib/clinical/copy";
 
 /** A nav aid, not a second inbox — just enough recent conversations to jump
  * back into one, no badges/counts. */
@@ -60,7 +61,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: "home", label: "Home", href: "/", icon: Home },
       { key: "chat", label: "Sparky", href: "/chat", icon: MessageSquarePlus },
-      { key: "watch", label: "Watch list", href: "/watch", icon: ListChecks },
+      { key: "watch", label: CLINICAL_COPY.watch.heading, href: "/watch", icon: ListChecks },
     ],
   },
   {

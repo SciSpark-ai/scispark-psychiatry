@@ -78,6 +78,12 @@ export const DESIGN_HINT =
   `OR "meta-analysis"[Title/Abstract] OR "systematic review"[Title/Abstract] OR guideline[Title/Abstract] OR cohort[Title/Abstract] ` +
   `OR trial[Title/Abstract])`
 
+/**
+ * Used instead of the design hint for a safety-signal entry: the design hint has no case-report
+ * term, so without this query the case reports the entry asks for would never be retrieved.
+ */
+export const CASE_REPORT_HINT = `("Case Reports"[pt] OR "case report"[Title/Abstract] OR "case series"[Title/Abstract])`
+
 function journalIdentifier(journal: Journal): string {
   return (journal.issn ?? journal.eissn) as string
 }
@@ -115,9 +121,27 @@ export function entryQuery(pack: SpecialtyPack, entry: WatchEntry, window: DateW
   }
 }
 
-/** The whole deterministic plan: every active entry, then both journal tiers. */
+/**
+ * The case-report query of a safety-signal entry. Like the gate's safety rule, it follows the
+ * treatment (or the condition, for a condition-only entry), not both.
+ */
+export function safetyQuery(pack: SpecialtyPack, entry: WatchEntry, window: DateWindow): PlannedQuery | null {
+  if (!entry.safetySignal || entry.priority === "paused") return null
+  const facet = entry.treatment
+    ? resolveFacet(pack, entry.treatment, "treatment")
+    : entry.condition ? resolveFacet(pack, entry.condition, "condition") : null
+  if (!facet) return null
+  return {
+    query: [facetClause(facet), windowClause(window), CASE_REPORT_HINT].join(" AND "),
+    entryId: entry.id,
+    tier: "entry",
+    rationale: `${entry.treatment ?? entry.condition} (case reports)`,
+  }
+}
+
+/** The whole deterministic plan: every active entry (plus its case reports when flagged), then both journal tiers. */
 export function deterministicPlan(pack: SpecialtyPack, entries: WatchEntry[], window: DateWindow): PlannedQuery[] {
-  const entryQueries = entries.flatMap((entry) => entryQuery(pack, entry, window) ?? [])
+  const entryQueries = entries.flatMap((entry) => [entryQuery(pack, entry, window) ?? [], safetyQuery(pack, entry, window) ?? []].flat())
   return [...entryQueries, ...journalQueries(pack, "A", window), ...journalQueries(pack, "B", window)]
 }
 

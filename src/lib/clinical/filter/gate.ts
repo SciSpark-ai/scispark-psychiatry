@@ -73,6 +73,12 @@ export interface GateResult {
  * condition-only entry, its condition). It need not mention both: an adverse event in a patient
  * whose condition is described differently is still a signal about the treatment.
  */
+/** Whole-word match: "ect" must not match inside "effect", nor "mania" inside "Romania". */
+function mentions(text: string, term: string): boolean {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`).test(text)
+}
+
 function matchesSafetyEntry(pack: SpecialtyPack, entries: WatchEntry[], candidate: Candidate): boolean {
   const text = norm(`${candidate.paper.title} ${candidate.paper.abstract ?? ""}`)
   return entries.some((entry) => {
@@ -80,7 +86,7 @@ function matchesSafetyEntry(pack: SpecialtyPack, entries: WatchEntry[], candidat
     const facet = entry.treatment
       ? resolveFacet(pack, entry.treatment, "treatment")
       : entry.condition ? resolveFacet(pack, entry.condition, "condition") : null
-    return facet !== null && facet.words.some((word) => text.includes(norm(word)))
+    return facet !== null && facet.words.some((word) => mentions(text, norm(word)))
   })
 }
 

@@ -5,6 +5,9 @@ export const CLINICAL_COPY = {
   disclaimerShort:
     "For literature awareness only. Designs and grades describe the papers, not whether a treatment is right for a patient.",
   noPatientData: "Do not enter patient information.",
+  loading: "Loading…",
+  errorPrefix: "Error:",
+  modes: { "whats-new": "What's new", "catch-up": "Catch up" },
   feed: {
     heading: "Your literature feed",
     emptyNoEntries: "Add the conditions and treatments you follow, and your feed will be built around them.",
@@ -16,6 +19,27 @@ export const CLINICAL_COPY = {
     safetySignals: "Safety signals",
     savedToKnowledgeBase: "Saved",
     saveToKnowledgeBase: "Save to knowledge base",
+    openWatchList: "Open the watch list",
+    updated: (when: string, mode: string, listed: number, found: number) => `Updated ${when} · ${mode} · ${listed} papers listed from ${found} found`,
+    saveFailed: "This paper could not be saved.",
+    match: (grade: number) => `match ${grade}/4`,
+    noAbstract: "No abstract",
+    notGraded: "Not graded",
+    published: (date: string) => `Published ${date}`,
+    noDate: "Publication date unavailable",
+  },
+  /** Errors and warnings of a feed run; shown on Home. */
+  run: {
+    noEntries: "Add at least one watch entry before refreshing the feed.",
+    planningFailed: "AI query planning did not complete; used the standard queries only.",
+    everyQueryFailed: "PubMed search failed for every query. Check your connection and try again.",
+    tooManyQueriesFailed: (failed: number, total: number) =>
+      `${failed} of ${total} PubMed searches failed, so this run would be incomplete. Your previous feed is still shown. Try again in a few minutes.`,
+    queryFailed: (reason: string) => `A PubMed query failed: ${reason}`,
+    truncated: (total: number, returned: number, rationale: string) => `A query matched ${total} records and only ${returned} were read (${rationale}).`,
+    gradingFailed: "AI grading did not complete. Check your AI connection in Settings, then try again.",
+    gradingBatchesFailed: (count: number) => `${count} grading batch(es) failed; those papers are shown ungraded.`,
+    nothingMatched: "No papers matched your watch entries well enough. Your previous feed is still shown.",
   },
   stages: {
     context: "Reading your watch list",
@@ -25,7 +49,7 @@ export const CLINICAL_COPY = {
     grade: "Matching papers to your watch list",
     select: "Building your list",
   },
-  feedback: { relevant: "Relevant to me", practiceChange: "Would change my practice", notRelevant: "Not relevant" },
+  feedback: { relevant: "Relevant to me", practiceChange: "Would change my practice", notRelevant: "Not relevant", saveFailed: "Your vote could not be saved." },
   designLabels: {
     "meta-analysis": "Meta-analysis", "systematic-review": "Systematic review", "randomized-trial": "Randomized trial",
     guideline: "Guideline", cohort: "Observational", "clinical-trial": "Clinical trial", review: "Review",
@@ -39,6 +63,10 @@ export const CLINICAL_COPY = {
     priority: "Priority", high: "High", normal: "Normal", paused: "Paused",
     safetySignal: "Show case reports for this topic as safety signals",
     add: "Add entry", remove: "Remove",
+    entriesLabel: "Watch entries",
+    needFacet: "Enter a condition, a treatment, or both.",
+    saveFailed: "Your watch list could not be saved.",
+    settingsSaveFailed: "Your settings could not be saved.",
     mode: "Feed mode", whatsNew: "What's new (last 30 days)", catchUp: "Catch up", catchUpWindow: "Catch up looks back",
     months: { 3: "3 months", 6: "6 months", 12: "12 months" },
     strictness: "Study design filter", strict: "Strict: trials, reviews, guidelines", standard: "Standard: adds observational studies", open: "Open: adds other reviews and designs",

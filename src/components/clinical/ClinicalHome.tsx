@@ -73,7 +73,7 @@ export function ClinicalHome() {
   }
 
   if (!data || !storage) {
-    return <div className="p-7">{error ? <p role="alert" className="text-[13px] text-red-600">Error: {error}</p> : <p className="text-[14px] text-muted-text">Loading…</p>}</div>
+    return <div className="p-7">{error ? <p role="alert" className="text-[13px] text-red-600">{CLINICAL_COPY.errorPrefix} {error}</p> : <p className="text-[14px] text-muted-text">{CLINICAL_COPY.loading}</p>}</div>
   }
 
   const { entries, settings, feed, saved, votes } = data
@@ -110,14 +110,14 @@ export function ClinicalHome() {
       {entries.length === 0 ? (
         <p className="text-[14px] text-muted-text">
           {CLINICAL_COPY.feed.emptyNoEntries}{" "}
-          <Link href="/watch" className="text-accent-ink underline">Open the watch list</Link>
+          <Link href="/watch" className="text-accent-ink underline">{CLINICAL_COPY.feed.openWatchList}</Link>
         </p>
       ) : !feed ? (
         <p className="text-[14px] text-muted-text">{CLINICAL_COPY.feed.emptyNoFeed}</p>
       ) : (
         <>
           <p className="mb-4 text-[13px] text-muted-text">
-            Updated {new Date(feed.generatedAt).toLocaleString()} · {MODE_LABELS[feed.mode]} · {feed.stats.listed} papers listed from {feed.stats.retrieved} found
+            {CLINICAL_COPY.feed.updated(new Date(feed.generatedAt).toLocaleString(), MODE_LABELS[feed.mode], feed.stats.listed, feed.stats.retrieved)}
           </p>
           {feed.warnings.length > 0 && <ul className="mb-4 list-disc pl-5 text-[12px] text-muted-text">{feed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           <div className="grid gap-4 lg:grid-cols-2">

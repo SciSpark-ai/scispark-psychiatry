@@ -2,6 +2,7 @@ import { paperKey, type PaperRecord } from "../../papers/types"
 import { cleanAbstract, cleanTitle, qualityFlags } from "../text/clean"
 import type { PlannedQuery } from "../plan/queries"
 import type { Candidate, DropRecord, Provenance } from "../types"
+import { CLINICAL_COPY } from "../copy"
 
 export interface EnumerateResult {
   records: PaperRecord[]
@@ -81,6 +82,6 @@ export async function retrieve(
     }
   }
 
-  if (plan.length > 0 && failures === plan.length) throw new Error("PubMed search failed for every query. Check your connection and try again.")
+  if (plan.length > 0 && failures === plan.length) throw new Error(CLINICAL_COPY.run.everyQueryFailed)
   return { candidates: [...byKey.values()], drops, queryLog }
 }

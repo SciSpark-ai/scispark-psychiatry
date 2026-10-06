@@ -117,6 +117,8 @@ export interface PubmedDeps {
   fetchFn?: typeof fetch
   apiKey?: string
   signal?: AbortSignal
+  /** Deadline for one request of an enumeration (clinical fork); the default is the shared source deadline. */
+  timeoutMs?: number
 }
 
 /**
@@ -339,8 +341,9 @@ const ESEARCH_HARD_LIMIT = 10_000
  * whole window and needs to know when it was cut short.
  */
 export async function enumeratePubmed(q: PubmedEnumerateQuery, deps: PubmedDeps = {}): Promise<PubmedEnumerateResult> {
-  return withSourceDeadline(deps.signal, async (signal) => {
-    const scoped = { ...deps, signal }
+  // Each request gets its own deadline: one deadline for the whole enumeration would cut off a
+  // large query after a few batches and lose everything already read.
+  const { pmids, total } = await withSourceDeadline(deps.signal, async (signal) => {
     const fetchFn = deps.fetchFn ?? sourceFetch("pubmed")
     const url = new URL(ESEARCH_URL)
     url.searchParams.set("db", "pubmed")
@@ -358,12 +361,22 @@ export async function enumeratePubmed(q: PubmedEnumerateQuery, deps: PubmedDeps 
     }
     if (!response.ok) throw new PaperSourceError(`PubMed esearch request failed with status ${response.status}`, response.status)
     const body = (await response.json()) as EsearchResponse
-    const pmids = body.esearchresult?.idlist ?? []
-    const total = Number(body.esearchresult?.count ?? pmids.length)
-    const records: PaperRecord[] = []
-    for (let i = 0; i < pmids.length; i += ENUMERATE_FETCH_BATCH) {
-      records.push(...(await fetchPubmedRecords(pmids.slice(i, i + ENUMERATE_FETCH_BATCH), scoped)))
+    const idlist = body.esearchresult?.idlist ?? []
+    const count = Number(body.esearchresult?.count ?? idlist.length)
+    return { pmids: idlist, total: Number.isFinite(count) ? count : idlist.length }
+  }, deps.timeoutMs)
+
+  const records: PaperRecord[] = []
+  for (let i = 0; i < pmids.length; i += ENUMERATE_FETCH_BATCH) {
+    const batch = pmids.slice(i, i + ENUMERATE_FETCH_BATCH)
+    try {
+      records.push(...(await withSourceDeadline(deps.signal, (signal) => fetchPubmedRecords(batch, { ...deps, signal }), deps.timeoutMs)))
+    } catch (err) {
+      deps.signal?.throwIfAborted()
+      // Nothing read yet: the query failed. Otherwise keep what was read; the rest counts as truncated.
+      if (records.length === 0) throw err
+      break
     }
-    return { records, total: Number.isFinite(total) ? total : pmids.length, truncated: total > pmids.length }
-  })
+  }
+  return { records, total, truncated: total > records.length }
 }

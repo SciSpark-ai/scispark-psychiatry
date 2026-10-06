@@ -6,6 +6,7 @@ import type { LLMProvider, Tier } from "../../llm/types"
 import type { LLMSettings } from "../../llm/settings"
 import type { VaultStorage } from "../../vault/storage"
 import type { GatedCandidate, StageAGrade, WatchEntry } from "../types"
+import { CLINICAL_COPY } from "../copy"
 
 export const STAGE_A_BATCH = 20
 const ABSTRACT_LIMIT = 1800
@@ -78,7 +79,7 @@ const ungraded = (key: string): StageAGrade => ({ key, entryId: null, grade: 0, 
 
 export class GradingFailedError extends Error {
   constructor() {
-    super("AI grading did not complete. Check your AI connection in Settings, then try again.")
+    super(CLINICAL_COPY.run.gradingFailed)
   }
 }
 
