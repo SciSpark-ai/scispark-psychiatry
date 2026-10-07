@@ -46,3 +46,19 @@ it("allows only the documented repository API paths through the relay", async ()
   }
   expect(fetch).toHaveBeenCalledOnce()
 })
+
+// Clinical edition: the digest needs the statements at the end of a paper.
+it("reads the funding and conflict statements after the body, not the reference list, and keeps the end of a long article", async () => {
+  const long = `<article><front><article-meta><article-id pub-id-type="doi">10.1000/fixture</article-id><title-group><article-title>${paper.title}</article-title></title-group></article-meta></front><body><sec><title>Methods</title><p>${body} ${"Filler sentence about charging. ".repeat(2500)}</p></sec></body><back><sec><title>Funding</title><p>Funded by the Fixture Battery Fund.</p></sec><ref-list><ref><mixed-citation>Somebody. A cited paper title.</mixed-citation></ref></ref-list></back></article>`
+  const fetch = vi.fn(async (input: unknown) => {
+    const url = new URL(String(input), "http://localhost").searchParams.get("url")!
+    if (url.includes("publisher.invalid")) return Response.json({ error: "url not allowed" }, { status: 403 })
+    return new Response(url.includes("/search?") ? lookup : long, { headers: { "content-type": "application/xml" } })
+  })
+  const result = await acquireReviewEvidence(paper, "P1", fetch)
+  expect(result?.access).toBe("full-text")
+  expect(result?.text.length).toBeLessThanOrEqual(45_000)
+  expect(result?.text).toContain("Funded by the Fixture Battery Fund.")
+  expect(result?.text).not.toContain("A cited paper title")
+  expect(result?.notes.join(" ")).toMatch(/middle/i)
+})

@@ -99,7 +99,7 @@ export const CLINICAL_COPY = {
       groups: { study: "The study", results: "Results", appraisal: "Appraisal" },
       write: "Write digest", writing: "Reading the paper…", update: "Update from full text", written: "Digest written",
       writeNote: "Reads the paper, the full text when it can be had, and uses your AI model.",
-      fromFullText: "Written by AI from the full text", fromExcerpt: "Written by AI from the first part of the full text",
+      fromFullText: "Written by AI from the full text", fromExcerpt: "Written by AI from the full text, without its middle part",
       fromAbstract: "Written by AI from the abstract only. The full text could not be read.",
       notStated: (fromFullText: boolean, labels: string[]) => `Not stated in the ${fromFullText ? "paper" : "abstract"}: ${labels.map((label) => label.toLowerCase()).join(", ")}.`,
       unverified: "Check this against the paper: a number here was not found in the text.",

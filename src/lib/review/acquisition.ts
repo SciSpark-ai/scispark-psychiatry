@@ -1,3 +1,4 @@
+import { headAndTail } from "../text"
 import { XMLParser } from "fast-xml-parser"
 import { normalizeDoi, type PaperRecord } from "../papers/types"
 import { serverRelayFetch } from "../server/relay-fetch"
@@ -6,6 +7,9 @@ import { hashReviewData } from "./budget"
 import type { EvidenceRecord } from "./contracts"
 import { contextOverlap } from "./context"
 import { extractReviewPdf } from "./pdf"
+
+/** How much of the end of a long article is kept (characters). */
+const FULL_TEXT_TAIL = 8_000
 
 const MAX_BYTES = 5_000_000
 async function boundedBytes(response: Response): Promise<Uint8Array> {
@@ -102,7 +106,9 @@ export async function acquireReviewEvidence(paper: PaperRecord, id: string,
         const doi = ids.find((item) => item["@_pub-id-type"] === "doi")?.["#text"]
         const title = extractReadableText(xml.match(/<article-title\b[^>]*>[\s\S]*?<\/article-title>/i)?.[0] ?? "")
         const body = xml.match(/<body\b[^>]*>[\s\S]*?<\/body>/i)?.[0] ?? ""
-        readable = `${title}\n\n${extractReadableText(body)}`
+        // Clinical edition: the statements after the body (funding, conflicts of interest) are read too; the reference list is not.
+        const back = (xml.match(/<back\b[^>]*>[\s\S]*?<\/back>/i)?.[0] ?? "").replace(/<ref-list\b[\s\S]*?<\/ref-list>/gi, "")
+        readable = `${title}\n\n${extractReadableText(body)}${back ? `\n\n${extractReadableText(back)}` : ""}`
         validIdentity = Boolean(body) && titleMatches(paper.title, title) && (!paper.ids.doi || normalizeDoi(doi) === normalizeDoi(paper.ids.doi))
       } else if (type.includes("html")) {
         const html = Buffer.from(bytes).toString("utf8")
@@ -110,8 +116,8 @@ export async function acquireReviewEvidence(paper: PaperRecord, id: string,
         readable = article ? extractReadableText(article) : ""; validIdentity = titleMatches(paper.title, readable)
       } else { notes.push("Unsupported full-text format; abstract retained"); continue }
       if (!validIdentity || !hasBody(readable)) { notes.push("Could not verify article identity and body; abstract retained"); continue }
-      text = readable.slice(0, 45_000); access = "full-text"; locator = url
-      if (readable.length > text.length) notes.push("Article text shortened to the first 45,000 characters; later sections were not read")
+      text = headAndTail(readable, 45_000, FULL_TEXT_TAIL); access = "full-text"; locator = url
+      if (readable.length > text.length) notes.push("Article text shortened to 45,000 characters: the beginning and the end were read, the middle was not")
       // Preserve only a bounded, identity-verified article for offline reading.
       // A cache write failure must not discard text we have already verified.
       if (onVerifiedSource && (type.includes("pdf") || type.includes("html"))) {

@@ -13,3 +13,17 @@ export function truncateAtWhitespace(text: string, limit: number): string {
   }
   return hardCut
 }
+
+/** Marks where `headAndTail` left text out. */
+export const TEXT_GAP = "\n[...]\n"
+
+/**
+ * Cuts `text` to at most `limit` chars by keeping its beginning and its last `tail` chars, with a
+ * mark where the middle was left out. (Clinical edition: a paper's funding and conflict-of-interest
+ * statements are at its end, so cutting only the end loses them.)
+ */
+export function headAndTail(text: string, limit: number, tail: number): string {
+  if (text.length <= limit) return text
+  const head = truncateAtWhitespace(text, limit - tail - TEXT_GAP.length)
+  return `${head}${TEXT_GAP}${text.slice(text.length - tail).replace(/^\S*\s/, "")}`
+}

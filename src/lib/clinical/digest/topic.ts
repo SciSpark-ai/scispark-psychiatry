@@ -91,6 +91,7 @@ Return "sentences": exactly one entry for every paper. Each entry:
   - "mixed": ONLY when the same treatment improved one clinical outcome AND the paper says it did not improve another. Your text must name both and contain "not" or "no".
   - "safety": the main finding is a harm, adverse effect or risk of a treatment (for example a drug lengthening the QTc interval, weight gain, misuse potential). Name the drug as the treatment.
   - "other": everything that is not about whether a treatment works or harms: associations, risk factors and mechanisms ("was linked to"), biomarkers, prediction, prevalence, measurement, and reviews that only say the evidence is uncertain.
+  "benefit", "no-benefit" and "mixed" are about the illness and the patient: symptoms, remission, relapse, functioning, survival, adherence. A result on a brain measure, a biomarker, a blood level or a mechanism ("did not alter brain function for reward processing", "lowered C4A levels") is "other", whatever its direction.
   When the abstract does not let you tell whether the outcome improved, choose "other", never "no-benefit".
 - "group": null. "emphasis": an empty list.
 
@@ -103,7 +104,7 @@ Rules:
 
 export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof OverviewSchema>>({
   name: "clinical-topic-overview",
-  version: "9",
+  version: "10",
   run: (ctx, input) =>
     ctx.llmStructured(
       // The stronger model: weighing several papers against each other is where the small one writes filler.

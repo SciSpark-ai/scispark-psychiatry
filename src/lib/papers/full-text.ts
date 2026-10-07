@@ -4,6 +4,7 @@ import { acquireReviewEvidence, isArticleText } from "../review/acquisition"
 import { extractReviewPdf } from "../review/pdf"
 import { serverRelayFetch } from "../server/relay-fetch"
 import { normalizeDoi, paperKey, type PaperRecord } from "./types"
+import { headAndTail } from "../text"
 import { PaperTextSchema, type PaperText } from "./text-contract"
 
 export interface PaperTextDeps { fetchFn?: typeof fetch; extractPdf?: typeof extractReviewPdf; now?: () => Date; onSnapshot?: () => void }
@@ -40,7 +41,7 @@ export async function loadPaperText(storage: VaultStorage, paper: PaperRecord, d
     if (html) {
       const article = html.match(/<article\b[^>]*>[\s\S]*?<\/article>/i)?.[0]
       const text = extractReadableText(article ?? html)
-      if (isArticleText(paper, text)) return remember({ paperKey: key, access: "full-text", text: text.slice(0, 45_000), locator: `sources/${stem}.html`, checkedAt, truncated: text.length > 45_000, notes: text.length > 45_000 ? ["Article text shortened to 45,000 characters; later content was not read."] : [] })
+      if (isArticleText(paper, text)) return remember({ paperKey: key, access: "full-text", text: headAndTail(text, 45_000, 8_000), locator: `sources/${stem}.html`, checkedAt, truncated: text.length > 45_000, notes: text.length > 45_000 ? ["Article text shortened to 45,000 characters: the beginning and the end were read, the middle was not."] : [] })
       notes.push("Saved HTML did not contain a verified article body.")
     }
     const pdf = await storage.readBinary(`sources/${stem}.pdf`)

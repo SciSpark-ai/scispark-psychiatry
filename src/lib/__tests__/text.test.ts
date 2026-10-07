@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { tokenize, truncateAtWhitespace } from "../text"
+import { headAndTail, tokenize, truncateAtWhitespace } from "../text"
 
 describe("tokenize", () => {
   it("lower-cases, splits on non-alphanumerics and drops short tokens", () => {
@@ -19,5 +19,20 @@ describe("truncateAtWhitespace", () => {
   })
   it("hard-cuts when no whitespace lies within 200 chars of the limit", () => {
     expect(truncateAtWhitespace("x".repeat(300), 250)).toBe("x".repeat(250))
+  })
+})
+
+// Clinical edition: funding and conflict-of-interest statements sit at the end of a paper.
+describe("headAndTail", () => {
+  it("returns short text unchanged", () => {
+    expect(headAndTail("short", 10, 4)).toBe("short")
+  })
+  it("keeps the beginning and the end of a long text within the limit, and marks the gap", () => {
+    const text = `START ${"x".repeat(500)} END`
+    const cut = headAndTail(text, 100, 20)
+    expect(cut.length).toBeLessThanOrEqual(100)
+    expect(cut.startsWith("START")).toBe(true)
+    expect(cut.endsWith("END")).toBe(true)
+    expect(cut).toContain("[...]")
   })
 })

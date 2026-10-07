@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { defineSkill } from "../../skills/types"
 import { runSkill } from "../../skills/runner"
-import { truncateAtWhitespace } from "../../text"
+import { headAndTail } from "../../text"
 import { paperSlug, slugifyTitle } from "../../wiki/authoring"
 import { PaperTextInfoSchema, type PaperTextInfo } from "../../papers/text-contract"
 import type { PaperRecord } from "../../papers/types"
@@ -41,8 +41,8 @@ const StoredPaperDigestSchema = z.object({
 })
 export type StoredPaperDigest = z.infer<typeof StoredPaperDigestSchema>
 
-/** How much of the full text goes to the model (characters). The same cap as upstream's digest. */
-const MAX_FULL_TEXT_CHARS = 40_000
+/** How much of the full text goes to the model (characters): all that upstream's reader keeps, which is the beginning and the end of a long paper. */
+const MAX_FULL_TEXT_CHARS = 45_000
 
 interface PaperDigestInput { title: string; journal?: string; abstract?: string; fullText?: string; problems?: string[] }
 
@@ -61,7 +61,7 @@ Return these ten items. Each is one or two plain sentences, at most 45 words (at
 - "funding": the funder and any conflicts of interest declared.
 
 Rules:
-- Use only the text given. Add nothing from outside knowledge.
+- Use only the text given. Add nothing from outside knowledge. A mark "[...]" in the full text shows where the middle of a long paper was left out.
 - Copy numbers exactly as printed. Never calculate a new number (no differences, ratios or rounding) and never state a number that is not printed in the text.
 - Do not tell the reader what to do with a patient and do not judge the study's quality beyond what the authors say.
 - If the input has "problems", your previous answer broke these rules there: write the digest again without them.`
@@ -122,7 +122,7 @@ export async function generatePaperDigest(
   if (cached && (cached.source.access === "full-text" || !hasFullText)) return { digest: cached, fromCache: true }
 
   const truncated = hasFullText && (opts.fullText as string).length > MAX_FULL_TEXT_CHARS
-  const fullText = hasFullText ? (truncated ? truncateAtWhitespace(opts.fullText as string, MAX_FULL_TEXT_CHARS) : (opts.fullText as string)) : undefined
+  const fullText = hasFullText ? (truncated ? headAndTail(opts.fullText as string, MAX_FULL_TEXT_CHARS, 8_000) : (opts.fullText as string)) : undefined
   const input: PaperDigestInput = { title: paper.title, ...(paper.venue ? { journal: paper.venue } : {}), ...(paper.abstract ? { abstract: paper.abstract } : {}), ...(fullText ? { fullText } : {}) }
   const sourceText = `${paper.title} ${paper.abstract ?? ""} ${fullText ?? ""}`
   let costUsd: number | null | undefined
