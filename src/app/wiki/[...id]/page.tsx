@@ -13,6 +13,7 @@ import type { VaultStorage } from "@/lib/vault/storage"
 import type { WikiPage } from "@/lib/vault/types"
 import { PageEditor } from "@/components/wiki/PageEditor"
 import { clinicalFence } from "@/components/clinical/clinical-fence"
+import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { Backlinks } from "@/components/wiki/Backlinks"
 import DeleteConfirmCard from "@/components/wiki/DeleteConfirmCard"
 
@@ -121,13 +122,17 @@ export default function WikiPageDetail() {
   const fm = page.frontmatter
   const slug = page.id.split("/").pop() ?? page.id
   const canDelete = isDeletablePage(page)
+  // A condition page belongs to the Evidence view; every other page is listed in the Library.
+  const back = fm.type === "condition"
+    ? { href: "/wiki", label: CLINICAL_COPY.nav.evidence }
+    : { href: "/wiki?view=all", label: CLINICAL_COPY.nav.library }
 
   return (
     <div className="p-7 flex flex-col lg:flex-row gap-6">
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-3 mb-3">
-          <Link href="/wiki" className="text-[13px] text-muted-text hover:text-espresso">
-            ← Wiki
+          <Link href={back.href} className="text-[13px] text-muted-text hover:text-espresso">
+            {CLINICAL_COPY.nav.backTo(back.label)}
           </Link>
           <div className="flex items-center gap-3">
             {status && <span className="text-[13px] text-accent-ink">{status}</span>}

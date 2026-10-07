@@ -4,7 +4,11 @@ export const CLINICAL_COPY = {
   /** The small word under the SciSpark wordmark. */
   edition: "Psychiatry",
   /** The rail, and the two views of the wiki page (amendments A1, A2, A4). */
-  nav: { whatsNew: "What's new", evidence: "Evidence", library: "Library", topics: "My topics", chat: "Chat", readLater: "Read later", history: "History" },
+  nav: {
+    whatsNew: "What's new", evidence: "Evidence", library: "Library", topics: "My topics", chat: "Chat", readLater: "Read later", history: "History",
+    /** The link at the top of a wiki page that leads back to the view it belongs to. */
+    backTo: (view: string) => `← ${view}`,
+  },
   metaDescription: "A literature radar and knowledge base for psychiatry: new papers matched to your watch list, with study design shown.",
   disclaimerShort:
     "For literature awareness only. Designs and grades describe the papers, not whether a treatment is right for a patient.",
