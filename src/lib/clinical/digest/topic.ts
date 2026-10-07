@@ -28,8 +28,11 @@ export { tidyOverviewSentence }
 export const OVERVIEW_MIN_PAPERS = 2
 const OVERVIEW_MAX_PAPERS = 20
 /** One sentence about one thing. The model is asked for fewer words than this. */
+// Tried and taken out on 2026-10-07: a limit on the number of sentences below the number of papers, to
+// force papers to share a sentence. With gpt-4o it left papers out (8 of 15 cited) and joined unrelated
+// findings into one sentence under the wrong kind. See docs/psychiatry/first-run-2026-10-06.md.
 const SENTENCE_MAX_WORDS = 28
-const OVERVIEW_MAX_SENTENCES = 14
+const OVERVIEW_MAX_SENTENCES = 20
 
 /** What a finding says: a treatment helped, did not help, did both, raised a safety concern, or something else was found. */
 export const OVERVIEW_KINDS = ["benefit", "no-benefit", "mixed", "safety", "other"] as const
