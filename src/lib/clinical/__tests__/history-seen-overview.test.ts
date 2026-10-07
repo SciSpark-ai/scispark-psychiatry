@@ -124,6 +124,18 @@ describe("the AI overview of a topic", () => {
       { text: "Response reached 55% with ketamine.", sources: ["k2"] },
     ])
   })
+  // Seen on the first real run: the model also wrote its sources into the sentence, "(1)" and "[2, 3]",
+  // and those digits failed the number check, so two of three topics lost their whole overview.
+  it("takes source markers the model wrote into the sentence out of the text, and does not count them as numbers", () => {
+    expect(checkOverview([
+      { text: "Remission was 27% with esketamine (1), while ketamine raised response [2].", sources: [1, 2] },
+      { text: "Both trials reported benefit (1, 2).", sources: [1, 2] },
+    ], papers)).toEqual([
+      { text: "Remission was 27% with esketamine, while ketamine raised response.", sources: ["k1", "k2"] },
+      { text: "Both trials reported benefit.", sources: ["k1", "k2"] },
+    ])
+  })
+
   it("drops a sentence with no valid source, with a number its sources do not contain, or that is too long", () => {
     const long = Array.from({ length: 60 }, () => "word").join(" ")
     expect(checkOverview([
