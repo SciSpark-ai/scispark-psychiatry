@@ -25,9 +25,9 @@ export function ConditionHome() {
     setOpening(condition.code)
     setError(null)
     try {
-      // The page is made the first time it is asked for (decision D19: by the reader, on request).
-      const id = condition.pageId ?? (await createConditionPageRemote(condition.code)).id
-      router.push(wikiHref(id))
+      // The page is made the first time it is asked for (decision D19: by the reader, on request). The call is made
+      // every time: it changes nothing on a page that has its evidence block, and gives the block to an older page.
+      router.push(wikiHref((await createConditionPageRemote(condition.code)).id))
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
       setOpening(null)

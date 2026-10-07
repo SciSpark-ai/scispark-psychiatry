@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { MemoryVaultStorage } from "../../vault/memory-storage"
 import { parseDocument } from "../../vault/frontmatter"
 import { loadBundle } from "../../vault/bundle"
+import { revertPersistedChangeset } from "../../vault/changesets"
 import { TaxonomySchema } from "../pack/schema"
 import { createConditionPage } from "../records/condition-page"
 import { parseEvidenceQuery } from "../records/query"
@@ -33,6 +34,35 @@ describe("creating a condition page", () => {
     await storage.write(path, `${await storage.read(path)}\nMy own notes.\n`)
     expect(await createConditionPage(storage, TAXONOMY, "depression", { now: NOW })).toEqual({ id: "wiki/conditions/major-depressive-disorder", created: false })
     expect(await storage.read(path)).toContain("My own notes.")
+    // A page that has its evidence block is not written again.
+    expect((await storage.list(".scispark/changesets/")).length).toBe(1)
+  })
+  it("gives a page made before the evidence block that block, at the top, and leaves the rest of the page as it is", async () => {
+    const storage = new MemoryVaultStorage()
+    const path = "wiki/conditions/major-depressive-disorder.md"
+    const front = "---\ntype: condition\ntitle: Major depressive disorder\ncreated: 2026-09-01\nupdated: 2026-09-03\ntags: [mine]\nrelated: []\nsources: []\ntaxonomy: depression\n---\n\n"
+    const rest = "## Treatment options\n\n```evidence-table\ncondition: depression\n```\n\n## My notes\n\nLithium first, I think.\n"
+    await storage.write(path, front + rest)
+    expect(await createConditionPage(storage, TAXONOMY, "depression", { now: NOW })).toEqual({ id: "wiki/conditions/major-depressive-disorder", created: false })
+    const after = (await storage.read(path)) as string
+    expect(after).toBe(`${front}## Evidence your feed has seen\n\n\`\`\`condition-evidence\ncondition: depression\n\`\`\`\n\n${rest}`)
+    // Through a changeset that holds the page as it was, so it can be undone.
+    const [changesetPath] = await storage.list(".scispark/changesets/")
+    const changeset = JSON.parse((await storage.read(changesetPath)) as string)
+    expect(changeset.changes).toEqual([{ path, before: front + rest, after }])
+    await revertPersistedChangeset(storage, changeset.id)
+    expect(await storage.read(path)).toBe(front + rest)
+  })
+  it("repairs a page once: asked again, it changes nothing", async () => {
+    const storage = new MemoryVaultStorage()
+    const path = "wiki/conditions/major-depressive-disorder.md"
+    await storage.write(path, "---\ntype: condition\ntitle: Major depressive disorder\ncreated: 2026-09-01\nupdated: 2026-09-03\ntags: []\nrelated: []\nsources: []\n---\n\nOnly my notes.\n")
+    await createConditionPage(storage, TAXONOMY, "depression", { now: NOW })
+    const once = await storage.read(path)
+    expect(once).toContain("```condition-evidence\ncondition: depression\n```")
+    expect(await createConditionPage(storage, TAXONOMY, "depression", { now: NOW })).toEqual({ id: "wiki/conditions/major-depressive-disorder", created: false })
+    expect(await storage.read(path)).toBe(once)
+    expect((await storage.list(".scispark/changesets/")).length).toBe(1)
   })
   it("refuses a code that is not a condition of the pack", async () => {
     const storage = new MemoryVaultStorage()

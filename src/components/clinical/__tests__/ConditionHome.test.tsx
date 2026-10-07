@@ -34,7 +34,7 @@ describe("wiki home", () => {
     const cards = [...container.querySelectorAll("[data-condition]")]
     expect(cards.map((card) => card.getAttribute("data-condition"))).toEqual(["depression", "adhd"])
     expect(cards[0].textContent).toContain("Major depressive disorder")
-    expect(cards[0].querySelector("[data-count]")!.textContent).toBe("22 papers · 5 new in the last two weeks")
+    expect(cards[0].querySelector("[data-count]")!.textContent).toBe("22 papers · 5 first listed in the last two weeks")
     expect(cards[0].querySelector("[data-treatments]")!.textContent).toBe("Ketamine, Lithium")
     expect(cards[1].querySelector("[data-count]")!.textContent).toBe("No papers yet")
     expect(cards[1].querySelector("[data-treatments]")).toBeNull()
@@ -47,6 +47,15 @@ describe("wiki home", () => {
     await act(async () => { (container.querySelector("[data-condition] button") as HTMLButtonElement).click() })
     expect(records.createConditionPageRemote).toHaveBeenCalledWith("adhd")
     expect(push).toHaveBeenCalledWith("/wiki/conditions/adhd")
+  })
+
+  it("asks for the page also when there is one, so that a page made before the evidence block gets it", async () => {
+    evidence.listFollowedConditionsRemote.mockResolvedValue([{ code: "depression", name: "Major depressive disorder", total: 3, recent: 0, treatments: [], pageId: "wiki/conditions/major-depressive-disorder" }])
+    records.createConditionPageRemote.mockResolvedValue({ id: "wiki/conditions/major-depressive-disorder", created: false })
+    await render()
+    await act(async () => { (container.querySelector("[data-condition] button") as HTMLButtonElement).click() })
+    expect(records.createConditionPageRemote).toHaveBeenCalledWith("depression")
+    expect(push).toHaveBeenCalledWith("/wiki/conditions/major-depressive-disorder")
   })
 
   it("says what to do when no condition is followed, and why when the list cannot be had", async () => {
