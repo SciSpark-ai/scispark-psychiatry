@@ -69,15 +69,16 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
       // Inline, not utility classes: the tint has to win over the card's own background class.
       {...(tone === undefined ? {} : { "data-tone": String(tone), style: {
         "--card-tone": CARD_TONES[tone % CARD_TONES.length],
-        backgroundColor: "color-mix(in srgb, var(--card-tone) 4%, var(--surface-light))",
-        borderColor: "color-mix(in srgb, var(--card-tone) 22%, var(--border))",
+        backgroundColor: "color-mix(in srgb, var(--card-tone) 2%, var(--surface-light))",
+        borderColor: "color-mix(in srgb, var(--card-tone) 14%, var(--border))",
       } as CSSProperties })}
       className="flex flex-col gap-2.5 p-4"
     >
       {/* Tags are plain text, not pills: a pill's own background fights with the card's tint. */}
       <p className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-snug">
-        {designNote && <span title={designNote} {...(inferredDesign ? { "data-inferred": "true" } : {})} className="font-semibold uppercase tracking-wide text-accent-ink">{CLINICAL_COPY.designLabels[item.design]}</span>}
-        {entryLabel && <span title={matchNote} className="font-medium text-secondary-dark">{entryLabel}{matched !== null && matched < 4 ? ` · ${F.matchLabels[matched]}` : ""}</span>}
+        {/* Topic first (the user's own watch entry, in the accent colour), then the study type in plain text. */}
+        {entryLabel && <span title={matchNote} className="font-semibold text-accent-ink">{entryLabel}</span>}
+        {designNote && <span title={designNote} {...(inferredDesign ? { "data-inferred": "true" } : {})} className="text-espresso">{CLINICAL_COPY.designLabels[item.design]}</span>}
         {item.flags.includes("title-only") && <span className="text-muted-text">{CLINICAL_COPY.feed.noAbstract}</span>}
         {item.ungraded && <span className="text-muted-text">{CLINICAL_COPY.feed.notGraded}</span>}
       </p>

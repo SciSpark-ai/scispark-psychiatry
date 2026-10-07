@@ -46,14 +46,16 @@ describe("ClinicalFeedCard", () => {
 
   it("says in words how the paper matches the watch entry, and explains it on hover", async () => {
     await mount(ITEM)
-    // A direct match shows the watch entry alone; a weaker match adds its level in words.
+    // The card names the topic only; how close the match is appears on hover, never as words on the card.
     expect(container.textContent).not.toContain("Direct match")
     expect(container.textContent).not.toContain("4/4")
     const tag = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Depression × Drug A")!
     expect(tag.getAttribute("title")).toContain("We randomised 200 adults")
     document.body.innerHTML = ""
     await mount({ ...ITEM, grade: 3 })
-    expect(container.textContent).toContain("Depression × Drug A · Close match")
+    expect(container.textContent).not.toContain("Close match")
+    const close = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Depression × Drug A")!
+    expect(close.getAttribute("title")).toContain("subtype")
   })
 
   it("hands the paper to the reader before opening it, so the paper page has content", async () => {
@@ -138,5 +140,16 @@ describe("ClinicalFeedCard", () => {
     const inferred = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Randomized trial")!
     expect(inferred.className).toBe(assignedClass)
     expect(inferred.getAttribute("title")).toContain("not assigned by PubMed")
+  })
+
+  it("puts the topic first, in the accent colour, and the study type after it in the normal text colour", async () => {
+    await mount(ITEM)
+    const text = container.textContent ?? ""
+    expect(text.indexOf("Depression × Drug A")).toBeLessThan(text.indexOf("Randomized trial"))
+    const topic = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Depression × Drug A")!
+    const design = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Randomized trial")!
+    expect(topic.className).toContain("text-accent-ink")
+    expect(design.className).toContain("text-espresso")
+    expect(design.className).not.toContain("uppercase")
   })
 })
