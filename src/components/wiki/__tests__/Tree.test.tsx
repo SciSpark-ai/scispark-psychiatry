@@ -36,10 +36,10 @@ describe("Tree paper routing (SP3 task 3)", () => {
 
   it("leaves a non-paper node's href on the wikiHref route", () => {
     const bundle = bundleFromPages([
-      { id: "wiki/concepts/attention", frontmatter: fm("concept", "Attention Mechanism") },
+      { id: "wiki/notes/attention", frontmatter: fm("note", "Attention Mechanism") },
     ])
     const html = renderToStaticMarkup(<Tree bundle={bundle} />)
-    expect(html).toMatch(/href="\/wiki\/concepts\/attention"/)
+    expect(html).toMatch(/href="\/wiki\/notes\/attention"/)
   })
 })
 
@@ -51,5 +51,21 @@ describe("Tree type headings (SP5 task 1: reinstated 'query' type)", () => {
     const html = renderToStaticMarkup(<Tree bundle={bundle} />)
     expect(html).toContain("Saved answers")
     expect(html).not.toMatch(/>query</)
+  })
+})
+
+describe("Tree in the clinical edition", () => {
+  it("does not list concept, topic or author pages", () => {
+    const bundle = bundleFromPages([
+      { id: "wiki/papers/a-paper", frontmatter: fm("paper", "A Paper") },
+      { id: "wiki/conditions/depression", frontmatter: fm("condition", "Major depressive disorder") },
+      { id: "wiki/notes/a-note", frontmatter: fm("note", "A Note") },
+      { id: "wiki/concepts/attention", frontmatter: fm("concept", "Attention Mechanism") },
+      { id: "wiki/topics/sleep", frontmatter: fm("topic", "Sleep Overview") },
+      { id: "wiki/authors/a-author", frontmatter: fm("author", "A. Author") },
+    ])
+    const html = renderToStaticMarkup(<Tree bundle={bundle} />)
+    for (const shown of ["A Paper", "Major depressive disorder", "A Note"]) expect(html).toContain(shown)
+    for (const hidden of ["Attention Mechanism", "Sleep Overview", "A. Author"]) expect(html).not.toContain(hidden)
   })
 })

@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { createRoot } from "react-dom/client"
 import { act } from "react"
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/" }))
+const route = vi.hoisted(() => ({ pathname: "/", search: "" }))
+vi.mock("next/navigation", () => ({ usePathname: () => route.pathname, useSearchParams: () => new URLSearchParams(route.search) }))
 vi.mock("@/lib/vault/get-vault", () => ({ getOpenVault: async () => ({}) }))
 vi.mock("@/lib/wiki/review-queue", () => ({ reviewCount: async () => 2 }))
 
@@ -20,19 +21,19 @@ import { Sidebar } from "../Sidebar"
 import { MobileNav } from "../MobileNav"
 import { useUIStore } from "@/stores/ui-store"
 
-const html = () => renderToStaticMarkup(<Sidebar collapsed={false} />)
+const html = () => renderToStaticMarkup(<Sidebar collapsed={false} />).replace(/&#x27;/g, "'")
 
 describe("Sidebar nav map (SP1)", () => {
-  it("shows the grouped real-surface map", () => {
+  it("shows the five-item rail, in order, with no group headings", () => {
     const out = html()
-    for (const label of ["Discover", "Knowledge", "Home", "Sparky", "Read later", "History", "My topics", "Wiki", "Graph", "Psychiatry"]) {
-      expect(out, label).toContain(label)
-    }
-    for (const href of ["/", "/watch", "/read-later", "/feed-history", "/wiki", "/viz", "/chat"]) {
-      expect(out, href).toContain(`href="${href}"`)
-    }
+    const labels = ["What's new", "Evidence", "Library", "My topics", "Chat", "Psychiatry"]
+    const at = labels.slice(0, 5).map((label) => out.indexOf(label))
+    for (const [index, label] of labels.entries()) expect(index < 5 ? at[index] : out.indexOf(label), label).toBeGreaterThan(-1)
+    expect([...at].sort((x, y) => x - y)).toEqual(at)
+    for (const href of ["/", "/wiki", "/wiki?view=all", "/watch", "/chat"]) expect(out, href).toContain(`href="${href}"`)
+    for (const label of ["Graph", "Sparky", "Home", "Wiki", "Discover", "Knowledge", "Read later", "History"]) expect(out, label).not.toContain(label)
+    for (const href of ["/viz", "/read-later", "/feed-history"]) expect(out, href).not.toContain(`href="${href}"`)
     // Clinical edition (D32): Trending, Idea Spark and the fork-mock pages are hidden.
-    // "History" is now the clinical search history (/feed-history); upstream's own /history page stays hidden.
     for (const label of ["Trending", "Idea Spark", "Projects"]) expect(out, label).not.toContain(label)
     for (const href of ["/spark", "/projects", "/trending", "/history"]) expect(out, href).not.toContain(`href="${href}"`)
     expect(out).not.toContain('href="/papers"')
@@ -40,10 +41,24 @@ describe("Sidebar nav map (SP1)", () => {
   it("drops the fork-era items and settings from the rail", () => {
     const out = html()
     expect(out).not.toContain("New Chat")
-    expect(out).not.toContain("Library")
     expect(out).not.toContain("Recent Chats")
     expect(out).not.toContain('href="/settings"')
     expect(out).not.toContain("Dashboard")
+  })
+  it("marks Evidence on /wiki and on a condition page, and Library on /wiki?view=all", () => {
+    const current = (pathname: string, search = "") => {
+      route.pathname = pathname
+      route.search = search
+      const host = document.createElement("div")
+      host.innerHTML = html()
+      route.pathname = "/"
+      route.search = ""
+      return [...host.querySelectorAll("nav a")].filter((link) => link.className.includes("font-medium")).map((link) => link.textContent)
+    }
+    expect(current("/wiki")).toEqual(["Evidence"])
+    expect(current("/wiki/conditions/depression")).toEqual(["Evidence"])
+    expect(current("/wiki", "view=all")).toEqual(["Library"])
+    expect(current("/")).toEqual(["What's new"])
   })
 })
 
@@ -74,8 +89,8 @@ describe("Sidebar recent chats (SP5 Task 10)", () => {
     expect(idx2).toBeGreaterThan(-1)
     expect(idx1).toBeGreaterThan(-1)
     expect(idx2).toBeLessThan(idx1)
-    // Saved conversations are shortcuts within History, not tool children.
-    expect(html.indexOf('href="/history"')).toBeLessThan(idx2)
+    // Saved conversations are shortcuts that follow the rail's Chat item.
+    expect(html.indexOf('href="/chat"')).toBeLessThan(idx2)
     expect(html).toContain("Second question about diffusion models")
     expect(html).toContain("First question about transformers")
 
@@ -149,7 +164,7 @@ it("closes the mobile drawer on destination selection and omits desktop header c
 })
 
 describe("Sidebar review-inbox badge (SP1)", () => {
-  it("renders the review count badge on the Wiki nav item once loaded", async () => {
+  it("renders the review count badge on the Evidence nav item once loaded", async () => {
     ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const container = document.createElement("div")

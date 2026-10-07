@@ -1,15 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   Home,
   BookOpen,
-  Network,
+  Library,
   ListChecks,
-  Clock,
-  History,
   MessageSquarePlus,
   PanelLeftClose,
   X,
@@ -52,29 +50,15 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-interface NavGroup {
-  heading: string;
-  items: NavItem[];
-}
+const N = CLINICAL_COPY.nav;
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    heading: "Discover",
-    items: [
-      { key: "home", label: "Home", href: "/", icon: Home },
-      { key: "chat", label: "Sparky", href: "/chat", icon: MessageSquarePlus },
-      { key: "read-later", label: CLINICAL_COPY.readLater.heading, href: "/read-later", icon: Clock },
-      { key: "feed-history", label: CLINICAL_COPY.history.heading, href: "/feed-history", icon: History },
-      { key: "watch", label: CLINICAL_COPY.watch.heading, href: "/watch", icon: ListChecks },
-    ],
-  },
-  {
-    heading: "Knowledge",
-    items: [
-      { key: "wiki", label: "Wiki", href: "/wiki", icon: BookOpen },
-      { key: "graph", label: "Graph", href: "/viz", icon: Network },
-    ],
-  },
+/** One group, no headings (amendment A1). Graph, Read later and History are not in the rail. */
+const NAV_ITEMS: NavItem[] = [
+  { key: "home", label: N.whatsNew, href: "/", icon: Home },
+  { key: "evidence", label: N.evidence, href: "/wiki", icon: BookOpen },
+  { key: "library", label: N.library, href: "/wiki?view=all", icon: Library },
+  { key: "watch", label: CLINICAL_COPY.watch.heading, href: "/watch", icon: ListChecks },
+  { key: "chat", label: N.chat, href: "/chat", icon: MessageSquarePlus },
 ];
 
 interface SidebarProps {
@@ -83,9 +67,61 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-function isItemActive(pathname: string, href: string): boolean {
-  if (href === "/chat" && pathname.startsWith("/papers")) return true;
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+/** Evidence and Library share the /wiki route and differ by `?view=all`; every other wiki page (notes, the inbox) belongs to the Library. */
+function isItemActive(pathname: string, item: NavItem, libraryView: boolean): boolean {
+  const inWiki = pathname === "/wiki" || pathname.startsWith("/wiki/");
+  if (item.key === "evidence") return pathname === "/wiki" ? !libraryView : pathname.startsWith("/wiki/conditions");
+  if (item.key === "library") return pathname === "/wiki" ? libraryView : inWiki && !pathname.startsWith("/wiki/conditions");
+  if (item.key === "chat" && pathname.startsWith("/papers")) return true;
+  return item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+}
+
+interface NavLinksProps {
+  pathname: string;
+  collapsed: boolean;
+  inboxCount: number;
+  fadeLabel: string;
+  onNavigate?: () => void;
+}
+
+function NavLinksView({ pathname, collapsed, inboxCount, fadeLabel, onNavigate, libraryView }: NavLinksProps & { libraryView: boolean }) {
+  return (
+    <>
+      {NAV_ITEMS.map((item) => {
+        const isActive = isItemActive(pathname, item, libraryView);
+        const Icon = item.icon;
+        // Review-inbox badge is Evidence-only; attached here rather than in
+        // NAV_ITEMS to keep the item data generic.
+        const badge = item.key === "evidence" && !collapsed && inboxCount > 0 ? inboxCount : null;
+        return (
+          <Link
+            key={item.key}
+            href={item.href}
+            onClick={onNavigate}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[15px] tracking-body transition-colors ${
+              isActive
+                ? "bg-card-surface text-espresso font-medium"
+                : "text-muted-text hover:bg-card-surface/50"
+            }`}
+          >
+            <Icon size={18} strokeWidth={1.8} className="flex-shrink-0" />
+            <span className={fadeLabel}>{item.label}</span>
+            {badge !== null && (
+              <Chip tone="accent" className="ml-auto flex-shrink-0">
+                {badge}
+              </Chip>
+            )}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
+/** Reads `?view=all` to tell Evidence from Library. */
+function NavLinks(props: NavLinksProps) {
+  const searchParams = useSearchParams();
+  return <NavLinksView {...props} libraryView={searchParams.get("view") === "all"} />;
 }
 
 export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
@@ -111,7 +147,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     return () => document.removeEventListener("mousedown", onDown);
   }, [menuOpen]);
 
-  // Review-inbox count for the Wiki nav badge. Reloaded whenever pathname
+  // Review-inbox count for the Evidence nav badge. Reloaded whenever pathname
   // changes so acting on the inbox (e.g. dismissing/undoing) refreshes the
   // count on return. Failures resolve to 0 silently — the nav must never
   // break on a vault hiccup.
@@ -133,7 +169,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     };
   }, [pathname]);
 
-  // Recent chat sessions for the quiet nav-aid list under History. Reloaded on
+  // Recent chat sessions for the quiet nav-aid list under Chat. Reloaded on
   // pathname change so starting/continuing a conversation is reflected on
   // return, same rationale as the inbox count above. Failures resolve to an
   // empty list silently — the nav must never break on a vault hiccup.
@@ -162,34 +198,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     collapsed ? "opacity-0 pointer-events-none" : "opacity-100"
   }`;
 
-  function renderItem(item: NavItem) {
-    const isActive = isItemActive(pathname, item.href);
-    const Icon = item.icon;
-    // Review-inbox badge is Wiki-only; attached here rather than in
-    // NAV_GROUPS to keep the item data generic.
-    const badge = item.key === "wiki" && !collapsed && inboxCount > 0 ? inboxCount : null;
-
-    return (
-      <Link
-        key={item.key}
-        href={item.href}
-        onClick={onNavigate}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[15px] tracking-body transition-colors ${
-          isActive
-            ? "bg-card-surface text-espresso font-medium"
-            : "text-muted-text hover:bg-card-surface/50"
-        }`}
-      >
-        <Icon size={18} strokeWidth={1.8} className="flex-shrink-0" />
-        <span className={fadeLabel}>{item.label}</span>
-        {badge !== null && (
-          <Chip tone="accent" className="ml-auto flex-shrink-0">
-            {badge}
-          </Chip>
-        )}
-      </Link>
-    );
-  }
+  const navProps = { pathname, collapsed, inboxCount, fadeLabel, onNavigate };
 
   return (
     <aside className="w-[240px] bg-page-warm flex flex-col h-full p-3 flex-shrink-0">
@@ -211,18 +220,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           : <ThemeToggle className={collapsed ? "invisible" : "ml-auto"} />}
       </div>
 
-      {/* Grouped nav — icons always at same position */}
+      {/* One group of five, no headings — icons always at same position */}
       <nav className={`flex-1 min-h-0 overflow-y-auto ${disabled ? "opacity-40 pointer-events-none" : ""}`}>
-        {NAV_GROUPS.map((group) => (
-          <div key={group.heading}>
-            <div
-              className={`px-3 pt-4 pb-1 text-[10px] uppercase tracking-wide text-muted-text ${collapsed ? "hidden" : ""}`}
-            >
-              {group.heading}
-            </div>
-            {group.items.map(renderItem)}
-          </div>
-        ))}
+        <Suspense fallback={<NavLinksView {...navProps} libraryView={false} />}>
+          <NavLinks {...navProps} />
+        </Suspense>
         <hr className="border-border-warm mx-[10px] my-[14px]" />
         {!collapsed && recentSessions.length > 0 && (
           <ul aria-label="Recent chats">

@@ -3,6 +3,8 @@ export const CLINICAL_COPY = {
   appName: "SciSpark Psychiatry",
   /** The small word under the SciSpark wordmark. */
   edition: "Psychiatry",
+  /** The rail, and the two views of the wiki page (amendments A1, A2, A4). */
+  nav: { whatsNew: "What's new", evidence: "Evidence", library: "Library", topics: "My topics", chat: "Chat", readLater: "Read later", history: "History" },
   metaDescription: "A literature radar and knowledge base for psychiatry: new papers matched to your watch list, with study design shown.",
   disclaimerShort:
     "For literature awareness only. Designs and grades describe the papers, not whether a treatment is right for a patient.",
@@ -307,6 +309,13 @@ export const CLINICAL_COPY = {
     effectNote: "Computed by this app from the numbers above, not taken from the paper and not written by AI. One trial is not a meta-analysis.",
   },
   evidence: {
+    home: {
+      heading: "Conditions you follow",
+      count: (total: number, recent: number) => (total === 0 ? "No papers yet" : `${total} ${total === 1 ? "paper" : "papers"}${recent > 0 ? ` · ${recent} new in the last two weeks` : ""}`),
+      open: "Open", opening: "Opening…",
+      none: "You are not following a condition yet.", addTopics: "Add one under My topics",
+      loading: "Loading…",
+    },
     badRequest: "The request was not understood.",
     noSuchCondition: "That condition is not in the pack.",
     requestFailed: (status: number) => `The evidence could not be reached (${status}).`,

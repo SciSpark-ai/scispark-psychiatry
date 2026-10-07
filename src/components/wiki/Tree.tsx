@@ -5,6 +5,7 @@ import { displayTitle } from "@/lib/papers/title"
 import type { Bundle } from "@/lib/vault/bundle"
 import { PAGE_TYPES } from "@/lib/vault/types"
 import { wikiHref } from "@/lib/wiki/href"
+import { HIDDEN_PAGE_TYPES } from "@/lib/clinical/page-types"
 
 // Mirrors index-builder.ts's TYPE_HEADINGS (kept in sync manually, same as
 // schema-routing.ts mirrors scaffold.ts's TYPE_DIRS elsewhere in this repo).
@@ -43,7 +44,7 @@ export function Tree({ bundle }: TreeProps) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {PAGE_TYPES.map((type) => {
+      {PAGE_TYPES.filter((type) => !HIDDEN_PAGE_TYPES.includes(type)).map((type) => {
         const rows = (byType.get(type) ?? []).sort((a, b) => a.title.localeCompare(b.title))
         return (
           <section key={type} className="border border-border-warm rounded-card p-3 bg-light-surface">

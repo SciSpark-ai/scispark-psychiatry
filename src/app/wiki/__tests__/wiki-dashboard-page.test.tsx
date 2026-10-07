@@ -22,6 +22,9 @@ vi.mock("@/lib/wiki/review-queue", () => ({
 }))
 vi.mock("@/lib/clinical/records/client", () => ({ listConditionsRemote: async () => [], createConditionPageRemote: async () => ({ id: "", created: false }) }))
 
+vi.mock("@/components/clinical/ConditionHome", () => ({ ConditionHome: () => <div data-testid="condition-home" /> }))
+vi.mock("@/lib/clinical/evidence/client", () => ({ listFollowedConditionsRemote: async () => [] }))
+
 import WikiIndexPage from "../page"
 
 const fm = (type: string, title: string, extra: Partial<Frontmatter> = {}): Frontmatter => ({
@@ -75,14 +78,6 @@ async function renderPage(): Promise<{ container: HTMLElement; root: ReturnType<
   }
 }
 
-function clickByText(container: HTMLElement, text: string) {
-  const el = Array.from(container.querySelectorAll("button, a")).find((e) => e.textContent?.includes(text))
-  if (!el) throw new Error(`no clickable element found containing: ${text}`)
-  act(() => {
-    el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))
-  })
-}
-
 beforeEach(() => {
   ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   vi.clearAllMocks()
@@ -90,138 +85,67 @@ beforeEach(() => {
   reviewCountMock.mockResolvedValue(3)
 })
 
-describe("WikiIndexPage — dashboard default view (SP3 task 3)", () => {
-  it("renders the dashboard sections and keeps New note + inbox count in the header", async () => {
+const title = (container: HTMLElement) => container.querySelector("h1")?.textContent
+const hasLink = (container: HTMLElement, href: string) => container.querySelector(`a[href="${href}"]`) !== null
+
+describe("WikiIndexPage — Evidence view (default)", () => {
+  it("shows the conditions on wiki home and keeps New note + inbox count in the header", async () => {
     loadBundleMock.mockResolvedValue(smallBundle())
     const { container, cleanup } = await renderPage()
 
+    expect(title(container)).toBe("Evidence")
     expect(container.textContent).toContain("New note")
     expect(container.textContent).toContain("Review inbox (3)")
-
-    // StatsStrip + shelves + type sections + recent activity
-    expect(container.innerHTML).toMatch(/href="\/paper\/saved-one"/)
-    expect(container.innerHTML).toMatch(/href="\/paper\/enriched-one"/)
-    expect(container.innerHTML).toMatch(/href="\/paper\/ingested-one"/)
-    expect(container.textContent).toContain("Attention Mechanism")
-    expect(container.textContent).toContain("Saved")
-    expect(container.textContent).toContain("Enriched")
-    expect(container.textContent).toContain("In knowledge base")
+    expect(container.querySelector("[data-testid=condition-home]")).not.toBeNull()
+    // nothing of the upstream dashboard, and no Dashboard / All pages toggle
+    expect(container.textContent).not.toContain("In knowledge base")
+    expect(container.textContent).not.toContain("Dashboard")
+    expect(container.textContent).not.toContain("All pages")
+    // Read later and History belong to the Library view
+    expect(hasLink(container, "/read-later")).toBe(false)
+    expect(hasLink(container, "/feed-history")).toBe(false)
 
     cleanup()
   })
 })
 
-describe("WikiIndexPage — Browse all toggle (SP3 task 3)", () => {
-  it("renders the Tree at ?view=all and keeps the header actions", async () => {
+describe("WikiIndexPage — Library view (?view=all)", () => {
+  it("renders the Tree, links to Read later and History, and keeps the header actions", async () => {
     searchParamsValue = new URLSearchParams("view=all")
     loadBundleMock.mockResolvedValue(smallBundle())
     const { container, cleanup } = await renderPage()
 
+    expect(title(container)).toBe("Library")
     expect(container.textContent).toContain("New note")
     expect(container.textContent).toContain("Review inbox (3)")
+    expect(hasLink(container, "/read-later")).toBe(true)
+    expect(hasLink(container, "/feed-history")).toBe(true)
+    expect(container.textContent).not.toContain("All pages")
+    expect(container.querySelector("[data-testid=condition-home]")).toBeNull()
 
-    // Tree groups by type heading and links papers to /paper/<slug>
+    // Tree groups by type heading and links papers to /paper/<slug>; concept pages are not listed
     expect(container.textContent).toContain("Papers")
-    expect(container.textContent).toContain("Concepts")
+    expect(container.textContent).not.toContain("Attention Mechanism")
     expect(container.innerHTML).toMatch(/href="\/paper\/saved-one"/)
-    expect(container.innerHTML).toMatch(/href="\/wiki\/concepts\/attention"/)
 
     cleanup()
   })
 })
 
-describe("WikiIndexPage — empty vault (SP3 task 3)", () => {
-  it("renders EmptyState with a Search for papers link when there are no pages", async () => {
-    loadBundleMock.mockResolvedValue(emptyBundle())
-    const { container, cleanup } = await renderPage()
-
-    expect(container.textContent).toContain("Search for papers")
-    expect(container.innerHTML).toMatch(/href="\/papers"/)
-
-    cleanup()
-  })
-})
-
-describe("WikiIndexPage — shelf View all drill-down (SP3 task 3)", () => {
-  it("switches to a full vertical list for the shelf and back again", async () => {
-    const manySaved = Array.from({ length: 13 }, (_, i) => ({
-      id: `wiki/papers/saved-${i}`,
-      frontmatter: fm("paper", `Saved Paper ${i}`, { status: "saved", updated: `2026-07-${String(i + 1).padStart(2, "0")}` }),
-    }))
-    loadBundleMock.mockResolvedValue(bundleFromPages(manySaved))
-    const { container, cleanup } = await renderPage()
-
-    expect(container.textContent).toContain("View all (13)")
-
-    clickByText(container, "View all (13)")
-
-    // all 13 saved papers now visible, plus a back-to-dashboard affordance
-    for (let i = 0; i < 13; i++) {
-      expect(container.innerHTML).toMatch(new RegExp(`href="/paper/saved-${i}"`))
-    }
-    expect(container.textContent).toContain("Back to dashboard")
-
-    clickByText(container, "Back to dashboard")
-
-    // the shelf strip (capped, no longer a full list) is back
-    expect(container.textContent).toContain("Saved")
-    expect(container.textContent).not.toContain("Back to dashboard")
-
-    cleanup()
-  })
-})
-
-describe("WikiIndexPage — drilldown reset on view change (review finding)", () => {
-  it("clears the shelf drill-down whenever `view` changes, not just via the toggle's onClick", async () => {
-    // Regression for: drill into a shelf -> click TypeSections' "All ->" link
-    // (a plain href, no onClick reset) -> browser Back -> URL is /wiki but
-    // the stale viewAllShelf state kept showing the drilldown. The fix
-    // derives the reset from `view` itself (useEffect), so simulate the
-    // param changing out from under the component the way navigation would
-    // (re-rendering the same root, exactly like Next.js does not remount the
-    // page on a query-param-only navigation).
-    const manySaved = Array.from({ length: 13 }, (_, i) => ({
-      id: `wiki/papers/saved-${i}`,
-      frontmatter: fm("paper", `Saved Paper ${i}`, { status: "saved", updated: `2026-07-${String(i + 1).padStart(2, "0")}` }),
-    }))
-    loadBundleMock.mockResolvedValue(bundleFromPages(manySaved))
-
-    const container = document.createElement("div")
-    document.body.appendChild(container)
-    const root = createRoot(container)
-    await act(async () => {
-      root.render(<WikiIndexPage />)
-    })
-    await act(async () => {})
-
-    // open the shelf drill-down (equivalent to Shelf's onViewAll)
-    clickByText(container, "View all (13)")
-    expect(container.textContent).toContain("Back to dashboard")
-
-    // navigate to ?view=all WITHOUT going through either toggle link's
-    // onClick — this is what TypeSections' "All ->" link (a plain href) or
-    // a browser Back/Forward does
+describe("WikiIndexPage — empty vault", () => {
+  it("renders EmptyState with a Search for papers link in the Library view only", async () => {
     searchParamsValue = new URLSearchParams("view=all")
-    await act(async () => {
-      root.render(<WikiIndexPage />)
-    })
-    await act(async () => {})
+    loadBundleMock.mockResolvedValue(emptyBundle())
+    const library = await renderPage()
 
-    expect(container.textContent).not.toContain("Back to dashboard")
-    expect(container.textContent).toContain("Papers") // Tree section heading
+    expect(library.container.textContent).toContain("Search for papers")
+    expect(library.container.innerHTML).toMatch(/href="\/papers"/)
+    library.cleanup()
 
-    // and browser Back to /wiki (view param cleared) must show the capped
-    // shelf strip again, not a resurrected drilldown
     searchParamsValue = new URLSearchParams()
-    await act(async () => {
-      root.render(<WikiIndexPage />)
-    })
-    await act(async () => {})
-
-    expect(container.textContent).not.toContain("Back to dashboard")
-    expect(container.textContent).toContain("View all (13)")
-
-    act(() => root.unmount())
-    container.remove()
+    const home = await renderPage()
+    expect(home.container.querySelector("[data-testid=condition-home]")).not.toBeNull()
+    expect(home.container.textContent).not.toContain("Search for papers")
+    home.cleanup()
   })
 })
