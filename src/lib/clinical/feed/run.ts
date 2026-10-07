@@ -223,10 +223,11 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   const listedItems = selected.items.map(withDigest)
   const entryLabel = (id: string) => { const entry = context.entries.find((candidate) => candidate.id === id); return entry ? topicLabel(entry) : id }
   const topicOverviews: Record<string, OverviewSentence[]> = {}
+  const overviewDrops: Array<{ entryId: string; reason: string }> = []
   if (deps.summarise) {
     const pending = []
     for (const topic of overviewTopics(listedItems)) {
-      const hash = `v2|${topic.papers.map((paper) => paper.key).join("|")}`
+      const hash = `v3|${topic.papers.map((paper) => paper.key).join("|")}`
       const kept = cache?.overviews?.[topic.entryId]
       if (kept && kept.hash === hash) topicOverviews[topic.entryId] = kept.value
       else pending.push({ ...topic, label: entryLabel(topic.entryId), hash })
@@ -234,6 +235,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     if (pending.length > 0) {
       const written = await writeTopicOverviews(pending, runOpts)
       costUsd = addCosts(costUsd, written.costUsd)
+      overviewDrops.push(...written.dropped)
       for (const topic of pending) {
         const overview = written.overviews[topic.entryId]
         if (!overview) continue
@@ -270,6 +272,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     grades: assessed.map((candidate) => gradeOf(candidate.key)),
     ...(cache ? { reusedGrades: reused.size } : {}),
     ...(summaries ? { digestDrops: summaries.dropped } : {}),
+    ...(deps.summarise ? { overviewDrops } : {}),
   }
   await saveRunLog(storage, log)
 

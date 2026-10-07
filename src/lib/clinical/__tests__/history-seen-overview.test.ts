@@ -6,6 +6,7 @@ import { checkOverview, overviewTopics, tidyOverviewSentence } from "../digest/t
 import { runClinicalFeed, type ClinicalFeedDeps } from "../feed/run"
 import { FEED_PATH, loadClinicalFeed } from "../feed/stored"
 import { deleteHistory, listHistory, loadHistory, restoreHistory } from "../history/store"
+import { loadLatestRunLog } from "../feed/run-log"
 import { settingsForLookBack } from "../modes"
 import { loadSeenTimes, recordSeen } from "../seen/store"
 import { ClinicalSettingsSchema } from "../types"
@@ -161,25 +162,49 @@ describe("the AI overview of a topic", () => {
     ], papers)).toEqual([])
   })
 
-  it("writes one overview per topic from the checked summaries, and stores it with the list", async () => {
+  const twoDigests = () => llmResult({ digests: [
+    { index: 0, headline: "Esketamine beat quetiapine", takeaway: "Remission at week 8 was 27% with esketamine and 18% with quetiapine.", source: 2 },
+    { index: 1, headline: "Ketamine raised response", takeaway: "Response was 55% with ketamine.", source: 2 },
+  ] }, "claude-haiku-4-5")
+  const plan = () => llmResult({ queries: [] }, "claude-opus-4-8")
+  const overviewOf = (sentences: Array<{ text: string; sources: number[] }>) => llmResult({ sentences }, "claude-opus-4-8")
+
+  it("writes one overview per topic from the checked summaries, with the stronger model, and stores it with the list", async () => {
     const { run } = await setup()
-    const digests = llmResult({ digests: [
-      { index: 0, headline: "Esketamine beat quetiapine", takeaway: "Remission at week 8 was 27% with esketamine and 18% with quetiapine.", source: 2 },
-      { index: 1, headline: "Ketamine raised response", takeaway: "Response was 55% with ketamine.", source: 2 },
-    ] }, "claude-haiku-4-5")
-    const overview = llmResult({ sentences: [{ text: "Both trials reported benefit, with remission of 27% against 18% in one.", sources: [1, 2] }] }, "claude-haiku-4-5")
-    const fast = new MockProvider([grades(), digests, overview])
-    const feed = await run(fast, { summarise: true })
+    const strong = new MockProvider([plan(), overviewOf([{ text: "Both trials reported benefit, with remission of 27% against 18% in one.", sources: [1, 2] }])])
+    const feed = await run(new MockProvider([grades(), twoDigests()]), { summarise: true, providerOverride: { strong, fast: new MockProvider([grades(), twoDigests()]) } })
     expect(feed.topicOverviews?.w1).toEqual([{ text: "Both trials reported benefit, with remission of 27% against 18% in one.", sources: ["pmid:111", "pmid:112"] }])
-    const sent = JSON.parse(fast.calls[2].req.messages.at(-1)!.content as string)
+    const sent = JSON.parse(strong.calls[1].req.messages.at(-1)!.content as string)
     expect(sent.papers.map((entry: { n: number }) => entry.n)).toEqual([1, 2])
     expect(JSON.stringify(sent)).not.toContain("METHODS")
   })
 
-  it("never fails the run: no overview when the call fails or nothing passes the checks", async () => {
+  it("asks once more when the first overview loses sentences to the checks, saying why, and keeps the better answer", async () => {
+    const { storage, run } = await setup()
+    const strong = new MockProvider([
+      plan(),
+      overviewOf([{ text: "Remission reached 62% with esketamine.", sources: [1] }, { text: "Ketamine raised response.", sources: [] }]),
+      overviewOf([{ text: "Remission was 27% with esketamine against 18% with quetiapine.", sources: [1] }, { text: "Ketamine raised response to 55%.", sources: [2] }]),
+    ])
+    const feed = await run(new MockProvider([]), { summarise: true, providerOverride: { strong, fast: new MockProvider([grades(), twoDigests()]) } })
+    expect(strong.calls).toHaveLength(3)
+    expect(JSON.stringify(strong.calls[2].req.messages)).toContain("62")
+    expect(feed.topicOverviews?.w1.map((sentence) => sentence.text)).toEqual(["Remission was 27% with esketamine against 18% with quetiapine.", "Ketamine raised response to 55%."])
+    expect((await loadLatestRunLog(storage))!.overviewDrops).toEqual([])
+  })
+
+  it("records why a topic has no overview", async () => {
+    const { storage, run } = await setup()
+    const bad = () => overviewOf([{ text: "Remission reached 62% with esketamine.", sources: [1] }])
+    const strong = new MockProvider([plan(), bad(), bad()])
+    const feed = await run(new MockProvider([]), { summarise: true, providerOverride: { strong, fast: new MockProvider([grades(), twoDigests()]) } })
+    expect(feed.topicOverviews ?? {}).toEqual({})
+    expect((await loadLatestRunLog(storage))!.overviewDrops).toEqual([{ entryId: "w1", reason: "number-not-in-sources:62" }])
+  })
+
+  it("never fails the run: no overview when the call fails", async () => {
     const { run } = await setup()
-    const digests = llmResult({ digests: [{ index: 0, headline: "Esketamine beat quetiapine", takeaway: "Remission at week 8 was 27% with esketamine and 18% with quetiapine.", source: 2 }, { index: 1, headline: "Ketamine raised response", takeaway: "Response was 55% with ketamine.", source: 2 }] }, "claude-haiku-4-5")
-    const feed = await run(new MockProvider([grades(), digests]), { summarise: true })
+    const feed = await run(new MockProvider([grades(), twoDigests()]), { summarise: true })
     expect(feed.items).toHaveLength(2)
     expect(feed.topicOverviews ?? {}).toEqual({})
   })
