@@ -249,7 +249,7 @@ export const CLINICAL_COPY = {
     conditionPage: {
       choose: "Choose a condition…", create: "New condition page", creating: "Making the page…",
       label: "Condition",
-      note: "Makes a page for the condition with a table of its treatments, counted from the trial data you extract.",
+      note: "Makes a page for the condition showing the evidence your feed has listed on it.",
       evidence: "Evidence your feed has seen", notes: "My notes",
       notesHint: "Write what you conclude from these papers here.",
     },
@@ -311,7 +311,7 @@ export const CLINICAL_COPY = {
   evidence: {
     home: {
       heading: "Conditions you follow",
-      count: (total: number, recent: number) => (total === 0 ? "No papers yet" : `${total} ${total === 1 ? "paper" : "papers"}${recent > 0 ? ` · ${recent} new in the last two weeks` : ""}`),
+      count: (total: number, recent: number) => (total === 0 ? "No papers yet" : `${total} ${total === 1 ? "paper" : "papers"}${recent > 0 ? ` · ${recent} first listed in the last two weeks` : ""}`),
       open: "Open", opening: "Opening…",
       none: "You are not following a condition yet.", addTopics: "Add one under My topics",
       loading: "Loading…",
@@ -323,10 +323,16 @@ export const CLINICAL_COPY = {
     empty: (condition: string) => `Your feed has not listed a paper on ${condition} yet. Follow it under My topics and refresh your feed.`,
     notAQuery: "This block does not name a condition. It should read: condition: <the pack's id of the condition>.",
     loading: "Counting…",
-    headings: { recent: "New in the last two weeks", treatments: "Treatments", safety: "Safety", findings: "Findings", timeline: "When they were published" },
+    headings: { recent: "First listed in the last two weeks", treatments: "Treatments", safety: "Safety", findings: "Findings", timeline: "When they were published" },
     showAll: "Show all",
-    noTreatment: "Not about a treatment",
-    studies: (count: number) => `${count} ${count === 1 ? "study" : "studies"}`,
+    /** Beside the heading of the newest findings when there are more than are shown. */
+    recentShown: (shown: number, total: number) => `${shown} of ${total}`,
+    noTreatment: "No treatment named",
+    /** The one row of the treatments the pack does not know that have a single paper each. */
+    folded: (count: number) => `Other treatments, one paper each (${count})`,
+    foldedNote: "A count of papers, each on a different treatment. Not a pooled effect.",
+    /** A review or an editorial is not a study, so papers are counted. */
+    papers: (count: number) => `${count} ${count === 1 ? "paper" : "papers"}`,
     kinds: { benefit: "benefit", "no-benefit": "no benefit", mixed: "mixed", safety: "safety", other: "other", unsorted: "not sorted" },
     kindLabels: { benefit: "Benefit", "no-benefit": "No benefit", mixed: "Mixed", safety: "Safety", other: "Other" },
     designPlurals: {

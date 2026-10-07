@@ -28,6 +28,8 @@ describe("the control that makes a condition page", () => {
     await render()
     const select = container.querySelector("select") as HTMLSelectElement
     expect([...select.options].map((option) => option.textContent)).toEqual(["Choose a condition…", "Major depressive disorder", "Schizophrenia"])
+    // What the control says it makes is the page as it is now: the evidence the feed has listed, not a table of trial data.
+    expect(select.title).toBe("Makes a page for the condition showing the evidence your feed has listed on it.")
     const button = container.querySelector("button") as HTMLButtonElement
     expect(button.disabled).toBe(true)
     await act(async () => { select.value = "schizophrenia"; select.dispatchEvent(new Event("change", { bubbles: true })) })
