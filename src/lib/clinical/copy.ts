@@ -222,6 +222,12 @@ export const CLINICAL_COPY = {
       open: { title: "Everything", note: "Every kind of article" },
     },
   },
+  records: {
+    notATrialDesign: "Trial data can be extracted from trials only.",
+    notATrial: "The paper does not report a trial with two or more groups.",
+    tooFewArms: "Fewer than two groups could be read from the paper and checked against it.",
+    extractFailed: (status: string) => `The trial data could not be extracted (${status}).`,
+  },
 } as const
 
 export type StageKey = keyof typeof CLINICAL_COPY.stages
