@@ -6,6 +6,7 @@ import { DESIGN_TIER, designAccepted, designGate, mentions } from "../filter/gat
 import { resolveFacet } from "../plan/queries"
 import { domainFilter } from "../filter/prefilter"
 import { gradeStageA } from "../grade/stage-a"
+import { verifyMatchedParts } from "../grade/verify-parts"
 import { MODES, windowFor } from "../modes"
 import type { SpecialtyPack } from "../pack/schema"
 import { planQueries } from "../plan/skill"
@@ -142,7 +143,14 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   const graded = await gradeStageA(capped.kept, context.entries, context.exemplars, runOpts)
   costUsd = addCosts(costUsd, graded.costUsd)
   if (graded.failedBatches > 0) warnings.push(CLINICAL_COPY.run.gradingBatchesFailed(graded.failedBatches))
-  const gradeOf = (key: string) => (reused.get(key) ?? graded.grades.get(key)) as StageAGrade
+  // What the model said about which part of the entry matches is checked against the paper's text.
+  // Done here, on reused grades too, so the check can be improved without paying for grading again.
+  const checkedGrades = new Map<string, StageAGrade>()
+  for (const candidate of gate.gated) {
+    const raw = reused.get(candidate.key) ?? graded.grades.get(candidate.key)
+    if (raw) checkedGrades.set(candidate.key, verifyMatchedParts(raw, candidate, context.entries, deps.pack))
+  }
+  const gradeOf = (key: string) => checkedGrades.get(key) as StageAGrade
   const withGrade = gate.gated.filter((candidate) => reused.has(candidate.key) || graded.grades.has(candidate.key))
 
   // Where PubMed has not assigned a type, the design the model read from the text replaces the text
