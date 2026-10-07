@@ -72,6 +72,16 @@ describe("extracting a trial record", () => {
     expect(checkExtraction(wrongNumber as never, TEXT, TAXONOMY).arms[0].n.value).toBeNull()
   })
 
+  it("compares numbers with their sign", () => {
+    const withMean = (value: number, quote: string) => checkExtraction({ ...ANSWER, outcomes: [{ ...ANSWER.outcomes[1], results: [{ ...ANSWER.outcomes[1].results[0], mean: q(value, quote) }] }] } as never, `${TEXT} ${quote}`, TAXONOMY).outcomes[0].results[0].mean
+    expect(withMean(-3.2, "The mean change was -3.2 points with esketamine.").value).toBe(-3.2)
+    expect(withMean(-3.2, "The mean change was \u22123.2 points with esketamine.").value).toBe(-3.2)
+    expect(withMean(3.2, "The mean change was -3.2 points with esketamine.").value).toBeNull()
+    expect(withMean(-3.2, "The mean change was 3.2 points with esketamine.").value).toBeNull()
+    expect(withMean(0.97, "The hazard ratio was 0.84 (95% CI 0.78-0.97) with esketamine.").value).toBe(0.97)
+    expect(withMean(-0.97, "The hazard ratio was 0.84 (95% CI 0.78-0.97) with esketamine.").value).toBeNull()
+  })
+
   it("keeps a code only if the pack has it, with the right type", () => {
     const codes = { ...ANSWER, conditionCode: "esketamine", arms: [{ ...ANSWER.arms[0], treatmentCode: "made-up-drug" }, ANSWER.arms[1]] }
     const checked = checkExtraction(codes as never, TEXT, TAXONOMY)
@@ -85,6 +95,7 @@ describe("extracting a trial record", () => {
     const checked = checkExtraction(noName as never, TEXT, TAXONOMY)
     expect(checked.arms.map((arm) => arm.id)).toEqual(["a1", "a3"])
     expect(checked.outcomes[0].results.map((result) => result.armId)).toEqual(["a1"])
+    expect(checked.dropped).toBe(1)
   })
 
   it("keeps three arms", () => {

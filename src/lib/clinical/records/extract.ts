@@ -65,6 +65,25 @@ export const trialExtractionSkill = defineSkill<ExtractionInput, Extraction>({
     ctx.llmStructured("strong", { maxTokens: 6144, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] }, ExtractionSchema),
 })
 
+/**
+ * The numbers a quote prints, with their sign. A minus directly before digits is a sign unless a digit or a
+ * closing bracket comes before it (then it is a range or a subtraction, as in "0.78-0.97"). Built on `numbers`,
+ * so separators are read the same way.
+ */
+function signedNumbers(quote: string): number[] {
+  const values = numbers(quote).map(Number)
+  const negatives: number[] = []
+  for (const match of quote.matchAll(/(?<![\d)\]])[-\u2212](?=\d)/g)) {
+    const first = numbers(quote.slice(match.index + 1))[0]
+    if (first !== undefined) negatives.push(Number(first))
+  }
+  for (const negative of negatives) {
+    const at = values.indexOf(negative)
+    if (at >= 0) values.splice(at, 1)
+  }
+  return [...values, ...negatives.map((value) => -value)]
+}
+
 const ARM_ID = /^[a-z][a-z0-9]{0,15}$/
 
 /** Applies the checks. `dropped` counts values the model gave that did not pass. */
@@ -81,7 +100,7 @@ export function checkExtraction(output: Extraction, sourceText: string, taxonomy
   }
   const numberField = (given: { value: number | null; quote: string | null }): NumberField => {
     if (given.value === null || !Number.isFinite(given.value)) return emptyField()
-    const printed = given.quote ? numbers(given.quote).map(Number) : []
+    const printed = given.quote ? signedNumbers(given.quote) : []
     if (given.quote && quoteInText(given.quote, sourceText) && printed.includes(given.value)) return { value: given.value, quote: given.quote.replace(/\s+/g, " ").trim(), state: "quote-verified" }
     dropped++
     return emptyField()
