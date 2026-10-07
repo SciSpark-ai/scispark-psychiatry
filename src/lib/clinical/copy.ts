@@ -31,6 +31,12 @@ export const CLINICAL_COPY = {
       2: "One part of this watch entry matches exactly and the other is only related, for example a new use of the treatment.",
       1: "Only one part of this watch entry appears in the paper.",
     },
+    /** Hover text on a card's topic, by the part of the watch entry the paper matches. */
+    matchedPartNotes: {
+      full: "This paper is about everything this watch entry follows.",
+      condition: "This paper is about the condition you follow, with a different treatment or none.",
+      treatment: "This paper studies the treatment you follow, in a different condition.",
+    },
     matchedOn: (quote: string) => `Matched on this sentence: “${quote}”`,
     conclusionLabel: "Authors' conclusion",
     aiNotice: "Headlines and summaries are written by AI from each abstract. Open a paper for its own title and abstract.",

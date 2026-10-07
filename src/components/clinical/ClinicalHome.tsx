@@ -13,7 +13,7 @@ import { MODE_LABELS } from "@/lib/clinical/modes"
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
 import { loadSeenTimes, recordSeen, seenRecently } from "@/lib/clinical/seen/store"
 import { refreshClinicalFeed } from "@/lib/clinical/feed/client"
-import { feedPage, loadClinicalFeed, pageCount, type StoredFeed } from "@/lib/clinical/feed/stored"
+import { feedPage, loadClinicalFeed, pageCount, type StoredFeed, type StoredFeedItem } from "@/lib/clinical/feed/stored"
 import { loadClinicalSettings, loadWatchEntries, saveClinicalSettings } from "@/lib/clinical/watch/store"
 import { FEED_MODES, type ClinicalSettings, type ClinicalStage, type WatchEntry } from "@/lib/clinical/types"
 import { ClinicalFeedCard } from "./ClinicalFeedCard"
@@ -94,7 +94,15 @@ export function ClinicalHome() {
   }
 
   const { entries, settings, feed, saved, votes } = data
-  const labels = new Map(entries.map((entry) => [entry.id, entryLabel(entry)]))
+  const byId = new Map(entries.map((entry) => [entry.id, entry]))
+  // The card names only the part of the watch entry the paper matches: both, the condition, or the treatment.
+  const topicOf = (item: StoredFeedItem): string | undefined => {
+    const entry = item.entryId ? byId.get(item.entryId) : undefined
+    if (!entry) return undefined
+    if (item.matched === "condition" && entry.condition) return entry.condition
+    if (item.matched === "treatment" && entry.treatment) return entry.treatment
+    return entryLabel(entry)
+  }
   const tones = new Map(entries.map((entry, index) => [entry.id, index]))
   const seenToday = (feed?.seenEarlier ?? []).filter((item) => data.seenToday.has(item.key))
   const shown = feed ? Array.from({ length: pages }, (_, page) => feedPage(feed, page)).flat() : []
@@ -144,7 +152,7 @@ export function ClinicalHome() {
           <div className="grid gap-4 lg:grid-cols-2">
             {shown.map((item) => (
               <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
-                entryLabel={item.entryId ? labels.get(item.entryId) : undefined} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
+                entryLabel={topicOf(item)} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
             ))}
           </div>
           {pages < pageCount(feed) && (
@@ -158,7 +166,7 @@ export function ClinicalHome() {
               <div className="mt-3 grid gap-4 lg:grid-cols-2">
                 {seenToday.map((item) => (
                   <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
-                    entryLabel={item.entryId ? labels.get(item.entryId) : undefined} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
+                    entryLabel={topicOf(item)} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
                 ))}
               </div>
             </details>

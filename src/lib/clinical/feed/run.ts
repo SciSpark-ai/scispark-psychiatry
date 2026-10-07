@@ -14,7 +14,7 @@ import { scoreCandidate, type ScoredItem } from "../score/score"
 import { digestCards } from "../digest/card"
 import { seenRecently } from "../seen/store"
 import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
-import { selectFeed, SHORTLIST_GRADE } from "../select/select"
+import { layerOf, selectFeed } from "../select/select"
 import type { Candidate, ClinicalStage, DropRecord, GatedCandidate, StageAGrade, WatchEntry } from "../types"
 import { LIST_CAP } from "../types"
 import { assembleContext } from "./context"
@@ -166,8 +166,8 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   // still matches, is kept under "Seen earlier".
   const selected = selectFeed(scored.filter((item) => !context.seen.has(item.candidate.key)), context.entries)
   const seenEarlier = scored
-    .filter((item) => seenRecently(context.seenAt.get(item.candidate.key), now()) && item.grade.entryId !== null && item.grade.grade >= SHORTLIST_GRADE)
-    .sort((a, b) => b.score - a.score).slice(0, LIST_CAP)
+    .filter((item) => seenRecently(context.seenAt.get(item.candidate.key), now()) && layerOf(item) !== null)
+    .sort((a, b) => (layerOf(a) as number) - (layerOf(b) as number) || b.score - a.score).slice(0, LIST_CAP)
 
   const toDigest = selected.items.map((item) => ({ key: item.candidate.key, paper: item.candidate.paper, design: item.candidate.design }))
   const knownDigests = new Map(cache ? toDigest.flatMap((item) => { const digest = cachedDigest(cache, item.key, item.paper); return digest ? [[item.key, digest] as const] : [] }) : [])
@@ -211,7 +211,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     drops: [...retrieved.drops, ...domain.drops, ...gate.drops, ...capped.drops, ...modelDrops, ...selected.drops],
     pool: {
       retrieved: retrieved.candidates.map(ref), domain: domain.kept.map(ref), gated: gate.gated.map(ref),
-      shortlisted: scored.filter((s) => s.grade.entryId !== null && s.grade.grade >= SHORTLIST_GRADE).map((s) => ref(s.candidate)),
+      shortlisted: scored.filter((s) => layerOf(s) !== null).map((s) => ref(s.candidate)),
       listed: selected.items.map((item) => ref(item.candidate)),
     },
     grades: assessed.map((candidate) => gradeOf(candidate.key)),

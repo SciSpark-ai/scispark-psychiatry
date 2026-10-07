@@ -1,7 +1,7 @@
 import { z } from "zod"
 import type { PaperRecord } from "../../papers/types"
 import type { VaultStorage } from "../../vault/storage"
-import { DESIGNS, DESIGN_SOURCES, FEED_MODES, GATE_STRICTNESS, PAGE_SIZE } from "../types"
+import { DESIGNS, DESIGN_SOURCES, MATCHED_PARTS, FEED_MODES, GATE_STRICTNESS, PAGE_SIZE } from "../types"
 import type { ScoredItem } from "../score/score"
 import type { GatedCandidate } from "../types"
 
@@ -22,6 +22,8 @@ const StoredItemSchema = z.object({
   topicGrade: z.number(),
   quote: z.string(),
   quoteVerified: z.boolean(),
+  /** Which part of the watch entry the paper matches; the card names only that part. */
+  matched: z.enum(MATCHED_PARTS).optional(),
   ungraded: z.boolean(),
   score: z.number(),
   flags: z.array(z.string()),
@@ -51,6 +53,7 @@ export function toStoredItem(item: ScoredItem): StoredFeedItem {
     paper: item.candidate.paper, key: item.candidate.key, design: item.candidate.design, designSource: item.candidate.designSource,
     entryId: item.grade.entryId, grade: item.grade.grade, topicGrade: item.grade.topicGrade, quote: item.grade.quote,
     quoteVerified: item.grade.quoteVerified, ungraded: item.grade.ungraded, score: item.score, flags: item.candidate.flags,
+    ...(item.grade.matched ? { matched: item.grade.matched } : {}),
   }
 }
 

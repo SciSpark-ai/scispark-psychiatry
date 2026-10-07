@@ -44,50 +44,36 @@ function suppressDuplicates(sorted: ScoredItem[]): { kept: ScoredItem[]; drops: 
 const reservedSlots = (entry: WatchEntry) => (entry.priority === "high" ? 2 : 1)
 
 /**
- * Builds the stored list page by page. On each page of `pageSize`, every active entry first gets its
- * reserved slots (2 for High, 1 for Normal), filled only with items graded 3 or more for that entry;
- * unfilled slots return to the pool, which fills the rest by score. No entry takes more than half a
- * page unless nothing else is left.
+ * The layer a paper is listed in: 1 matches the whole watch entry, 2 only its condition, 3 only its
+ * treatment; null is not a match. A grade made before the model said which part matches has no
+ * layer of its own and counts as layer 1 when its grade reaches the shortlist.
  */
-export function selectFeed(
-  scored: ScoredItem[],
-  entries: WatchEntry[],
-  opts: { listCap?: number; pageSize?: number; lowerCap?: number } = {},
-): SelectedFeed {
-  const listCap = opts.listCap ?? LIST_CAP
-  const pageSize = opts.pageSize ?? PAGE_SIZE
+export function layerOf(item: ScoredItem): 1 | 2 | 3 | null {
+  const grade = item.grade
+  if (grade.ungraded || grade.entryId === null) return null
+  if (grade.matched) return grade.matched === "full" ? 1 : grade.matched === "condition" ? 2 : 3
+  return grade.grade >= SHORTLIST_GRADE ? 1 : null
+}
+
+/**
+ * Orders the papers of one layer. In turns of `pageSize`, every active entry first gets its reserved
+ * places (2 for High, 1 for Normal), filled only with full or strongly graded matches; unfilled
+ * places return to the pool, which fills the rest by score. No entry takes more than half a turn
+ * unless nothing else is left.
+ */
+function arrange(layer: ScoredItem[], active: WatchEntry[], limit: number, pageSize: number): ScoredItem[] {
   const halfPage = Math.floor(pageSize / 2)
-  const sorted = [...scored].sort((a, b) => b.score - a.score)
-  const { kept, drops } = suppressDuplicates(sorted)
-
-  const shortlist = kept.filter((item) => item.grade.entryId !== null && item.grade.grade >= SHORTLIST_GRADE)
-  // Graded non-matches are capped; a paper the grader failed on or skipped is always kept (spec 6.9 step 5).
-  const lowerCap = opts.lowerCap ?? LOWER_CONFIDENCE_CAP
-  // A paper graded 1 for its entry ("loosely related") is not shown anywhere (owner decision, 2026-10-06).
-  const loose = (item: ScoredItem) => !item.grade.ungraded && item.grade.entryId !== null && item.grade.grade > 0 && item.grade.grade < SHORTLIST_GRADE
-  const rest = kept.filter((item) => !shortlist.includes(item) && !loose(item))
-  const gradedRest = rest.filter((item) => !item.grade.ungraded)
-  const lowerConfidence = [...gradedRest.slice(0, lowerCap), ...rest.filter((item) => item.grade.ungraded)]
-  const cut = (item: ScoredItem, reason: string) =>
-    drops.push({ key: item.candidate.key, title: item.candidate.paper.title, step: "select", reason })
-  for (const item of gradedRest.slice(lowerCap)) cut(item, "lower-confidence-cap")
-  for (const item of kept.filter(loose)) cut(item, "loosely-related")
-
-  const active = entries
-    .filter((entry) => entry.priority !== "paused")
-    .sort((a, b) => Number(b.priority === "high") - Number(a.priority === "high"))
-  const pool = [...shortlist]
+  const pool = [...layer]
   const items: ScoredItem[] = []
-
-  while (pool.length > 0 && items.length < listCap) {
-    const size = Math.min(pageSize, listCap - items.length)
+  while (pool.length > 0 && items.length < limit) {
+    const size = Math.min(pageSize, limit - items.length)
     const page: ScoredItem[] = []
     const take = (item: ScoredItem) => {
       pool.splice(pool.indexOf(item), 1)
       page.push(item)
     }
     for (const entry of active) {
-      const eligible = pool.filter((item) => item.grade.entryId === entry.id && item.grade.grade >= COVERAGE_GRADE)
+      const eligible = pool.filter((item) => item.grade.entryId === entry.id && (item.grade.matched === "full" || item.grade.grade >= COVERAGE_GRADE))
       for (const item of eligible.slice(0, Math.min(reservedSlots(entry), halfPage))) if (page.length < size) take(item)
     }
     const countFor = (id: string | null) => page.filter((item) => item.grade.entryId === id).length
@@ -98,13 +84,51 @@ export function selectFeed(
       if (countFor(id) >= halfPage && othersWaiting) continue
       take(item)
     }
-    // Only capped entries were left: relax the cap rather than leave the page short.
+    // Only capped entries were left: relax the cap rather than leave the turn short.
     for (const item of [...pool]) {
       if (page.length >= size) break
       take(item)
     }
     items.push(...page.sort((a, b) => b.score - a.score))
   }
-  for (const item of pool) cut(item, "list-cap")
+  return items
+}
+
+/**
+ * Builds the stored list: full matches first, then papers that match only the condition of a watch
+ * entry, then papers that match only its treatment (owner decision 2026-10-06). Each layer is
+ * ordered by `arrange`; the list is cut at `listCap`, so the last layer is the first to be cut.
+ */
+export function selectFeed(
+  scored: ScoredItem[],
+  entries: WatchEntry[],
+  opts: { listCap?: number; pageSize?: number; lowerCap?: number } = {},
+): SelectedFeed {
+  const listCap = opts.listCap ?? LIST_CAP
+  const pageSize = opts.pageSize ?? PAGE_SIZE
+  const sorted = [...scored].sort((a, b) => b.score - a.score)
+  const { kept, drops } = suppressDuplicates(sorted)
+  const cut = (item: ScoredItem, reason: string) =>
+    drops.push({ key: item.candidate.key, title: item.candidate.paper.title, step: "select", reason })
+
+  const shortlist = kept.filter((item) => layerOf(item) !== null)
+  // A paper graded 1 with no word on which part matches ("loosely related") is not shown anywhere.
+  const loose = (item: ScoredItem) => !item.grade.ungraded && !item.grade.matched && item.grade.entryId !== null && item.grade.grade > 0 && item.grade.grade < SHORTLIST_GRADE
+  // Graded non-matches are capped; a paper the grader failed on or skipped is always kept (spec 6.9 step 5).
+  const lowerCap = opts.lowerCap ?? LOWER_CONFIDENCE_CAP
+  const rest = kept.filter((item) => layerOf(item) === null && !loose(item))
+  const gradedRest = rest.filter((item) => !item.grade.ungraded)
+  const lowerConfidence = [...gradedRest.slice(0, lowerCap), ...rest.filter((item) => item.grade.ungraded)]
+  for (const item of gradedRest.slice(lowerCap)) cut(item, "lower-confidence-cap")
+  for (const item of kept.filter(loose)) cut(item, "loosely-related")
+
+  const active = entries
+    .filter((entry) => entry.priority !== "paused")
+    .sort((a, b) => Number(b.priority === "high") - Number(a.priority === "high"))
+  const items: ScoredItem[] = []
+  for (const layer of [1, 2, 3] as const) {
+    items.push(...arrange(shortlist.filter((item) => layerOf(item) === layer), active, listCap - items.length, pageSize))
+  }
+  for (const item of shortlist.filter((entry) => !items.includes(entry))) cut(item, "list-cap")
   return { items, lowerConfidence, drops }
 }

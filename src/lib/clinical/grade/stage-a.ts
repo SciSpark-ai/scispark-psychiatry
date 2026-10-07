@@ -5,7 +5,7 @@ import { addCosts } from "../../llm/pricing"
 import type { LLMProvider, Tier } from "../../llm/types"
 import type { LLMSettings } from "../../llm/settings"
 import type { VaultStorage } from "../../vault/storage"
-import type { Design, GatedCandidate, StageAGrade, WatchEntry } from "../types"
+import type { Design, GatedCandidate, MatchedPart, StageAGrade, WatchEntry } from "../types"
 import { CLINICAL_COPY } from "../copy"
 import { quoteInText } from "../text/quote"
 
@@ -19,6 +19,9 @@ const AssessmentsSchema = z.object({
     grade: z.number().int().min(0).max(4),
     topicGrade: z.number().int().min(0).max(4),
     quote: z.string(),
+    /** Does the paper concern the entry's condition? Its treatment? null when the entry has no such part. */
+    conditionMatch: z.boolean().nullable().default(null),
+    treatmentMatch: z.boolean().nullable().default(null),
     /** The kind of study, from MODEL_DESIGNS, or null. Checked against the list in code. */
     design: z.string().nullable().default(null),
   })),
@@ -51,6 +54,7 @@ Rules:
 - "entryId" is the id of the best-matching entry, or null when nothing matches (then grade must be 0).
 - "quote" must be copied VERBATIM from the paper's title or abstract (at least 8 characters) and must be the passage that justifies your grades. If you cannot quote support for a grade above 0, give 0.
 - Judge only from the text given. Do not use outside knowledge about whether the paper is good.
+- "conditionMatch": true if the paper is about the entry's condition (the condition itself or a subtype of it), false if not, null if the entry has no condition. "treatmentMatch": true if the paper studies the entry's treatment (the same treatment under any name, formulation or closely related form, such as ketamine for esketamine), false if it studies only other treatments, null if the entry has no treatment. Answer each on its own: a paper about the condition that studies a different treatment is conditionMatch true, treatmentMatch false. Pick the entry for which the most parts are true.
 - "design" is the kind of study THIS paper reports, one of: ${MODEL_DESIGNS.join(", ")}. "randomized-trial" only if this paper reports a trial that allocated participants at random; "clinical-trial" for other interventional studies (single-arm, open-label, pilot); "cohort" for observational studies of patients; "review" for a narrative review; "protocol" for a study plan with no results; "preclinical" for animal or laboratory work; "other" when none fits. Use null if the text does not say.
 - Return one assessment per candidate, using the candidate's index.
 - The example papers show what this clinician has found useful. They can reveal extra interests, but do not match on them unless a watch entry or the topic grade supports it.`
@@ -135,6 +139,15 @@ export async function gradeStageA(
       if (!assessment) { grades.set(candidate.key, ungraded(candidate.key)); return }
       const knownEntry = assessment.entryId !== null && entryIds.has(assessment.entryId)
       const verified = verifyQuote(assessment.quote, candidate)
+      const entry = knownEntry ? entries.find((candidateEntry) => candidateEntry.id === assessment.entryId) : undefined
+      // The two answers, kept only for the parts the entry fills.
+      const answered = assessment.conditionMatch !== null || assessment.treatmentMatch !== null
+      const onCondition = Boolean(entry?.condition) && assessment.conditionMatch === true
+      const onTreatment = Boolean(entry?.treatment) && assessment.treatmentMatch === true
+      const wantsBoth = Boolean(entry?.condition) && Boolean(entry?.treatment)
+      const matched: MatchedPart | undefined = !entry || !answered ? undefined
+        : wantsBoth ? (onCondition && onTreatment ? "full" : onCondition ? "condition" : onTreatment ? "treatment" : undefined)
+        : onCondition || onTreatment ? "full" : undefined
       const named = MODEL_DESIGNS.find((design) => design === assessment.design)
       const modelDesign = named ? { modelDesign: named } : {}
       const claimsMatch = assessment.grade > 0 || assessment.topicGrade > 0
@@ -142,15 +155,18 @@ export async function gradeStageA(
         grades.set(candidate.key, { key: candidate.key, entryId: null, grade: 0, topicGrade: 0, quote: assessment.quote, quoteVerified: false, ungraded: false, modelGrade: assessment.grade, ...modelDesign })
         return
       }
+      // The model answered both questions with "no": not a match, whatever grade it gave.
+      const noPart = Boolean(entry) && answered && matched === undefined
       grades.set(candidate.key, {
         key: candidate.key,
-        entryId: knownEntry ? assessment.entryId : null,
-        grade: knownEntry ? assessment.grade : 0,
+        entryId: knownEntry && !noPart ? assessment.entryId : null,
+        grade: knownEntry && !noPart ? assessment.grade : 0,
         topicGrade: assessment.topicGrade,
         quote: assessment.quote,
         quoteVerified: verified,
         ungraded: false,
         modelGrade: assessment.grade,
+        ...(matched ? { matched } : {}),
         ...modelDesign,
       })
     })

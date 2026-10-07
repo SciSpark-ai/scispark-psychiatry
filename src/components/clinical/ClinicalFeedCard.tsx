@@ -45,8 +45,9 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   const designNote = item.designSource === "publication-type" ? CLINICAL_COPY.designNote : inferredDesign ? CLINICAL_COPY.designInferredNote : undefined
   const conclusion = conclusionOf(paper.abstract)
   const matched = item.entryId !== null && isMatchGrade(item.grade) ? item.grade : null
-  const matchNote = matched === null ? undefined
-    : [F.matchNotes[matched], item.quoteVerified && item.quote ? F.matchedOn(item.quote) : ""].filter(Boolean).join(" ")
+  const partNote = item.matched ? F.matchedPartNotes[item.matched] : matched === null ? undefined : F.matchNotes[matched]
+  const matchNote = partNote === undefined ? undefined
+    : [partNote, item.quoteVerified && item.quote ? F.matchedOn(item.quote) : ""].filter(Boolean).join(" ")
 
   // The paper page finds a paper through the reader hand-off; a feed paper is in neither the wiki nor upstream's feed cache.
   async function open() {
@@ -79,7 +80,7 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
         {/* Topic first (the user's own watch entry, in the accent colour), then the study type in plain text. */}
         {entryLabel && (
           <span
-            title={matchNote} className="font-semibold text-accent-ink"
+            data-topic="true" title={matchNote} className="font-semibold text-accent-ink"
             // On a tinted card the topic takes the tint's own hue, deepened towards the text colour so it stays readable in both themes.
             {...(tone === undefined ? {} : { "data-toned": "true", style: { color: "color-mix(in srgb, var(--card-tone) 62%, var(--text-primary))" } })}
           >{entryLabel}</span>

@@ -155,4 +155,13 @@ describe("ClinicalHome", () => {
     const order = container.textContent ?? ""
     expect(order.indexOf("Paper 1")).toBeLessThan(order.indexOf("For literature awareness only"))
   })
+
+  it("names on the card only the part of the watch entry the paper matches", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "Depression", treatment: "Esketamine", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1, { matched: "full" }), item(2, { matched: "condition" }), item(3, { matched: "treatment" })]))
+    await mount()
+    const topics = [...container.querySelectorAll("[data-testid=clinical-feed-card] [data-topic]")].map((el) => el.textContent)
+    expect(topics).toEqual(["Depression × Esketamine", "Depression", "Esketamine"])
+  })
 })

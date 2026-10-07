@@ -27,8 +27,11 @@ export interface FeedCache {
 }
 
 /** Everything about the active watch entries that a grade depends on. */
+/** Raised when the grading question changes, so that grades of the earlier question are not reused. 2: the model says which part of the entry matches. */
+const GRADE_SCHEME = 2
+
 export function entriesKey(entries: WatchEntry[]): string {
-  return JSON.stringify(entries
+  return `scheme ${GRADE_SCHEME} ` + JSON.stringify(entries
     .filter((entry) => entry.priority !== "paused")
     .map(({ id, condition, treatment, population, outcome }) => [id, condition ?? "", treatment ?? "", population ?? "", outcome ?? ""])
     .sort((a, b) => a[0].localeCompare(b[0])))
