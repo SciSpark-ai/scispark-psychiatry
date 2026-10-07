@@ -235,7 +235,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   if (deps.summarise) {
     const pending = []
     for (const topic of overviewTopics(listedItems)) {
-      const hash = `v6|${topic.papers.map((paper) => paper.part[0]).join("")}|${topic.papers.map((paper) => paper.key).join("|")}`
+      const hash = `v8|${topic.papers.map((paper) => paper.part[0]).join("")}|${topic.papers.map((paper) => paper.key).join("|")}`
       const kept = cache?.overviews?.[topic.entryId]
       if (kept && kept.hash === hash) topicOverviews[topic.entryId] = kept.value
       else pending.push({ ...topic, label: entryLabel(topic.entryId), hash })

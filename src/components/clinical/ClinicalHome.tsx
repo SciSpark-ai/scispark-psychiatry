@@ -13,7 +13,7 @@ import { LOOK_BACK, lookBackName, lookBackOf, lookBackPhrase, settingsForLookBac
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
 import { clearSeen, recordSeen } from "@/lib/clinical/seen/store"
 import { loadReadLater } from "@/lib/clinical/readlater/store"
-import { tidyOverviewSentence } from "@/lib/clinical/text/overview-text"
+import { negationWords, tidyOverviewSentence } from "@/lib/clinical/text/overview-text"
 import { conditionLabel } from "@/lib/clinical/topic-label"
 import { entryLabel, topicLookup } from "./topic"
 import { refreshClinicalFeed } from "@/lib/clinical/feed/client"
@@ -32,9 +32,9 @@ const OVERVIEW_KIND_ORDER = ["benefit", "no-benefit", "mixed", "safety", "other"
 /** The colour of a kind of finding: green for benefit, red for none; the rest are set in the text colour. */
 const KIND_COLOUR: Partial<Record<(typeof OVERVIEW_KIND_ORDER)[number], string>> = { benefit: "var(--clinical-benefit)", "no-benefit": "var(--clinical-no-benefit)" }
 const SPACE = " "
+const JOIN = "; "
+const STOP = ". "
 const tint = (colour: string) => `color-mix(in srgb, ${colour} 16%, transparent)`
-/** The words that turn a finding round. Marked in findings of no benefit and in mixed ones. */
-const NEGATION = /\b(?:not|no|nor|neither|without)\b/gi
 
 export function ClinicalHome() {
   const [storage, setStorage] = useState<VaultStorage | null>(null)
@@ -143,8 +143,27 @@ export function ClinicalHome() {
     { id: "related", title: CLINICAL_COPY.feed.alsoOn(overviewTopic ? (conditionLabel(overviewTopic) ?? entryLabel(overviewTopic)) : ""), points: (overview ?? []).filter((point) => point.group === "related") },
   ].filter((group) => group.points.length > 0)
   // Each part as a synthesis: one line per kind of finding. An overview stored before findings had a kind reads as "other".
+  // Findings on the same treatment are joined: the treatment once, then each paper's outcome with its number.
   const overviewRows = (points: NonNullable<typeof overview>) =>
-    OVERVIEW_KIND_ORDER.map((kind) => ({ kind, points: points.filter((point) => (point.kind ?? "other") === kind) })).filter((row) => row.points.length > 0)
+    OVERVIEW_KIND_ORDER.map((kind) => {
+      const clusters: Array<{ treatment?: string; points: typeof points }> = []
+      for (const point of points.filter((entry) => (entry.kind ?? "other") === kind)) {
+        const same = point.treatment ? clusters.find((cluster) => cluster.treatment?.toLowerCase() === point.treatment?.toLowerCase()) : undefined
+        if (same) same.points.push(point)
+        else clusters.push({ treatment: point.treatment, points: [point] })
+      }
+      return { kind, clusters }
+    }).filter((row) => row.clusters.length > 0)
+  const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+  const sourcesOf = (point: NonNullable<typeof overview>[number]) => point.sources.map((key, index) => {
+    // A source is always a paper of this list: the overview is written from the listed papers only.
+    const position = inTab.findIndex((item) => item.key === key)
+    if (position < 0) return null
+    return (
+      <button key={key} type="button" data-source="true" title={headlineOf.get(key) ?? key} onMouseDown={(event) => event.preventDefault()} onClick={() => jumpTo(position)}
+        className={`align-super text-[11px] font-medium text-accent-ink underline decoration-dotted hover:text-accent-ink-hover ${index === 0 ? "ml-0.5" : "ml-1.5"}`}>{position + 1}</button>
+    )
+  })
   // The first line of the overview: the papers of the tab, and how many the overview cites under each kind.
   const kindCounts = OVERVIEW_KIND_ORDER
     .filter((kind) => kind !== "other")
@@ -164,7 +183,7 @@ export function ClinicalHome() {
     const found = treatment ? text.indexOf(treatment) : -1
     if (treatment && found >= 0) spans.push({ at: found, end: found + treatment.length, negation: false })
     if (kind === "no-benefit" || kind === "mixed") {
-      for (const match of text.matchAll(NEGATION)) {
+      for (const match of text.matchAll(negationWords())) {
         const at = match.index ?? 0
         if (!spans.some((span) => at < span.end && at + match[0].length > span.at)) spans.push({ at, end: at + match[0].length, negation: true })
       }
@@ -288,30 +307,30 @@ export function ClinicalHome() {
               {/* Running text: what helped, what did not, mixed, safety, the rest. Papers on the whole topic first, then those on its condition alone. */}
               {overviewGroups.map((group) => (
                 <div key={group.id} data-overview-group={group.id} className="mt-2.5 first:mt-0">
-                  {overviewGroups.length > 1 && <span data-group-title="true" className="mb-0.5 block text-[13px] font-semibold text-secondary-dark">{group.title}</span>}
+                  {overviewGroups.length > 1 && <span data-group-title="true" className="mb-1 block text-[13px] font-semibold text-secondary-dark">{group.title}</span>}
                   {overviewGroups.length === 1 && <span data-group-title="true" className="sr-only">{group.title}</span>}
-                  <p className="text-[15px] leading-[1.75] text-espresso">
-                    {overviewRows(group.points).map((row) => (
-                      <span key={row.kind} data-kind={row.kind}>
-                        <span data-kind-label="true" className="mr-1.5 text-[12px] font-semibold uppercase tracking-wide" style={KIND_COLOUR[row.kind] ? { color: KIND_COLOUR[row.kind] } : undefined}>{CLINICAL_COPY.feed.overviewKinds[row.kind]}</span>
-                        {row.points.map((point) => (
-                          <span key={point.text}>
-                            {marked(tidyOverviewSentence(point.text), point.emphasis?.[0], row.kind)}
-                            {point.sources.map((key, index) => {
-                              // A source is always a paper of this list: the overview is written from the listed papers only.
-                              const position = inTab.findIndex((item) => item.key === key)
-                              if (position < 0) return null
-                              return (
-                                <button key={key} type="button" data-source="true" title={headlineOf.get(key) ?? key} onMouseDown={(event) => event.preventDefault()} onClick={() => jumpTo(position)}
-                                  className={`align-super text-[11px] font-medium text-accent-ink underline decoration-dotted hover:text-accent-ink-hover ${index === 0 ? "ml-0.5" : "ml-1.5"}`}>{position + 1}</button>
-                              )
-                            })}
-                            <span>{SPACE}</span>
-                          </span>
-                        ))}
-                      </span>
-                    ))}
-                  </p>
+                  {/* One line per kind of finding, its label in front in its own colour. */}
+                  {overviewRows(group.points).map((row) => (
+                    <p key={row.kind} data-kind={row.kind} className="mt-1 text-[15px] leading-[1.7] text-espresso first:mt-0">
+                      <span data-kind-label="true" className="mr-2 inline-block min-w-[88px] text-[13px] font-bold uppercase tracking-wide" style={KIND_COLOUR[row.kind] ? { color: KIND_COLOUR[row.kind] } : undefined}>{CLINICAL_COPY.feed.overviewKinds[row.kind]}</span>
+                      {row.clusters.map((cluster, at) => (
+                        <span key={at}>
+                          {cluster.treatment && <>{marked(capital(cluster.treatment), capital(cluster.treatment), row.kind)}<span>{SPACE}</span></>}
+                          {cluster.points.map((point, index) => {
+                            const phrase = tidyOverviewSentence(point.text).replace(/\.$/, "")
+                            return (
+                              <span key={point.text}>
+                                {index > 0 && <span>{JOIN}</span>}
+                                {marked(cluster.treatment ? phrase : capital(phrase), cluster.treatment ? undefined : point.emphasis?.[0], row.kind)}
+                                {sourcesOf(point)}
+                              </span>
+                            )
+                          })}
+                          <span>{STOP}</span>
+                        </span>
+                      ))}
+                    </p>
+                  ))}
                 </div>
               ))}
             </div>

@@ -18,3 +18,9 @@ export function tidyOverviewSentence(text: string): string {
   if (!tidy) return ""
   return /[.!?]$/.test(tidy) ? tidy : `${tidy}.`
 }
+
+/**
+ * The words that say in so many words that something did not work. A finding is filed under "no
+ * benefit" or "mixed" only if it has one, and the page marks them there.
+ */
+export const negationWords = () => /\b(?:not|no|nor|neither|without|failed|fails|lacked|lack)\b/gi

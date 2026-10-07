@@ -4,7 +4,7 @@ import { runSkill } from "../../skills/runner"
 import { addCosts } from "../../llm/pricing"
 import type { CardDigest, DigestRunOpts } from "./card"
 import { numbers } from "./card"
-import { tidyOverviewSentence } from "../text/overview-text"
+import { negationWords, tidyOverviewSentence } from "../text/overview-text"
 
 export { tidyOverviewSentence }
 
@@ -17,10 +17,12 @@ export { tidyOverviewSentence }
  * - A sentence may use only numbers that appear in the headline or takeaway of the papers it names.
  * - A sentence must be short.
  *
- * Since 2026-10-07 the overview is a synthesis rather than a list of points: each sentence has a kind
- * (benefit, no benefit, mixed, safety, other), papers that found related things share a sentence, and
- * every listed paper must be a source of some sentence. The page sets the sentences as running text by
- * kind and counts the papers of each kind itself; the model does not write the counts.
+ * Since 2026-10-07 the model no longer writes the overview as text. It sorts each paper: a kind
+ * (benefit, no benefit, mixed, safety, other), the treatment, and a short outcome. The page joins the
+ * answers: one line per kind, papers on the same treatment together, every paper with its number.
+ * Asked to join papers itself, the model either wrote one sentence per paper or joined unrelated ones
+ * (docs/psychiatry/first-run-2026-10-06.md). "No benefit" and "mixed" are kept only for an outcome
+ * that says in words that something did not work.
  *
  * What survives is stored with the list as sentences and the keys of their papers.
  */
@@ -45,6 +47,8 @@ export interface OverviewSentence {
   group?: "focus" | "related"
   /** What the finding says about benefit. Absent in overviews written before 2026-10-07. */
   kind?: OverviewKind
+  /** The treatment or exposure the finding is about, as the paper names it. The page joins findings on the same one. */
+  treatment?: string
   /** Words of the sentence to mark, so the eye finds the point. Each is in `text` as written. */
   emphasis?: string[]
 }
@@ -53,7 +57,7 @@ export interface OverviewPaper { key: string; headline: string; takeaway: string
 const OverviewSchema = z.object({
   sentences: z.array(z.object({
     text: z.string(), sources: z.array(z.number().int()),
-    group: z.enum(["focus", "related"]).nullable().default(null), kind: z.enum(OVERVIEW_KINDS).nullable().default(null), emphasis: z.array(z.string()).default([]),
+    group: z.enum(["focus", "related"]).nullable().default(null), kind: z.enum(OVERVIEW_KINDS).nullable().default(null), treatment: z.string().nullable().default(null), emphasis: z.array(z.string()).default([]),
   })),
 })
 
@@ -64,27 +68,33 @@ interface OverviewInput {
   problems?: string[]
 }
 
-const SYSTEM_PROMPT = `You write the short overview a busy psychiatrist reads before the paper list of one topic: which treatments the new papers found to help, which they found not to help, where the result was mixed, what safety concerns they raise, and what else they found. It reads as running text, not as a list of the papers. You are given the topic and, for each paper, a number, a headline, a one-sentence takeaway, and "part": "focus" for a paper about the whole topic (its condition and its treatment), "related" for a paper about the condition with another treatment or none.
+const SYSTEM_PROMPT = `You sort the new papers on one topic for a psychiatrist, one answer per paper. Code will then join your answers into an overview, so do not join papers yourself. You are given the topic and, for each paper, a number, a headline, a one-sentence takeaway, and "part" (ignore it).
 
-Return "sentences". Every paper must be a source of at least one sentence. Papers that found the same or a closely related thing share ONE sentence that lists them all; do not write one sentence per paper when they can be joined. Each sentence:
-- "text": one plain sentence of at most 24 words, starting with a capital letter and ending with a full stop. Name the treatment or exposure and what was found, with the patient group when it matters. No filler ("recent papers explore"), no study-design words unless they are the point.
-- "kind": "benefit" if a treatment or intervention did better than its comparator or improved the outcome; "no-benefit" if it made no difference, did worse, or the trial failed; "mixed" if it helped on one outcome and not on another; "safety" if the finding is a harm, adverse effect or risk of a treatment; "other" for everything that is not about whether a treatment works (risk factors, mechanisms, prediction, prevalence, service use, protocols).
-- "group": "focus" or "related", the part its papers belong to. Never mix the two parts in one sentence.
-- "sources": the numbers of the papers the sentence rests on. At least one.
-- "emphasis": exactly one phrase of one to four words copied exactly from your text: the name of the treatment or exposure. An empty list if the sentence has none.
+Return "sentences": exactly one entry for every paper. Each entry:
+- "sources": a list with the one number of the paper.
+- "treatment": the treatment, intervention or exposure the paper is about, as its shortest usual name copied from the headline or takeaway ("ketamine", not "repeated ketamine infusions"; "rTMS"; "exercise"). null when the paper is not about a treatment or exposure (genetics, prediction models, prevalence, scales).
+- "text": what the paper found, at most 14 words, lower case, no full stop.
+  - With a treatment: start with a verb and do NOT repeat the treatment name, so that "<treatment> <text>" reads as a sentence: "reduced suicidal thoughts in treatment-resistant depression", "did not reduce symptoms compared with placebo".
+  - Without a treatment: a complete short statement: "older age was linked to slower improvement".
+- "kind": read the takeaway carefully and choose strictly:
+  - "benefit": the treatment improved an outcome or did better than its comparator. An improvement in one outcome, with nothing said to have failed, is a benefit.
+  - "no-benefit": ONLY when the paper says in so many words that the treatment did not work: no effect, did not improve, not better than placebo or control, the trial failed. Your text must then contain "not" or "no".
+  - "mixed": ONLY when the same treatment improved one outcome AND the paper says it did not improve another. Your text must name both and contain "not" or "no".
+  - "safety": the finding is a harm, adverse effect or risk of a treatment.
+  - "other": everything else. This includes: two active treatments or doses with similar results (that is not "no benefit"); associations, risk factors and mechanisms ("was linked to"); prediction, prevalence, measurement; reviews that say the evidence is uncertain or varies.
+  When in doubt between "no-benefit" or "mixed" and "other", choose "other".
+- "group": null. "emphasis": an empty list.
 
 Rules:
-- Use only the headlines and takeaways given. Add nothing from outside knowledge.
-- Keep each paper's own level of certainty: an association is "was linked to", not "caused"; a pilot or single small study "suggested". Never write "evidence shows".
-- When a treatment did not help, say so with the word "not" or "no".
-- Use a number only if it appears in the headline or takeaway of a paper you list as a source for that sentence. Copy it exactly; never calculate or round. Prefer no number.
-- Do not write paper numbers, brackets with numbers, or phrases like "paper 2" inside the text.
-- Do not rank the papers, do not say which is best, and do not tell the reader what to do with a patient.
+- Use only the headline and takeaway of that paper. Add nothing from outside knowledge.
+- Keep the paper's own level of certainty: an association is "was linked to", not "caused"; "may" stays "may".
+- Use a number only if it appears in the headline or takeaway of that paper. Copy it exactly; never calculate or round. Prefer no number.
+- Do not write paper numbers inside the text, do not rank the papers, and do not tell the reader what to do with a patient.
 - If the input has "problems", your previous answer had them: write it again without them.`
 
 export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof OverviewSchema>>({
   name: "clinical-topic-overview",
-  version: "6",
+  version: "8",
   run: (ctx, input) =>
     ctx.llmStructured(
       // The stronger model: weighing several papers against each other is where the small one writes filler.
@@ -114,7 +124,7 @@ export function overviewTopics(
 
 /** Checks each sentence. `kept` have the keys of their papers as sources; `problems` say why the others were rejected. */
 export function judgeOverview(
-  sentences: Array<{ text: string; sources: number[]; group?: "focus" | "related" | null; kind?: OverviewKind | null; emphasis?: string[] }>, papers: Array<Omit<OverviewPaper, "part"> & { part?: OverviewPaper["part"] }>,
+  sentences: Array<{ text: string; sources: number[]; group?: "focus" | "related" | null; kind?: OverviewKind | null; treatment?: string | null; emphasis?: string[] }>, papers: Array<Omit<OverviewPaper, "part"> & { part?: OverviewPaper["part"] }>,
 ): { kept: OverviewSentence[]; problems: string[] } {
   const kept: OverviewSentence[] = []
   const problems: string[] = []
@@ -129,7 +139,16 @@ export function judgeOverview(
     if (invented) { problems.push(`number-not-in-sources:${invented}`); continue }
     // Only words that are in the sentence as written can be marked in it.
     const emphasis = (sentence.emphasis ?? []).map((phrase) => phrase.trim()).filter((phrase) => phrase.length > 1 && phrase.split(/\s+/).length <= 4 && text.includes(phrase)).slice(0, 2)
-    kept.push({ text, sources: cited.map((paper) => paper.key), ...(sentence.group ? { group: sentence.group } : {}), ...(sentence.kind ? { kind: sentence.kind } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
+    // The part of the topic is a fact about the papers, so it is taken from them when they say.
+    const group = cited[0].part ?? sentence.group ?? undefined
+    // "No benefit" and "mixed" are strong words: only for a finding that says in words that something did not work.
+    let kind = sentence.kind ?? undefined
+    if ((kind === "no-benefit" || kind === "mixed") && !negationWords().test(text)) { problems.push(`kind-not-stated:${kind}`); kind = "other" }
+    // The treatment must be named in the summaries of the papers the finding rests on.
+    const sourceWords = new Set(cited.flatMap((paper) => `${paper.headline} ${paper.takeaway}`.toLowerCase().match(/[a-z0-9]+/g) ?? []))
+    let treatment = sentence.treatment?.replace(/\s+/g, " ").trim() || undefined
+    if (treatment && !(treatment.toLowerCase().match(/[a-z0-9]+/g) ?? []).every((word) => sourceWords.has(word))) { problems.push(`treatment-not-in-source:${treatment}`); treatment = undefined }
+    kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
   }
   return { kept, problems }
 }
@@ -144,6 +163,8 @@ function problemText(reason: string): string {
   const [kind, detail] = reason.split(":")
   if (kind === "number-not-in-sources") return `A sentence used the number ${detail}, which is not in the headline or takeaway of the papers it listed as sources. Use only numbers from the sources of that sentence, or no number.`
   if (kind === "no-source") return "A sentence listed no valid paper number in its sources. Every sentence needs at least one."
+  if (kind === "kind-not-stated") return `An entry was filed under "${detail}" but its text does not say in words that something did not work. Use "${detail}" only when the paper says so, with "not" or "no" in the text; otherwise use "benefit" or "other".`
+  if (kind === "treatment-not-in-source") return `The treatment "${detail}" is not named in the headline or takeaway of its paper. Copy the name from there.`
   if (kind === "too-long") return "A sentence was too long. Keep each sentence to at most 24 words; put a second result in a sentence of its own."
   return "A sentence was empty."
 }

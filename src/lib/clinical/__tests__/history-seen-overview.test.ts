@@ -173,7 +173,7 @@ describe("the AI overview of a topic", () => {
     const { run } = await setup()
     const strong = new MockProvider([plan(), overviewOf([{ text: "Both trials reported benefit, with remission of 27% against 18% in one.", sources: [1, 2] }])])
     const feed = await run(new MockProvider([grades(), twoDigests()]), { summarise: true, providerOverride: { strong, fast: new MockProvider([grades(), twoDigests()]) } })
-    expect(feed.topicOverviews?.w1).toEqual([{ text: "Both trials reported benefit, with remission of 27% against 18% in one.", sources: ["pmid:111", "pmid:112"] }])
+    expect(feed.topicOverviews?.w1).toEqual([{ text: "Both trials reported benefit, with remission of 27% against 18% in one.", sources: ["pmid:111", "pmid:112"], group: "focus" }])
     const sent = JSON.parse(strong.calls[1].req.messages.at(-1)!.content as string)
     expect(sent.papers.map((entry: { n: number }) => entry.n)).toEqual([1, 2])
     expect(JSON.stringify(sent)).not.toContain("METHODS")
@@ -279,5 +279,35 @@ describe("the overview as a synthesis", () => {
     expect(strong.calls).toHaveLength(2)
     expect(JSON.parse(strong.calls[1].req.messages.at(-1)!.content as string).problems.join(" ")).toMatch(/papers? 2, 3/i)
     expect(written.overviews.w1.flatMap((sentence) => sentence.sources).sort()).toEqual(["k1", "k2", "k3"])
+  })
+})
+
+// Owner decision 2026-10-07: the model sorts each paper (kind, treatment, short outcome); code joins them.
+describe("the overview from per-paper answers", () => {
+  const papers = [
+    { key: "k1", headline: "Ketamine improved symptoms", takeaway: "Ketamine reduced sadness and suicidal thoughts in treatment-resistant depression.", part: "focus" as const },
+    { key: "k2", headline: "Low-dose antipsychotics matched standard doses", takeaway: "Low-dose antipsychotics showed similar discontinuation to standard doses.", part: "focus" as const },
+    { key: "k3", headline: "Omega-3 added nothing", takeaway: "Adding omega-3 did not reduce symptoms.", part: "related" as const },
+  ]
+  it("keeps the treatment a paper names, and takes the part of the topic from the paper, not from the model", () => {
+    const { kept } = judgeOverview([
+      { text: "reduced sadness and suicidal thoughts", sources: [1], kind: "benefit", treatment: "ketamine", group: "related" },
+      { text: "did not reduce symptoms", sources: [3], kind: "no-benefit", treatment: "Omega-3", group: "focus" },
+    ], papers)
+    expect(kept.map((entry) => [entry.treatment, entry.group, entry.kind])).toEqual([["ketamine", "focus", "benefit"], ["Omega-3", "related", "no-benefit"]])
+  })
+  it("does not keep a treatment the paper's summary does not name", () => {
+    const { kept, problems } = judgeOverview([{ text: "reduced sadness", sources: [1], kind: "benefit", treatment: "esketamine nasal spray" }], papers)
+    expect(kept[0].treatment).toBeUndefined()
+    expect(problems).toEqual(["treatment-not-in-source:esketamine nasal spray"])
+  })
+  it("files a finding under no benefit or mixed only when it says in words that something did not work", () => {
+    const { kept, problems } = judgeOverview([
+      { text: "showed similar discontinuation to standard doses", sources: [2], kind: "no-benefit", treatment: "Low-dose antipsychotics" },
+      { text: "reduced sadness and suicidal thoughts", sources: [1], kind: "mixed", treatment: "Ketamine" },
+      { text: "did not reduce symptoms", sources: [3], kind: "no-benefit", treatment: "omega-3" },
+    ], papers)
+    expect(kept.map((entry) => entry.kind)).toEqual(["other", "other", "no-benefit"])
+    expect(problems).toEqual(["kind-not-stated:no-benefit", "kind-not-stated:mixed"])
   })
 })
