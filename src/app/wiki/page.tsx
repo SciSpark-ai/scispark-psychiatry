@@ -24,6 +24,7 @@ import { RecentStrip } from "@/components/wiki/dashboard/RecentStrip"
 import { COMPANION_CLEARANCE } from "@/components/layout/companion-clearance"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { cn } from "@/components/ui/cn"
+import { NewConditionPage } from "@/components/clinical/NewConditionPage"
 
 const SHELF_LABELS: Record<PaperShelfStatus, string> = {
   saved: "Saved",
@@ -187,6 +188,7 @@ function WikiIndexPageContent() {
             <Button onClick={handleNewNote} disabled={busy || !storage}>
               New note
             </Button>
+            <NewConditionPage />
           </>
         }
       />

@@ -43,3 +43,4 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/app/paper/[key]/page.tsx | the trial-data panel (`ClinicalTrialRecord`) under the digest, and its link in the side navigation | spec 7.7, 7.12 | Slice 3 |
 | src/components/wiki/markdown-preview.tsx (+ test) | `renderMarkdown` takes an optional `fence` callback that may draw a fenced block; without it, or when it declines, the code block is drawn as before | spec 7.6, 7.9 | Slice 3 |
 | src/components/wiki/PageEditor.tsx, src/app/wiki/[...id]/page.tsx | `fence` and `initialTab` props; a condition page opens on its preview with the evidence table drawn | spec 7.6 | Slice 3 |
+| src/app/wiki/page.tsx (+ its test's mocks) | the "New condition page" control beside "New note" | decision D19, spec 7.9 | Slice 3 |

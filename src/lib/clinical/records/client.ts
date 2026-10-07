@@ -34,3 +34,10 @@ export interface TreatmentTable { condition: { code: string; name: string }; row
 export async function loadTreatmentTableRemote(condition: string, fetchFn: typeof fetch = fetch): Promise<TreatmentTable> {
   return unwrap<TreatmentTable>(await fetchFn(`${URL}/table?condition=${encodeURIComponent(condition)}`, { method: "GET" }))
 }
+
+export async function listConditionsRemote(fetchFn: typeof fetch = fetch): Promise<Array<{ code: string; name: string }>> {
+  return (await unwrap<{ conditions: Array<{ code: string; name: string }> }>(await fetchFn("/api/clinical/conditions", { method: "GET" }))).conditions
+}
+export async function createConditionPageRemote(code: string, fetchFn: typeof fetch = fetch): Promise<{ id: string; created: boolean }> {
+  return unwrap<{ id: string; created: boolean }>(await fetchFn("/api/clinical/conditions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code }) }))
+}

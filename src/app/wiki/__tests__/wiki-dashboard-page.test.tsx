@@ -20,6 +20,7 @@ vi.mock("@/lib/vault/bundle", () => ({
 vi.mock("@/lib/wiki/review-queue", () => ({
   reviewCount: (...args: unknown[]) => reviewCountMock(...args),
 }))
+vi.mock("@/lib/clinical/records/client", () => ({ listConditionsRemote: async () => [], createConditionPageRemote: async () => ({ id: "", created: false }) }))
 
 import WikiIndexPage from "../page"
 

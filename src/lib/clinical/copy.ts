@@ -239,6 +239,13 @@ export const CLINICAL_COPY = {
     badSlug: "That is not a paper this app knows.",
     badRequest: "The request was not understood.",
     noSuchCondition: "That condition is not in the pack.",
+    conditionPage: {
+      choose: "Choose a condition…", create: "New condition page", creating: "Making the page…",
+      label: "Condition",
+      note: "Makes a page for the condition with a table of its treatments, counted from the trial data you extract.",
+      overview: "Overview", options: "Treatment options",
+      overviewHint: "Write what you want to remember about this condition here.",
+    },
     table: {
       columns: ["Treatment", "Type", "Trials", "Compared with", "Primary outcomes", "Direction of effect", "Latest trial"],
       modalities: { drug: "Drug", psychotherapy: "Psychotherapy", neuromodulation: "Neuromodulation", other: "Other" },
