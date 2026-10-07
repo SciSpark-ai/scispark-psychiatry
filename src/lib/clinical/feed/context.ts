@@ -6,12 +6,15 @@ import { dismissedKeys, exemplarTitles, loadFeedback } from "../feedback/store"
 import { loadClinicalSettings, loadWatchEntries } from "../watch/store"
 import type { ClinicalSettings, WatchEntry } from "../types"
 import { CLINICAL_COPY } from "../copy"
+import { loadSeen } from "../seen/store"
 
 export interface RunContext {
   entries: WatchEntry[]
   settings: ClinicalSettings
   /** Papers already in the knowledge base or marked not relevant. */
   exclude: Set<string>
+  /** Papers already displayed to the user (seen/store.ts). */
+  seen: Set<string>
   exemplars: string[]
 }
 
@@ -28,6 +31,7 @@ export async function assembleContext(storage: VaultStorage): Promise<RunContext
     entries,
     settings: await loadClinicalSettings(storage),
     exclude: new Set([...saved, ...dismissedKeys(feedback)]),
+    seen: await loadSeen(storage),
     exemplars: exemplarTitles(feedback),
   }
 }

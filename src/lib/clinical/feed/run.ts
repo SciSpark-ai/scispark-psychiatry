@@ -2,7 +2,7 @@ import type { LLMProvider, Tier } from "../../llm/types"
 import type { LLMSettings } from "../../llm/settings"
 import { addCosts } from "../../llm/pricing"
 import type { VaultStorage } from "../../vault/storage"
-import { DESIGN_TIER, designGate, mentions } from "../filter/gate"
+import { DESIGN_TIER, designAccepted, designGate, mentions } from "../filter/gate"
 import { resolveFacet } from "../plan/queries"
 import { domainFilter } from "../filter/prefilter"
 import { gradeStageA } from "../grade/stage-a"
@@ -15,6 +15,7 @@ import { digestCards } from "../digest/card"
 import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
 import { selectFeed, SHORTLIST_GRADE } from "../select/select"
 import type { Candidate, ClinicalStage, DropRecord, GatedCandidate, StageAGrade, WatchEntry } from "../types"
+import { LIST_CAP } from "../types"
 import { assembleContext } from "./context"
 import { saveRunLog, type PoolRef, type RunLog } from "./run-log"
 import { loadClinicalFeed, saveClinicalFeed, toSafetyRef, toStoredItem, type StoredFeed, type StoredFeedItem } from "./stored"
@@ -141,12 +142,31 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   costUsd = addCosts(costUsd, graded.costUsd)
   if (graded.failedBatches > 0) warnings.push(CLINICAL_COPY.run.gradingBatchesFailed(graded.failedBatches))
   const gradeOf = (key: string) => (reused.get(key) ?? graded.grades.get(key)) as StageAGrade
-  const assessed = gate.gated.filter((candidate) => reused.has(candidate.key) || graded.grades.has(candidate.key))
+  const withGrade = gate.gated.filter((candidate) => reused.has(candidate.key) || graded.grades.has(candidate.key))
+
+  // Where PubMed has not assigned a type, the design the model read from the text replaces the text
+  // rule's guess. The same exclusions then apply: a paper the model identifies as, say, a narrative
+  // review is left out like one PubMed labelled so.
+  const modelDrops: DropRecord[] = []
+  const assessed = withGrade.flatMap((candidate): GatedCandidate[] => {
+    const named = gradeOf(candidate.key).modelDesign
+    if (!named || candidate.designSource === "publication-type") return [candidate]
+    if (!designAccepted(context.settings.strictness, named)) {
+      modelDrops.push({ key: candidate.key, title: candidate.paper.title, step: "gate", reason: `design:${named}:model` })
+      return []
+    }
+    return [{ ...candidate, design: named, designSource: "model" }]
+  })
 
   deps.onStage?.("select")
   const scored = assessed.map((candidate) =>
     scoreCandidate({ candidate, grade: gradeOf(candidate.key), mode, now: now(), journals: deps.pack.journals }))
-  const selected = selectFeed(scored, context.entries)
+  // A paper already displayed to the user is not recommended again: it leaves the list and, if it
+  // still matches, is kept under "Seen earlier".
+  const selected = selectFeed(scored.filter((item) => !context.seen.has(item.candidate.key)), context.entries)
+  const seenEarlier = scored
+    .filter((item) => context.seen.has(item.candidate.key) && item.grade.entryId !== null && item.grade.grade >= SHORTLIST_GRADE)
+    .sort((a, b) => b.score - a.score).slice(0, LIST_CAP)
 
   const toDigest = selected.items.map((item) => ({ key: item.candidate.key, paper: item.candidate.paper, design: item.candidate.design }))
   const knownDigests = new Map(cache ? toDigest.flatMap((item) => { const digest = cachedDigest(cache, item.key, item.paper); return digest ? [[item.key, digest] as const] : [] }) : [])
@@ -170,7 +190,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     await saveFeedCache(storage, cache, now())
   }
   const withDigest = (item: ScoredItem): StoredFeedItem => {
-    const digest = summaries?.digests.get(item.candidate.key)
+    const digest = summaries?.digests.get(item.candidate.key) ?? (cache ? cachedDigest(cache, item.candidate.key, item.candidate.paper) : undefined)
     return digest ? { ...toStoredItem(item), digest } : toStoredItem(item)
   }
 
@@ -179,6 +199,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     version: 1, generatedAt, mode, strictness: context.settings.strictness,
     items: selected.items.map(withDigest),
     lowerConfidence: selected.lowerConfidence.map(toStoredItem),
+    ...(seenEarlier.length > 0 ? { seenEarlier: seenEarlier.map(withDigest) } : {}),
     safetySignals: gate.safety.map(toSafetyRef),
     stats: { retrieved: retrieved.candidates.length, domain: domain.kept.length, gated: gate.gated.length, graded: assessed.length, listed: selected.items.length },
     costUsd, warnings,
@@ -186,7 +207,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
 
   const log: RunLog = {
     generatedAt, mode, queryLog: retrieved.queryLog,
-    drops: [...retrieved.drops, ...domain.drops, ...gate.drops, ...capped.drops, ...selected.drops],
+    drops: [...retrieved.drops, ...domain.drops, ...gate.drops, ...capped.drops, ...modelDrops, ...selected.drops],
     pool: {
       retrieved: retrieved.candidates.map(ref), domain: domain.kept.map(ref), gated: gate.gated.map(ref),
       shortlisted: scored.filter((s) => s.grade.entryId !== null && s.grade.grade >= SHORTLIST_GRADE).map((s) => ref(s.candidate)),
@@ -199,7 +220,8 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   await saveRunLog(storage, log)
 
   // An earlier empty feed is not worth protecting; only a feed with papers in it is.
-  if (feed.items.length === 0 && previous && previous.items.length > 0) {
+  // A list that is empty only because every match has been seen is a real result ("nothing new"), not a failed run.
+  if (feed.items.length === 0 && seenEarlier.length === 0 && previous && previous.items.length > 0) {
     throw new Error(CLINICAL_COPY.run.nothingMatched)
   }
   await saveClinicalFeed(storage, feed)

@@ -41,10 +41,12 @@ export type ClinicalSettings = z.infer<typeof ClinicalSettingsSchema>
 
 export const DESIGNS = [
   "meta-analysis", "systematic-review", "randomized-trial", "guideline", "cohort",
-  "clinical-trial", "review", "case-report", "editorial", "erratum", "retraction", "other", "unknown",
+  "clinical-trial", "review", "case-report", "editorial", "erratum", "retraction", "protocol", "preclinical", "other", "unknown",
 ] as const
 export type Design = (typeof DESIGNS)[number]
-export type DesignSource = "publication-type" | "text-rule" | "none"
+/** Who named the design: PubMed's own indexing, the grading model, the text rules, or nobody. */
+export const DESIGN_SOURCES = ["publication-type", "model", "text-rule", "none"] as const
+export type DesignSource = (typeof DESIGN_SOURCES)[number]
 
 /** Where a candidate came from; kept for the recall audit. */
 export interface Provenance {
@@ -88,6 +90,8 @@ export interface StageAGrade {
   quoteVerified: boolean
   /** The entry grade the model gave, before the quote check or an unknown entry id zeroed it (for the run log). */
   modelGrade?: number
+  /** The study design the model read from the title and abstract, when it named one from the list. */
+  modelDesign?: Design
   /** True when the grading call failed or skipped this candidate; it is kept, ungraded. */
   ungraded: boolean
 }

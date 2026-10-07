@@ -58,7 +58,8 @@ describe("runClinicalFeed", () => {
     expect(stages).toEqual(["context", "plan", "retrieve", "filter", "grade", "select"])
     expect(feed.items.map((item) => item.paper.ids.pmid)).toEqual(["111"])
     expect(feed.items[0]).toMatchObject({ design: "randomized-trial", entryId: "w1", grade: 4, quoteVerified: true })
-    expect(feed.lowerConfidence.map((item) => item.paper.ids.pmid)).toEqual(["333"])
+    // The cohort is graded 1 ("loosely related"), which is no longer listed anywhere (owner decision 2026-10-06).
+    expect(feed.lowerConfidence.map((item) => item.paper.ids.pmid)).toEqual([])
     expect(feed.stats).toEqual({ retrieved: 4, domain: 3, gated: 2, graded: 2, listed: 1 })
     expect(feed.mode).toBe("whats-new")
     expect(typeof feed.costUsd).toBe("number")

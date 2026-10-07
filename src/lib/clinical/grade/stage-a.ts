@@ -5,7 +5,7 @@ import { addCosts } from "../../llm/pricing"
 import type { LLMProvider, Tier } from "../../llm/types"
 import type { LLMSettings } from "../../llm/settings"
 import type { VaultStorage } from "../../vault/storage"
-import type { GatedCandidate, StageAGrade, WatchEntry } from "../types"
+import type { Design, GatedCandidate, StageAGrade, WatchEntry } from "../types"
 import { CLINICAL_COPY } from "../copy"
 import { quoteInText } from "../text/quote"
 
@@ -19,8 +19,16 @@ const AssessmentsSchema = z.object({
     grade: z.number().int().min(0).max(4),
     topicGrade: z.number().int().min(0).max(4),
     quote: z.string(),
+    /** The kind of study, from MODEL_DESIGNS, or null. Checked against the list in code. */
+    design: z.string().nullable().default(null),
   })),
 })
+
+/** The designs the model may name. PubMed's own type, when there is one, always wins over this. */
+export const MODEL_DESIGNS: readonly Design[] = [
+  "meta-analysis", "systematic-review", "randomized-trial", "guideline", "cohort", "clinical-trial",
+  "review", "case-report", "editorial", "protocol", "preclinical", "other",
+]
 
 export interface StageAInput {
   entries: WatchEntry[]
@@ -28,7 +36,7 @@ export interface StageAInput {
   candidates: Array<{ index: number; title: string; abstract: string }>
 }
 
-const SYSTEM_PROMPT = `You triage new psychiatry literature for a clinician. For each candidate paper, find the ONE watch entry it matches best and grade the match.
+const SYSTEM_PROMPT = () => `You triage new psychiatry literature for a clinician. For each candidate paper, find the ONE watch entry it matches best and grade the match.
 
 Match grade for that entry (0-4). A watch entry has a condition, a treatment, or both; grade only the facets it fills:
 4 = the paper's population/condition AND treatment both match the entry (population compatible)
@@ -43,6 +51,7 @@ Rules:
 - "entryId" is the id of the best-matching entry, or null when nothing matches (then grade must be 0).
 - "quote" must be copied VERBATIM from the paper's title or abstract (at least 8 characters) and must be the passage that justifies your grades. If you cannot quote support for a grade above 0, give 0.
 - Judge only from the text given. Do not use outside knowledge about whether the paper is good.
+- "design" is the kind of study THIS paper reports, one of: ${MODEL_DESIGNS.join(", ")}. "randomized-trial" only if this paper reports a trial that allocated participants at random; "clinical-trial" for other interventional studies (single-arm, open-label, pilot); "cohort" for observational studies of patients; "review" for a narrative review; "protocol" for a study plan with no results; "preclinical" for animal or laboratory work; "other" when none fits. Use null if the text does not say.
 - Return one assessment per candidate, using the candidate's index.
 - The example papers show what this clinician has found useful. They can reveal extra interests, but do not match on them unless a watch entry or the topic grade supports it.`
 
@@ -55,7 +64,7 @@ export const stageASkill = defineSkill<StageAInput, z.infer<typeof AssessmentsSc
       {
         maxTokens: 8192,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: SYSTEM_PROMPT() },
           { role: "user", content: JSON.stringify({
             watchEntries: input.entries.map(({ id, condition, treatment, population, outcome }) => ({ id, condition, treatment, population, outcome })),
             examplePapers: input.exemplars,
@@ -126,9 +135,11 @@ export async function gradeStageA(
       if (!assessment) { grades.set(candidate.key, ungraded(candidate.key)); return }
       const knownEntry = assessment.entryId !== null && entryIds.has(assessment.entryId)
       const verified = verifyQuote(assessment.quote, candidate)
+      const named = MODEL_DESIGNS.find((design) => design === assessment.design)
+      const modelDesign = named ? { modelDesign: named } : {}
       const claimsMatch = assessment.grade > 0 || assessment.topicGrade > 0
       if (claimsMatch && !verified) {
-        grades.set(candidate.key, { key: candidate.key, entryId: null, grade: 0, topicGrade: 0, quote: assessment.quote, quoteVerified: false, ungraded: false, modelGrade: assessment.grade })
+        grades.set(candidate.key, { key: candidate.key, entryId: null, grade: 0, topicGrade: 0, quote: assessment.quote, quoteVerified: false, ungraded: false, modelGrade: assessment.grade, ...modelDesign })
         return
       }
       grades.set(candidate.key, {
@@ -140,6 +151,7 @@ export async function gradeStageA(
         quoteVerified: verified,
         ungraded: false,
         modelGrade: assessment.grade,
+        ...modelDesign,
       })
     })
   }

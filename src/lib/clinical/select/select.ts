@@ -63,12 +63,15 @@ export function selectFeed(
   const shortlist = kept.filter((item) => item.grade.entryId !== null && item.grade.grade >= SHORTLIST_GRADE)
   // Graded non-matches are capped; a paper the grader failed on or skipped is always kept (spec 6.9 step 5).
   const lowerCap = opts.lowerCap ?? LOWER_CONFIDENCE_CAP
-  const rest = kept.filter((item) => !shortlist.includes(item))
+  // A paper graded 1 for its entry ("loosely related") is not shown anywhere (owner decision, 2026-10-06).
+  const loose = (item: ScoredItem) => !item.grade.ungraded && item.grade.entryId !== null && item.grade.grade > 0 && item.grade.grade < SHORTLIST_GRADE
+  const rest = kept.filter((item) => !shortlist.includes(item) && !loose(item))
   const gradedRest = rest.filter((item) => !item.grade.ungraded)
   const lowerConfidence = [...gradedRest.slice(0, lowerCap), ...rest.filter((item) => item.grade.ungraded)]
   const cut = (item: ScoredItem, reason: string) =>
     drops.push({ key: item.candidate.key, title: item.candidate.paper.title, step: "select", reason })
   for (const item of gradedRest.slice(lowerCap)) cut(item, "lower-confidence-cap")
+  for (const item of kept.filter(loose)) cut(item, "loosely-related")
 
   const active = entries
     .filter((entry) => entry.priority !== "paused")

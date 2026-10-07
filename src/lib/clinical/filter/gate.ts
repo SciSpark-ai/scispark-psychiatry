@@ -12,6 +12,7 @@ function fromPublicationTypes(types: string[]): Design | null {
   const startsWith = (prefix: string) => set.some((type) => type.startsWith(prefix))
   if (has("retracted publication", "retraction of publication")) return "retraction"
   if (has("published erratum", "erratum", "corrected and republished article")) return "erratum"
+  if (has("clinical trial protocol")) return "protocol"
   if (has("meta-analysis")) return "meta-analysis"
   if (has("systematic review")) return "systematic-review"
   if (has("practice guideline", "guideline")) return "guideline"
@@ -24,23 +25,46 @@ function fromPublicationTypes(types: string[]): Design | null {
   return null
 }
 
+/** MeSH marks animal work with "Animals"; a human study that also used animals carries "Humans" too. */
+function animalsOnly(fields: string[]): boolean {
+  const set = fields.map(norm)
+  return set.includes("animals") && !set.includes("humans")
+}
+
+const sentencesOf = (text: string) => text.split(/(?<=[.!?])\s+|\n/)
+/** "We conducted a meta-analysis", not "previous meta-analyses suggested". */
+const OWN_WORK = /\b(?:we|this|our|present|current)\b/i
+const OTHERS_WORK = /\b(?:previous|prior|earlier|recent|published|existing)\b/i
+
+/**
+ * Design from the wording, used only when PubMed has not assigned a type. A word must describe
+ * this paper to count: in the title, or in a sentence of the abstract that says what the authors
+ * did. An abstract that ends "randomized trials are needed" is not a randomized trial.
+ */
 function fromText(paper: PaperRecord): Design | null {
   const title = paper.title
-  const text = `${title}\n${paper.abstract ?? ""}`
-  if (/\bmeta-?analy(?:sis|ses|tic)\b/i.test(text)) return "meta-analysis"
-  if (/\bsystematic (?:literature )?review\b/i.test(text)) return "systematic-review"
+  const abstract = paper.abstract ?? ""
+  const own = sentencesOf(abstract).filter((sentence) => OWN_WORK.test(sentence) && !OTHERS_WORK.test(sentence)).join(" ")
+  if (/\bprotocol\b/i.test(title)) return "protocol"
+  if (/\b(?:mice|mouse|rats?|murine|rodents?|zebrafish|in vitro|animal model)\b/i.test(title)) return "preclinical"
+  if (/\bmeta-?analy(?:sis|ses|tic)\b/i.test(`${title} ${own}`)) return "meta-analysis"
+  if (/\b(?:systematic (?:literature )?|scoping |umbrella |rapid )review\b/i.test(`${title} ${own}`)) return "systematic-review"
   if (/\b(?:guidelines?|consensus statement)\b/i.test(title)) return "guideline"
-  if (/\brandomi[sz]ed\b/i.test(text)) return "randomized-trial"
-  if (/\bcase (?:report|series)\b/i.test(title) || /\bwe (?:report|describe) (?:a|the|an) (?:\w+ ){0,3}case\b/i.test(text)) return "case-report"
-  if (/\b(?:cohort|prospective|longitudinal|registry-based|nationwide)\b/i.test(text)) return "cohort"
+  if (/\b(?:single[- ](?:group|arm)|uncontrolled)\b/i.test(title)) return "clinical-trial"
+  if (/\brandomi[sz]ed\b|\bdouble-blind\b|\bplacebo-controlled\b/i.test(title)) return "randomized-trial"
+  if (/\b(?:were|was) (?:then )?randomi[sz]ed\b|\brandomly (?:assigned|allocated)\b|\brandomi[sz]ed (?:to|into|in a|1:1|2:1)\b/i.test(abstract)) return "randomized-trial"
+  if (/\bcase (?:report|series)\b/i.test(title) || /\bwe (?:report|describe) (?:a|the|an) (?:\w+ ){0,3}case\b/i.test(abstract)) return "case-report"
+  if (/\b(?:cohort|prospective|longitudinal|registry-based|nationwide)\b/i.test(`${title} ${abstract}`)) return "cohort"
+  if (/\breview\b|\boverview\b/i.test(title)) return "review"
   return null
 }
 
-/** Design from publication types first, then from title and abstract text. Not a quality judgement. */
+/** Design from PubMed's publication types first, then from the wording. Not a quality judgement. */
 export function classifyDesign(paper: PaperRecord): { design: Design; source: DesignSource } {
   const byType = fromPublicationTypes(paper.publicationTypes ?? [])
   const generic = byType === null || byType === "review"
   if (!generic) return { design: byType as Design, source: "publication-type" }
+  if (animalsOnly(paper.fields ?? [])) return { design: "preclinical", source: "publication-type" }
   const byText = fromText(paper)
   // A bare "Review" type may still be a meta-analysis or systematic review; other text findings only fill a gap.
   if (byText && (byType === null || byText === "meta-analysis" || byText === "systematic-review")) return { design: byText, source: "text-rule" }
@@ -49,16 +73,26 @@ export function classifyDesign(paper: PaperRecord): { design: Design; source: De
   return hasEvidence ? { design: "other", source: "none" } : { design: "unknown", source: "none" }
 }
 
+/** Strict admits a short list of designs. */
 const STRICT: ReadonlySet<Design> = new Set(["meta-analysis", "systematic-review", "randomized-trial", "guideline"])
-const STANDARD: ReadonlySet<Design> = new Set([...STRICT, "cohort", "clinical-trial", "unknown"])
-// Editorials, letters and comments never reach this point: upstream's eligibility filter drops them in every mode.
-const OPEN: ReadonlySet<Design> = new Set([...STANDARD, "review", "other"])
-const ACCEPTED: Record<GateStrictness, ReadonlySet<Design>> = { strict: STRICT, standard: STANDARD, open: OPEN }
+/**
+ * Standard excludes rather than admits (owner decision, 2026-10-06): a paper is left out only when its
+ * design is known to be one the feed does not want. A design nobody could name stays in, so a
+ * wrong or missing label cannot remove a paper.
+ */
+export const STANDARD_EXCLUDED: ReadonlySet<Design> = new Set(["review", "editorial", "case-report", "protocol", "preclinical", "erratum", "retraction"])
+const NEVER: ReadonlySet<Design> = new Set(["erratum", "retraction"])
+
+export function designAccepted(strictness: GateStrictness, design: Design): boolean {
+  if (strictness === "strict") return STRICT.has(design)
+  if (strictness === "standard") return !STANDARD_EXCLUDED.has(design)
+  return !NEVER.has(design)
+}
 
 /** Evidence signal by design (spec 6.10): design only, not study quality. */
 export const DESIGN_TIER: Record<Design, number> = {
   "meta-analysis": 100, "systematic-review": 100, "randomized-trial": 90, guideline: 85, cohort: 60,
-  "clinical-trial": 60, review: 40, "case-report": 40, editorial: 40, erratum: 0, retraction: 0, other: 40, unknown: 50,
+  "clinical-trial": 60, review: 40, "case-report": 40, editorial: 40, erratum: 0, retraction: 0, protocol: 20, preclinical: 20, other: 40, unknown: 50,
 }
 
 export interface GateResult {
@@ -111,7 +145,7 @@ export function designGate(
       else drop(candidate, "case-report")
       continue
     }
-    if (ACCEPTED[strictness].has(design)) gated.push(withDesign)
+    if (designAccepted(strictness, design)) gated.push(withDesign)
     else drop(candidate, `design:${design}`)
   }
   return { gated, safety, drops }

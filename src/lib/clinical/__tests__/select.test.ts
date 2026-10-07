@@ -9,10 +9,12 @@ function many(entryId: string, count: number, startScore: number, g = 3) {
 }
 
 describe("selectFeed", () => {
-  it("separates the shortlist from lower-confidence items, keeping both", () => {
+  // Owner decision 2026-10-06: a loosely related paper (grade 1) is no longer listed anywhere, so "y" is dropped.
+  it("separates the shortlist from lower-confidence items, and leaves out a loosely related one", () => {
     const result = selectFeed([...many("a", 2, 90), scored("x", "Unmatched general paper about mood", null, 0, 95), scored("y", "Weak match to entry b here", "b", 1, 60)], entries)
     expect(result.items.map((i) => i.candidate.key)).toEqual(["a0", "a1"])
-    expect(result.lowerConfidence.map((i) => i.candidate.key)).toEqual(["x", "y"])
+    expect(result.lowerConfidence.map((i) => i.candidate.key)).toEqual(["x"])
+    expect(result.drops).toContainEqual({ key: "y", title: "Weak match to entry b here", step: "select", reason: "loosely-related" })
   })
 
   it("reserves slots per entry so a loud entry cannot crowd out a quiet one", () => {

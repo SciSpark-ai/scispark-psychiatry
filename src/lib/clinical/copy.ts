@@ -32,6 +32,9 @@ export const CLINICAL_COPY = {
     },
     matchedOn: (quote: string) => `Matched on this sentence: “${quote}”`,
     conclusionLabel: "Authors' conclusion",
+    aiNotice: "Headlines and summaries are written by AI from each abstract. Open a paper for its own title and abstract.",
+    nothingNew: "Nothing new since your last visit. Papers you have already seen are below.",
+    seenEarlier: "Seen earlier",
     aiSummaryLabel: "AI summary",
     aiSummaryNote: (quote: string) =>
       `Written by the AI model from the abstract, not by the authors. It rests on this sentence: “${quote}” Read the paper before relying on it.`,
@@ -66,9 +69,11 @@ export const CLINICAL_COPY = {
   designLabels: {
     "meta-analysis": "Meta-analysis", "systematic-review": "Systematic review", "randomized-trial": "Randomized trial",
     guideline: "Guideline", cohort: "Observational", "clinical-trial": "Clinical trial", review: "Review",
-    "case-report": "Case report", editorial: "Editorial", erratum: "Erratum", retraction: "Retracted", other: "Other design", unknown: "Design unknown",
+    "case-report": "Case report", editorial: "Editorial", erratum: "Erratum", retraction: "Retracted",
+    protocol: "Study protocol", preclinical: "Animal or lab study", other: "Other design", unknown: "Design unknown",
   },
-  designNote: "The publication type PubMed assigned to this record. It is not a judgement of study quality. New records may not have one yet.",
+  designNote: "The publication type PubMed assigned to this record. It is not a judgement of study quality.",
+  designInferredNote: "Read from the title and abstract, not assigned by PubMed, so it may be wrong. It is not a judgement of study quality.",
   watch: {
     heading: "Watch list",
     intro: "The conditions and treatments you follow. Each entry needs a condition, a treatment, or both.",
@@ -82,7 +87,7 @@ export const CLINICAL_COPY = {
     settingsSaveFailed: "Your settings could not be saved.",
     mode: "Feed mode", whatsNew: "What's new (last 30 days)", catchUp: "Catch up", catchUpWindow: "Catch up looks back",
     months: { 3: "3 months", 6: "6 months", 12: "12 months" },
-    strictness: "Study design filter", strict: "Strict: trials, reviews, guidelines", standard: "Standard: adds observational studies", open: "Open: adds other reviews and designs",
+    strictness: "Study design filter", strict: "Strict: trials, reviews, guidelines", standard: "Standard: everything except case reports, narrative reviews, protocols and animal studies", open: "Open: everything except corrections and retractions",
   },
 } as const
 

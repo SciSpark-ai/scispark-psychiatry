@@ -38,8 +38,8 @@ beforeEach(() => { document.body.innerHTML = ""; push.mockReset() })
 describe("ClinicalFeedCard", () => {
   it("shows the authors' conclusion, not the background sentence", async () => {
     await mount(ITEM)
-    expect(container.textContent).toContain("Authors' conclusion")
-    expect(container.textContent).toContain("Drug A improved response at week 8.")
+    const conclusion = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Drug A improved response at week 8.")!
+    expect(conclusion.getAttribute("title")).toBe("Authors' conclusion")
     expect(container.textContent).not.toContain("Depression is common and often undertreated")
   })
 
@@ -60,40 +60,43 @@ describe("ClinicalFeedCard", () => {
     expect(push).toHaveBeenCalledWith(`/paper/${paperSlug(ITEM.paper)}`)
   })
 
-  it("leads with the AI headline and takeaway when the paper has them, marked as AI-written, and keeps the real title", async () => {
-    await mount({ ...ITEM, digest: { headline: "Drug A beat placebo for depression", takeaway: "Drug A improved response at week 8.", quote: "Drug A improved response at week 8." } })
-    const heading = container.querySelector("h3")!
-    expect(heading.textContent).toBe("Drug A beat placebo for depression")
-    expect(container.textContent).toContain("AI summary")
-    expect(container.textContent).toContain("Drug A improved response at week 8.")
-    expect(container.textContent).toContain("Drug A versus placebo in adults with depression: a randomised trial")
-    expect(container.textContent).not.toContain("Authors' conclusion")
-    const note = [...container.querySelectorAll("[title]")].find((el) => el.textContent?.includes("AI summary"))!
-    expect(note.getAttribute("title")).toContain("Drug A improved response at week 8.")
-  })
+  const DIGEST = { headline: "Drug A beat placebo for depression", takeaway: "Drug A improved response at week 8.", quote: "CONCLUSIONS: Drug A improved response at week 8." }
 
-  it("shows the study design only when PubMed assigned it, never a guess from the text", async () => {
-    await mount(ITEM)
-    expect(container.textContent).toContain("Randomized trial")
-    document.body.innerHTML = ""
-    await mount({ ...ITEM, designSource: "text-rule" })
-    expect(container.textContent).not.toContain("Randomized trial")
-    document.body.innerHTML = ""
-    await mount({ ...ITEM, design: "unknown", designSource: "none" })
-    expect(container.textContent).not.toContain("Design unknown")
-  })
-
-  it("puts the AI headline and summary on top and the paper's own title, journal and date underneath", async () => {
-    await mount({ ...ITEM, paper: { ...ITEM.paper, venue: "The Lancet Psychiatry", year: 2026 }, digest: { headline: "Drug A beat placebo for depression", takeaway: "Drug A improved response at week 8.", quote: "CONCLUSIONS: Drug A improved response at week 8." } })
+  it("with an AI summary shows only the headline, journal and date, and the summary, in that order", async () => {
+    await mount({ ...ITEM, paper: { ...ITEM.paper, venue: "The Lancet Psychiatry", year: 2026 }, digest: DIGEST })
     const text = container.textContent ?? ""
-    const at = (part: string) => text.indexOf(part)
-    expect(at("Drug A beat placebo for depression")).toBeGreaterThanOrEqual(0)
-    expect(at("Drug A beat placebo for depression")).toBeLessThan(at("Drug A improved response at week 8."))
-    expect(at("Drug A improved response at week 8.")).toBeLessThan(at("Drug A versus placebo in adults with depression: a randomised trial"))
-    expect(at("Drug A versus placebo in adults with depression: a randomised trial")).toBeLessThan(at("The Lancet Psychiatry"))
-    expect(at("The Lancet Psychiatry")).toBeLessThan(at("Published 2026-09-20"))
-    const source = container.querySelector("[data-testid=clinical-card-source]")!
-    expect(source.textContent).toContain("Drug A versus placebo in adults with depression: a randomised trial")
-    expect(source.textContent).toContain("The Lancet Psychiatry")
+    expect(container.querySelector("h3")!.textContent).toBe(DIGEST.headline)
+    expect(text.indexOf(DIGEST.headline)).toBeLessThan(text.indexOf("The Lancet Psychiatry · 2026-09-20"))
+    expect(text.indexOf("The Lancet Psychiatry · 2026-09-20")).toBeLessThan(text.indexOf(DIGEST.takeaway))
+    expect(text).not.toContain("Drug A versus placebo in adults with depression: a randomised trial")
+    expect(text).not.toContain("AI summary")
+    expect(text).not.toContain("Authors' conclusion")
+    expect(text).not.toContain("Published")
+  })
+
+  it("says on hover that the summary is AI-written and which sentence it rests on", async () => {
+    await mount({ ...ITEM, digest: DIGEST })
+    const summary = [...container.querySelectorAll("[title]")].find((el) => el.textContent === DIGEST.takeaway)!
+    expect(summary.getAttribute("title")).toContain("AI")
+    expect(summary.getAttribute("title")).toContain("Drug A improved response at week 8.")
+  })
+
+  it("shows the date as precisely as the record gives it", async () => {
+    await mount({ ...ITEM, paper: { ...ITEM.paper, venue: "CNS Drugs", date: "2026-10" }, digest: DIGEST })
+    expect(container.textContent).toContain("CNS Drugs · 2026-10")
+  })
+
+  it("shows a PubMed design as it is, an inferred one marked as inferred, and nothing when the design is not known", async () => {
+    await mount(ITEM)
+    const assigned = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Randomized trial")!
+    expect(assigned.getAttribute("title")).toContain("PubMed")
+    document.body.innerHTML = ""
+    await mount({ ...ITEM, designSource: "model" })
+    const inferred = [...container.querySelectorAll("[title]")].find((el) => el.textContent?.includes("Randomized trial"))!
+    expect(inferred.getAttribute("title")).toContain("not assigned by PubMed")
+    expect(inferred.getAttribute("data-inferred")).toBe("true")
+    document.body.innerHTML = ""
+    await mount({ ...ITEM, design: "other", designSource: "none" })
+    expect(container.textContent).not.toContain("Other design")
   })
 })

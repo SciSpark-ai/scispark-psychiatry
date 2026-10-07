@@ -1,7 +1,7 @@
 import { z } from "zod"
 import type { PaperRecord } from "../../papers/types"
 import type { VaultStorage } from "../../vault/storage"
-import { DESIGNS, FEED_MODES, GATE_STRICTNESS, PAGE_SIZE } from "../types"
+import { DESIGNS, DESIGN_SOURCES, FEED_MODES, GATE_STRICTNESS, PAGE_SIZE } from "../types"
 import type { ScoredItem } from "../score/score"
 import type { GatedCandidate } from "../types"
 
@@ -16,7 +16,7 @@ const StoredItemSchema = z.object({
   paper: PaperSchema,
   key: z.string(),
   design: z.enum(DESIGNS),
-  designSource: z.enum(["publication-type", "text-rule", "none"]),
+  designSource: z.enum(DESIGN_SOURCES),
   entryId: z.string().nullable(),
   grade: z.number(),
   topicGrade: z.number(),
@@ -37,6 +37,8 @@ const StoredFeedSchema = z.object({
   strictness: z.enum(GATE_STRICTNESS),
   items: z.array(StoredItemSchema),
   lowerConfidence: z.array(StoredItemSchema),
+  /** Matching papers that were already displayed on an earlier visit; not recommended again. */
+  seenEarlier: z.array(StoredItemSchema).optional(),
   safetySignals: z.array(z.object({ paper: PaperSchema, key: z.string() })),
   stats: z.object({ retrieved: z.number(), domain: z.number(), gated: z.number(), graded: z.number(), listed: z.number() }),
   costUsd: z.number().nullable(),

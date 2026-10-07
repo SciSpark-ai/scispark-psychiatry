@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import type { VaultStorage } from "@/lib/vault/storage"
 import { paperSlug } from "@/lib/wiki/authoring"
 import { displayTitle } from "@/lib/papers/title"
-import { venueYearLine } from "@/lib/papers/venue"
 import { savePaper } from "@/lib/papers/save-client"
 import { Card } from "@/components/ui/Card"
 import { Chip } from "@/components/ui/Chip"
@@ -30,7 +29,9 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { paper } = item
-  const meta = venueYearLine(paper.venue, paper.year)
+  // Journal and the publication date as precisely as the record gives it (day, month or year).
+  const source = [paper.venue, paper.date?.slice(0, 10) ?? (paper.year ? String(paper.year) : undefined)].filter(Boolean).join(" · ")
+  const inferredDesign = (item.designSource === "model" || item.designSource === "text-rule") && item.design !== "other" && item.design !== "unknown"
   const conclusion = conclusionOf(paper.abstract)
   const matched = item.entryId !== null && isMatchGrade(item.grade) ? item.grade : null
   const matchNote = matched === null ? undefined
@@ -52,38 +53,27 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   }
 
   return (
-    <Card className="flex flex-col gap-3 p-4" data-testid="clinical-feed-card">
+    <Card className="flex flex-col gap-2.5 p-4" data-testid="clinical-feed-card">
       <div className="flex flex-wrap items-center gap-2">
-        {/* Only a design PubMed itself assigned is shown; one guessed from the text is used for filtering but not displayed. */}
-        {item.designSource === "publication-type" && <Chip tone="accent" title={CLINICAL_COPY.designNote}>{CLINICAL_COPY.designLabels[item.design]}</Chip>}
+        {item.designSource === "publication-type"
+          ? <Chip tone="accent" title={CLINICAL_COPY.designNote}>{CLINICAL_COPY.designLabels[item.design]}</Chip>
+          : inferredDesign && <Chip data-inferred="true" title={CLINICAL_COPY.designInferredNote} className="border border-dashed border-border-warm bg-transparent italic">{CLINICAL_COPY.designLabels[item.design]}</Chip>}
         {entryLabel && <Chip title={matchNote}>{entryLabel}{matched !== null ? ` · ${F.matchLabels[matched]}` : ""}</Chip>}
         {item.flags.includes("title-only") && <Chip>{CLINICAL_COPY.feed.noAbstract}</Chip>}
         {item.ungraded && <Chip>{CLINICAL_COPY.feed.notGraded}</Chip>}
       </div>
+      {/* With an AI headline the card shows only headline, source and summary; the paper's own title is on its page. */}
       <button type="button" onClick={() => void open()} className="text-left" title={displayTitle(paper.title)}>
         <h3 className="line-clamp-3 font-heading text-[18px] font-semibold leading-snug tracking-heading-card text-espresso">{item.digest ? item.digest.headline : displayTitle(paper.title)}</h3>
       </button>
-      {item.digest ? (
-        <div>
-          <p className="text-[12px] font-medium uppercase tracking-wide text-muted-text"><span title={F.aiSummaryNote(item.digest.quote)} className="cursor-help underline decoration-dotted">{F.aiSummaryLabel}</span></p>
-          <p className="text-[15px] leading-relaxed text-espresso">{item.digest.takeaway}</p>
-        </div>
-      ) : conclusion && (
-        <div>
-          <p className="text-[12px] font-medium uppercase tracking-wide text-muted-text">{F.conclusionLabel}</p>
-          <p className="line-clamp-4 text-[15px] leading-relaxed text-espresso">{conclusion}</p>
-        </div>
-      )}
-      <div className="flex flex-wrap items-end justify-between gap-2 border-t border-border-warm/60 pt-3">
-        {/* The source: with an AI headline on top, the paper's own title belongs here with its journal and date. */}
-        <div className="min-w-0 flex-1 text-[13px] leading-relaxed text-muted-text" data-testid="clinical-card-source">
-          {item.digest && <p className="line-clamp-2 text-secondary-dark" title={displayTitle(paper.title)}>{displayTitle(paper.title)}</p>}
-          {meta && <p className="truncate" title={meta}>{meta}</p>}
-          <p>{paper.date ? CLINICAL_COPY.feed.published(paper.date.slice(0, 10)) : CLINICAL_COPY.feed.noDate}</p>
-        </div>
+      {source && <p className="truncate text-[13px] text-muted-text" title={source}>{source}</p>}
+      {item.digest
+        ? <p className="text-[15px] leading-relaxed text-espresso" title={F.aiSummaryNote(item.digest.quote)}>{item.digest.takeaway}</p>
+        : conclusion && <p className="line-clamp-4 text-[15px] leading-relaxed text-espresso" title={F.conclusionLabel}>{conclusion}</p>}
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <ClinicalFeedback storage={storage} paperKey={item.key} title={displayTitle(paper.title)} initial={vote} />
         <PaperSaveButton saved={saved} busy={saving} onSave={() => void handleSave()} />
       </div>
-      <ClinicalFeedback storage={storage} paperKey={item.key} title={displayTitle(paper.title)} initial={vote} />
       {error && <p role="alert" className="text-[12px] text-espresso">{error}</p>}
     </Card>
   )

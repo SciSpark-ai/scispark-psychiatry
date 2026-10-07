@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { MODE_LABELS } from "@/lib/clinical/modes"
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
+import { recordSeen } from "@/lib/clinical/seen/store"
 import { refreshClinicalFeed } from "@/lib/clinical/feed/client"
 import { feedPage, loadClinicalFeed, pageCount, type StoredFeed } from "@/lib/clinical/feed/stored"
 import { loadClinicalSettings, loadWatchEntries, saveClinicalSettings } from "@/lib/clinical/watch/store"
@@ -72,6 +73,13 @@ export function ClinicalHome() {
     setData({ ...data, settings })
   }
 
+  // Every paper put on screen is remembered as seen, so that a later refresh does not recommend it again.
+  // Only what was displayed counts: the pages opened so far, not the whole stored list.
+  const displayedKeys = data?.feed ? Array.from({ length: pages }, (_, page) => feedPage(data.feed as StoredFeed, page)).flat().map((item) => item.key).join("\n") : ""
+  useEffect(() => {
+    if (storage && displayedKeys) void recordSeen(storage, displayedKeys.split("\n")).catch(() => {})
+  }, [storage, displayedKeys])
+
   if (!data || !storage) {
     return <div className="p-7">{error ? <p role="alert" className="text-[13px] text-red-600">{CLINICAL_COPY.errorPrefix} {error}</p> : <p className="text-[14px] text-muted-text">{CLINICAL_COPY.loading}</p>}</div>
   }
@@ -119,6 +127,8 @@ export function ClinicalHome() {
           <p className="mb-4 text-[13px] text-muted-text">
             {CLINICAL_COPY.feed.updated(new Date(feed.generatedAt).toLocaleString(), MODE_LABELS[feed.mode], feed.stats.listed, feed.stats.retrieved)}
           </p>
+          <p className="mb-4 text-[12px] text-muted-text">{CLINICAL_COPY.feed.aiNotice}</p>
+          {feed.items.length === 0 && <p className="mb-4 text-[14px] text-espresso">{CLINICAL_COPY.feed.nothingNew}</p>}
           {feed.warnings.length > 0 && <ul className="mb-4 list-disc pl-5 text-[12px] text-muted-text">{feed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           <div className="grid gap-4 lg:grid-cols-2">
             {shown.map((item) => (
@@ -132,10 +142,21 @@ export function ClinicalHome() {
             </button>
           )}
           {feed.lowerConfidence.length > 0 && (
-            <details className="mt-8">
+            <details className="mt-8" onToggle={(event) => { if (event.currentTarget.open) void recordSeen(storage, feed.lowerConfidence.map((item) => item.key)).catch(() => {}) }}>
               <summary className="cursor-pointer text-[14px] text-espresso">{CLINICAL_COPY.feed.lowerConfidence} ({feed.lowerConfidence.length})</summary>
               <div className="mt-3 grid gap-4 lg:grid-cols-2">
                 {feed.lowerConfidence.map((item) => (
+                  <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
+                    entryLabel={item.entryId ? labels.get(item.entryId) : undefined} vote={votes.get(item.key)} />
+                ))}
+              </div>
+            </details>
+          )}
+          {(feed.seenEarlier ?? []).length > 0 && (
+            <details className="mt-6">
+              <summary className="cursor-pointer text-[14px] text-espresso">{CLINICAL_COPY.feed.seenEarlier} ({(feed.seenEarlier ?? []).length})</summary>
+              <div className="mt-3 grid gap-4 lg:grid-cols-2">
+                {(feed.seenEarlier ?? []).map((item) => (
                   <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
                     entryLabel={item.entryId ? labels.get(item.entryId) : undefined} vote={votes.get(item.key)} />
                 ))}
