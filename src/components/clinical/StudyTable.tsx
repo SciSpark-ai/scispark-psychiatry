@@ -47,7 +47,7 @@ export function StudyTable({ studies, kind }: { studies: Study[]; kind: StudyTab
   return (
     <div data-table-scroll="true" className="overflow-x-auto">
       <table className="w-full min-w-[640px] border-collapse">
-        <thead><tr>{heads.map((head) => <th key={head} scope="col" className={TH}>{head}</th>)}</tr></thead>
+        <thead><tr>{heads.map((head) => <th key={head} scope="col" title={head === C.size ? E.sizeTitle : undefined} className={TH}>{head}</th>)}</tr></thead>
         <tbody>
           {studies.map((study) => (
             <tr key={study.key} data-study={study.key}>

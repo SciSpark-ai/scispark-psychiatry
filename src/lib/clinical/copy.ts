@@ -1,3 +1,6 @@
+/** Several short findings as one line: each without its own full stop, a semicolon between them, one full stop at the end. */
+const joinFindings = (texts: string[]) => `${texts.map((text) => text.trim().replace(/\.+$/, "")).join("; ")}.`
+
 /** All clinical-edition wording lives here, so a later language layer and legal review touch one file. */
 export const CLINICAL_COPY = {
   appName: "SciSpark Psychiatry",
@@ -346,11 +349,15 @@ export const CLINICAL_COPY = {
     /** A review or an editorial is not a study, so papers are counted. */
     papers: (count: number) => `${count} ${count === 1 ? "paper" : "papers"}`,
     newCount: (count: number) => `+${count} new`,
-    /** The few words under a treatment: what it did, and what to watch for. */
-    did: (texts: string[]) => `Did: ${texts.join("; ")}`,
-    watch: (texts: string[]) => `Watch: ${texts.join("; ")}`,
+    /** The few words under a treatment: what it did, and what to watch for. Each text loses its own full stop; the line ends with one. */
+    did: (texts: string[]) => `Did: ${joinFindings(texts)}`,
+    watch: (texts: string[]) => `Watch: ${joinFindings(texts)}`,
     kinds: { benefit: "benefit", "no-benefit": "no benefit", mixed: "mixed", safety: "safety", other: "other", unsorted: "not sorted" },
-    kindLabels: { benefit: "Benefit", "no-benefit": "No benefit", mixed: "Mixed", safety: "Safety", other: "Other" },
+    kindLabels: { benefit: "Benefit", "no-benefit": "No benefit", mixed: "Mixed", safety: "Safety", other: "Other", unsorted: "Not sorted" },
+    /** The name of the key to the bars, for a screen reader. */
+    barKey: "What the bar colours mean",
+    /** What "n" counts, shown when the pointer rests on the column's heading. */
+    sizeTitle: "Participants, as the paper prints it",
     columns: { treatment: "Treatment", study: "Study", design: "Design", population: "Population", size: "n", comparator: "Compared with", outcome: "Outcome", result: "Result", finding: "Finding" },
     studyMarks: { new: "new", saved: "saved" },
     dash: "–",

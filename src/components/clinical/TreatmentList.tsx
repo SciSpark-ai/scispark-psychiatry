@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import type { ClassEvidence, Counts, TreatmentEvidence } from "@/lib/clinical/evidence/build"
-import { EvidenceBar } from "./EvidenceBar"
+import { EvidenceBar, EvidenceBarKey } from "./EvidenceBar"
 import { classNameOf } from "./evidence-labels"
 import { StudyTable } from "./StudyTable"
 
@@ -79,8 +79,13 @@ function ClassRow({ entry, largest }: { entry: ClassEvidence; largest: number })
   )
 }
 
-/** The Treatments tab: one row per class, scaled against the largest class on the page. */
+/** The Treatments tab: the key to the bars, then one row per class, scaled against the largest class on the page. */
 export function TreatmentList({ classes }: { classes: ClassEvidence[] }) {
   const largest = Math.max(1, ...classes.map((entry) => entry.papers))
-  return <div>{classes.map((entry) => <ClassRow key={entry.key} entry={entry} largest={largest} />)}</div>
+  return (
+    <div>
+      <EvidenceBarKey counts={classes.map((entry) => entry.counts)} />
+      {classes.map((entry) => <ClassRow key={entry.key} entry={entry} largest={largest} />)}
+    </div>
+  )
 }

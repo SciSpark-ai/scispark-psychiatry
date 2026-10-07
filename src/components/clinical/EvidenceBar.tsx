@@ -4,11 +4,14 @@ import type { Counts } from "@/lib/clinical/evidence/build"
 const E = CLINICAL_COPY.evidence
 
 export const KIND_ORDER = ["benefit", "no-benefit", "mixed", "safety", "other", "unsorted"] as const
-export const KIND_COLOUR: Record<(typeof KIND_ORDER)[number], string> = {
-  benefit: "var(--clinical-benefit)", "no-benefit": "var(--clinical-no-benefit)", mixed: "var(--viz-cat-6)", safety: "var(--viz-cat-3)", other: "var(--border)", unsorted: "var(--border)",
+type Kind = (typeof KIND_ORDER)[number]
+/** The neutral kinds are the muted text colour, thinned: the border colour could not be seen on the track, which has that colour as its edge. */
+export const KIND_COLOUR: Record<Kind, string> = {
+  benefit: "var(--clinical-benefit)", "no-benefit": "var(--clinical-no-benefit)", mixed: "var(--viz-cat-6)", safety: "var(--viz-cat-3)",
+  other: "color-mix(in srgb, var(--text-muted) 55%, transparent)", unsorted: "color-mix(in srgb, var(--text-muted) 30%, transparent)",
 }
 /** The colour of a direction's name in text: the pale fill colour of the neutral kinds would not be read. */
-export const KIND_TEXT_COLOUR: Record<(typeof KIND_ORDER)[number], string> = { ...KIND_COLOUR, other: "var(--text-muted)", unsorted: "var(--text-muted)" }
+export const KIND_TEXT_COLOUR: Record<Kind, string> = { ...KIND_COLOUR, other: "var(--text-muted)", unsorted: "var(--text-muted)" }
 
 const MIN_FILL = 6
 const TRACK = "flex h-2.5 w-full overflow-hidden rounded-full border border-border-warm bg-light-surface"
@@ -23,10 +26,26 @@ export function EvidenceBar({ counts, papers, largest }: { counts: Counts; paper
   const fill = Math.max(MIN_FILL, Math.round((100 * papers) / Math.max(1, largest)))
   const title = kinds.map((kind) => `${counts[kind]} ${E.kinds[kind]}`).join(", ")
   return (
-    <span data-bar="true" title={title} className={TRACK}>
+    <span data-bar="true" role="img" aria-label={title} title={title} className={TRACK}>
       <span data-bar-fill="true" className="flex h-full" style={{ width: `${fill}%` }}>
         {kinds.map((kind) => <span key={kind} data-kind={kind} className="h-full" style={{ width: percent(counts[kind], papers), backgroundColor: KIND_COLOUR[kind] }} />)}
       </span>
     </span>
+  )
+}
+
+/** The key to the bars: a swatch and the name of each direction that some bar of the list has, in the order of the fill. */
+export function EvidenceBarKey({ counts }: { counts: Counts[] }) {
+  const kinds = KIND_ORDER.filter((kind) => counts.some((entry) => entry[kind] > 0))
+  if (kinds.length === 0) return null
+  return (
+    <ul data-bar-key="true" aria-label={E.barKey} className="flex flex-wrap gap-x-4 gap-y-1 px-2 pb-1 pt-2 text-[12px] text-muted-text">
+      {kinds.map((kind) => (
+        <li key={kind} data-key-kind={kind} className="flex items-center gap-1.5">
+          <span data-swatch="true" aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: KIND_COLOUR[kind] }} />
+          <span>{E.kindLabels[kind]}</span>
+        </li>
+      ))}
+    </ul>
   )
 }

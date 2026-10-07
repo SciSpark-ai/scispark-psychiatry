@@ -124,9 +124,42 @@ describe("the evidence block of a condition page", () => {
     await show()
     const bar = classRow("medicine").querySelector("[data-bar]") as HTMLElement
     expect(bar.getAttribute("title")).toBe("3 benefit, 1 no benefit")
+    // Final review I4: the same words for a reader who cannot hover.
+    expect(bar.getAttribute("aria-label")).toBe("3 benefit, 1 no benefit")
+    expect(bar.getAttribute("role")).toBe("img")
     expect([...bar.querySelectorAll("[data-kind]")].map((segment) => [segment.getAttribute("data-kind"), (segment as HTMLElement).style.width])).toEqual([["benefit", "75%"], ["no-benefit", "25%"]])
     expect((bar.querySelector("[data-kind=benefit]") as HTMLElement).style.backgroundColor).toBe("var(--clinical-benefit)")
     expect((bar.querySelector("[data-kind=no-benefit]") as HTMLElement).style.backgroundColor).toBe("var(--clinical-no-benefit)")
+  })
+
+  // Final review I4.
+  it("gives the bar a key above the classes: a swatch and a name for each direction on the page, in order", async () => {
+    await show()
+    const key = q("[data-bar-key]")
+    expect(key.getAttribute("aria-label")).toBe("What the bar colours mean")
+    expect(key.compareDocumentPosition(classRow("medicine")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const entries = [...key.querySelectorAll("[data-key-kind]")] as HTMLElement[]
+    expect(entries.map((entry) => [entry.getAttribute("data-key-kind"), entry.textContent])).toEqual([["benefit", "Benefit"], ["no-benefit", "No benefit"]])
+    expect((entries[0].querySelector("[data-swatch]") as HTMLElement).style.backgroundColor).toBe("var(--clinical-benefit)")
+    document.body.innerHTML = ""
+    const every = klass("medicine", null, [ketamine], { counts: counts({ benefit: 1, "no-benefit": 1, mixed: 1, safety: 1, other: 1, unsorted: 1 }) })
+    await show({ ...EVIDENCE, classes: [every] })
+    expect(qa("[data-key-kind]").map((entry) => entry.textContent)).toEqual(["Benefit", "No benefit", "Mixed", "Safety", "Other", "Not sorted"])
+    document.body.innerHTML = ""
+    await show({ ...EVIDENCE, classes: [] })
+    expect(q("[data-bar-key]")).toBeNull()
+  })
+
+  // Final review M8: the border colour on a border-coloured track could not be seen.
+  it("fills the other and not-sorted parts of a bar with a colour that is not the track's", async () => {
+    await show({ ...EVIDENCE, classes: [klass("medicine", null, [ketamine], { counts: counts({ other: 1, unsorted: 1 }) })] })
+    const colours = ["other", "unsorted"].map((kind) => (classRow("medicine").querySelector(`[data-bar] [data-kind=${kind}]`) as HTMLElement).style.backgroundColor)
+    for (const colour of colours) {
+      expect(colour).toContain("var(--text-muted)")
+      expect(colour).not.toContain("var(--border)")
+      expect(colour).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+    }
+    expect(new Set(colours).size).toBe(2)
   })
 
   it("keeps a class closed at first, with no study row, and opens it to its treatments with Did and Watch", async () => {
@@ -140,8 +173,8 @@ describe("the evidence block of a condition page", () => {
     expect(qa("[data-treatment]").map((row) => row.getAttribute("data-treatment"))).toEqual(["ketamine", "lithium"])
     const first = q("[data-treatment=ketamine]")
     expect(first.querySelector("[data-name]")!.textContent).toBe("Ketamine")
-    expect(first.querySelector("[data-did]")!.textContent).toBe("Did: Eased symptoms within a day")
-    expect(first.querySelector("[data-watch]")!.textContent).toBe("Watch: No better than placebo")
+    expect(first.querySelector("[data-did]")!.textContent).toBe("Did: Eased symptoms within a day.")
+    expect(first.querySelector("[data-watch]")!.textContent).toBe("Watch: No better than placebo.")
     // Bars inside the class are scaled against its largest treatment (2 papers): lithium has 1.
     expect((q("[data-treatment=lithium] [data-bar-fill]")).style.width).toBe("50%")
     expect(qa("[data-study]")).toHaveLength(0)
@@ -151,15 +184,16 @@ describe("the evidence block of a condition page", () => {
 
   it("joins several texts with a semicolon, and shows a single benefit text plain but a single caution labelled", async () => {
     const many = treatment("ketamine", "Ketamine", [study(1), study(2), study(8, { kind: "safety" })], {
-      did: [{ text: "Eased symptoms", key: "a" }, { text: "Worked fast", key: "b" }], watch: [{ text: "Dissociation", key: "c", kind: "safety" }, { text: "Faded by week 6", key: "d", kind: "mixed" }],
+      did: [{ text: "Eased symptoms.", key: "a" }, { text: "Worked fast.", key: "b" }], watch: [{ text: "Dissociation. ", key: "c", kind: "safety" }, { text: "Faded by week 6", key: "d", kind: "mixed" }],
     })
     await show({ ...EVIDENCE, classes: [klass("medicine", null, [many, lithium, sertraline])] })
     await openClass("medicine")
-    expect(q("[data-treatment=ketamine] [data-did]").textContent).toBe("Did: Eased symptoms; Worked fast")
-    expect(q("[data-treatment=ketamine] [data-watch]").textContent).toBe("Watch: Dissociation; Faded by week 6")
+    // Final review M5: each text loses its own full stop, and the line ends with one.
+    expect(q("[data-treatment=ketamine] [data-did]").textContent).toBe("Did: Eased symptoms; Worked fast.")
+    expect(q("[data-treatment=ketamine] [data-watch]").textContent).toBe("Watch: Dissociation; Faded by week 6.")
     expect(q("[data-treatment=lithium] [data-did]").textContent).toBe("Cut relapse")
     expect(q("[data-treatment=lithium] [data-watch]")).toBeNull()
-    expect(q("[data-treatment=sertraline] [data-watch]").textContent).toBe("Watch: Raised bleeding risk")
+    expect(q("[data-treatment=sertraline] [data-watch]").textContent).toBe("Watch: Raised bleeding risk.")
     expect(q("[data-treatment=sertraline] [data-did]")).toBeNull()
   })
 
@@ -171,6 +205,8 @@ describe("the evidence block of a condition page", () => {
     await click(button)
     expect(button.getAttribute("aria-expanded")).toBe("true")
     expect(qa("table th").map((head) => head.textContent)).toEqual(["Study", "Design", "Population", "n", "Compared with", "Outcome", "Result"])
+    // Final review I2: the one unit of n is said where it is shown.
+    expect(qa("table th").map((head) => head.getAttribute("title"))).toEqual([null, null, null, "Participants, as the paper prints it", null, null, null])
     const rows = qa("[data-study]")
     expect(rows.map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
     const link = rows[0].querySelector("a") as HTMLAnchorElement
@@ -205,7 +241,7 @@ describe("the evidence block of a condition page", () => {
     await show({ ...EVIDENCE, classes: [klass("neuromodulation", "Neuromodulation", [ketamine])] })
     await openClass("neuromodulation")
     expect(qa("[data-treatment] button")).toHaveLength(0)
-    expect(q("[data-treatment]").querySelector("[data-did]")!.textContent).toBe("Did: Eased symptoms within a day")
+    expect(q("[data-treatment]").querySelector("[data-did]")!.textContent).toBe("Did: Eased symptoms within a day.")
     expect(qa("[data-study]")).toHaveLength(2)
   })
 
@@ -228,9 +264,20 @@ describe("the evidence block of a condition page", () => {
     const groups = qa("[data-research]")
     expect(groups.map((group) => [group.getAttribute("data-research"), group.querySelector("button")!.textContent])).toEqual([["mechanism", "Mechanisms1"], ["risk-factor", "Risk factors1"]])
     expect(qa("[data-study]")).toHaveLength(0)
+    expect(qa("[data-research] [data-new]")).toHaveLength(0)
     await click(groups[0].querySelector("button"))
     expect(qa("table th").map((head) => head.textContent)).toEqual(["Study", "Design", "Population", "n", "Finding"])
     expect(q("[data-study] [data-cell=finding]").textContent).toBe("Inflammation tracks severity.")
+  })
+
+  // Final review M4.
+  it("says how many papers of a research group are new, as on a class row", async () => {
+    await show({ ...EVIDENCE, research: [{ ...EVIDENCE.research[0], papers: 3, newPapers: 2 }, EVIDENCE.research[1]] })
+    await click(qa('[role="tab"]')[2])
+    const [first, second] = qa("[data-research]")
+    expect(first.querySelector("[data-new]")!.textContent).toBe("+2 new")
+    expect(first.querySelector("[data-papers]")!.textContent).toBe("3")
+    expect(second.querySelector("[data-new]")).toBeNull()
   })
 
   it("draws the timeline last, folded", async () => {
