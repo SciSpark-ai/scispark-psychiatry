@@ -28,13 +28,14 @@ export { tidyOverviewSentence }
  */
 
 export const OVERVIEW_MIN_PAPERS = 2
-const OVERVIEW_MAX_PAPERS = 20
+// One short answer per paper, so a long list is still one modest call.
+const OVERVIEW_MAX_PAPERS = 40
 /** One sentence about one thing. The model is asked for fewer words than this. */
 // Tried and taken out on 2026-10-07: a limit on the number of sentences below the number of papers, to
 // force papers to share a sentence. With gpt-4o it left papers out (8 of 15 cited) and joined unrelated
 // findings into one sentence under the wrong kind. See docs/psychiatry/first-run-2026-10-06.md.
 const SENTENCE_MAX_WORDS = 28
-const OVERVIEW_MAX_SENTENCES = 20
+const OVERVIEW_MAX_SENTENCES = OVERVIEW_MAX_PAPERS
 
 /** What a finding says: a treatment helped, did not help, did both, raised a safety concern, or something else was found. */
 export const OVERVIEW_KINDS = ["benefit", "no-benefit", "mixed", "safety", "other"] as const
@@ -72,7 +73,7 @@ const SYSTEM_PROMPT = `You sort the new papers on one topic for a psychiatrist, 
 
 Return "sentences": exactly one entry for every paper. Each entry:
 - "sources": a list with the one number of the paper.
-- "treatment": the treatment, intervention or exposure the paper is about, as its shortest usual name copied from the headline or takeaway ("ketamine", not "repeated ketamine infusions"; "rTMS"; "exercise"). null when the paper is not about a treatment or exposure (genetics, prediction models, prevalence, scales).
+- "treatment": the treatment, intervention or exposure the paper is about, as its shortest usual name copied from the headline or takeaway ("ketamine", not "repeated ketamine infusions"; "rTMS"; "exercise"; "nature exposure", never half a name). When the paper compares two treatments, name both ("methylphenidate and risperidone"). null when the paper is not about a treatment or exposure (genetics, prediction models, prevalence, scales).
 - "text": what the paper found, at most 14 words, lower case, no full stop.
   - With a treatment: start with a verb and do NOT repeat the treatment name, so that "<treatment> <text>" reads as a sentence: "reduced suicidal thoughts in treatment-resistant depression", "did not reduce symptoms compared with placebo".
   - Without a treatment: a complete short statement: "older age was linked to slower improvement".
@@ -99,7 +100,7 @@ export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof Over
     ctx.llmStructured(
       // The stronger model: weighing several papers against each other is where the small one writes filler.
       "strong",
-      { maxTokens: 1024, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] },
+      { maxTokens: 4096, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] },
       OverviewSchema,
     ),
 })
