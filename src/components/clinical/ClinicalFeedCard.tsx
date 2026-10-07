@@ -62,7 +62,6 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
       </div>
       <button type="button" onClick={() => void open()} className="text-left" title={displayTitle(paper.title)}>
         <h3 className="line-clamp-3 font-heading text-[18px] font-semibold leading-snug tracking-heading-card text-espresso">{item.digest ? item.digest.headline : displayTitle(paper.title)}</h3>
-        {item.digest && <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-muted-text">{displayTitle(paper.title)}</p>}
       </button>
       {item.digest ? (
         <div>
@@ -76,7 +75,9 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
         </div>
       )}
       <div className="flex flex-wrap items-end justify-between gap-2 border-t border-border-warm/60 pt-3">
-        <div className="min-w-0 flex-1 text-[13px] leading-relaxed text-muted-text">
+        {/* The source: with an AI headline on top, the paper's own title belongs here with its journal and date. */}
+        <div className="min-w-0 flex-1 text-[13px] leading-relaxed text-muted-text" data-testid="clinical-card-source">
+          {item.digest && <p className="line-clamp-2 text-secondary-dark" title={displayTitle(paper.title)}>{displayTitle(paper.title)}</p>}
           {meta && <p className="truncate" title={meta}>{meta}</p>}
           <p>{paper.date ? CLINICAL_COPY.feed.published(paper.date.slice(0, 10)) : CLINICAL_COPY.feed.noDate}</p>
         </div>

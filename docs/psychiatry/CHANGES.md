@@ -22,4 +22,4 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/components/layout/__tests__/Sidebar.test.tsx, src/app/__tests__/home-feed-notices.test.tsx | follow the above | D32 | 17 |
 | src/lib/papers/pubmed.ts | `enumeratePubmed`: a deadline per request instead of one for the whole enumeration; batches already read are kept when a later batch fails (reported as truncated); `PubmedDeps.timeoutMs` | review of Slices 0–1, finding 1 | review |
 | src/components/layout/Sidebar.tsx | the Watch list label comes from the copy file | §8.1, review finding 5 | review |
-| src/app/globals.css | light theme colours, typeface (system sans-serif), letter-spacing and card radius follow the earlier SciSpark web frontend | owner request 2026-10-06 (readability); departs from D11 | after first runs |
+| src/app/globals.css | typeface: system sans-serif for headings and body, letter-spacing relaxed (colours and layout unchanged from upstream) | owner request 2026-10-06 (readability) | after first runs |

@@ -82,4 +82,18 @@ describe("ClinicalFeedCard", () => {
     await mount({ ...ITEM, design: "unknown", designSource: "none" })
     expect(container.textContent).not.toContain("Design unknown")
   })
+
+  it("puts the AI headline and summary on top and the paper's own title, journal and date underneath", async () => {
+    await mount({ ...ITEM, paper: { ...ITEM.paper, venue: "The Lancet Psychiatry", year: 2026 }, digest: { headline: "Drug A beat placebo for depression", takeaway: "Drug A improved response at week 8.", quote: "CONCLUSIONS: Drug A improved response at week 8." } })
+    const text = container.textContent ?? ""
+    const at = (part: string) => text.indexOf(part)
+    expect(at("Drug A beat placebo for depression")).toBeGreaterThanOrEqual(0)
+    expect(at("Drug A beat placebo for depression")).toBeLessThan(at("Drug A improved response at week 8."))
+    expect(at("Drug A improved response at week 8.")).toBeLessThan(at("Drug A versus placebo in adults with depression: a randomised trial"))
+    expect(at("Drug A versus placebo in adults with depression: a randomised trial")).toBeLessThan(at("The Lancet Psychiatry"))
+    expect(at("The Lancet Psychiatry")).toBeLessThan(at("Published 2026-09-20"))
+    const source = container.querySelector("[data-testid=clinical-card-source]")!
+    expect(source.textContent).toContain("Drug A versus placebo in adults with depression: a randomised trial")
+    expect(source.textContent).toContain("The Lancet Psychiatry")
+  })
 })

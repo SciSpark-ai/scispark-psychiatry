@@ -1,19 +1,18 @@
 @import "tailwindcss";
 
-/* SciSpark Psychiatry: the light theme and the type follow the earlier SciSpark web frontend
-   (white page, slate text, grey borders, system sans-serif, no negative letter-spacing) at the
-   owner's request, for readability. The orange accent and the dark theme are upstream's.
+/* SciSpark Psychiatry: colours and layout are upstream's. Only the type differs, at the owner's
+   request, for readability: a system sans-serif for headings and body, and no tight letter-spacing.
    Semantic theme variables — the single source of color truth.
    Light is the brand identity (cream/espresso/orange); dark derives from the
    same hues. Tailwind utility names are mapped below and never change. */
 :root {
-  --bg-page: #ffffff;
-  --bg-warm: #f7f8fa;
-  --surface-card: #f1f2f5;
-  --surface-light: #ffffff;
-  --text-primary: #22252a;
-  --text-secondary: #393d46;
-  --text-muted: #5b6270;
+  --bg-page: #fefaf5;
+  --bg-warm: #f6f0e9;
+  --surface-card: #efe7dd;
+  --surface-light: #faf6f2;
+  --text-primary: #2b180a;
+  --text-secondary: #3e2407;
+  --text-muted: #716559;
   --paper-header-findings: #fce2ce;
   --paper-header-methods: #f4cca8;
   --paper-header-review: #f2d7c8;
@@ -24,8 +23,8 @@
   --on-accent: #ffffff;
   --accent: #f97316;
   --accent-light: #fb923c;
-  --tan: #d1d5db;
-  --border: #e5e7eb;
+  --tan: #dab697;
+  --border: #e8d3c0;
   --gold: #fde68a;
 
   /* Feed-card badge bands (SP2.1) — saturated landing-page-style header
@@ -140,7 +139,7 @@
   --tracking-heading-card: -0.01em;
   --tracking-body: 0em;
 
-  --radius-card: 16px;
+  --radius-card: 28px;
   --radius-badge: 8px;
   --radius-btn: 12px;
   --radius-pill: 50px;
