@@ -16,6 +16,7 @@ export interface RefreshDeps {
   summarise?: boolean
   useCache?: boolean
   keepHistory?: boolean
+  recordFindings?: boolean
   /** When given, the run searches through the vault's record store (retrieve/record-store.ts) instead of `enumerate`. */
   enumerateWithRecords?: (records: RecordStore) => EnumerateFn
 }
@@ -34,6 +35,7 @@ export async function handleRefresh(vault: VaultStorage, emit: (event: object) =
       summarise: deps.summarise,
       useCache: deps.useCache,
       keepHistory: deps.keepHistory,
+      recordFindings: deps.recordFindings,
       onStage: (stage) => emit({ type: "progress", stage }),
     })
   } finally {

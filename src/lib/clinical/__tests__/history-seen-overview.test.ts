@@ -210,9 +210,9 @@ describe("the AI overview of a topic", () => {
     expect(feed.topicOverviews ?? {}).toEqual({})
   })
 
-  it("asks for an overview only for topics with at least two summarised papers", () => {
+  it("asks for an overview only for topics with a summarised paper", () => {
     const item = (key: string, entryId: string, withDigest = true) => ({ key, entryId, digest: withDigest ? { headline: "h", takeaway: "t", quote: "q" } : undefined })
-    expect(overviewTopics([item("a", "w1"), item("b", "w1"), item("c", "w2"), item("d", "w3"), item("e", "w3", false)]).map((topic) => topic.entryId)).toEqual(["w1"])
+    expect(overviewTopics([item("a", "w1"), item("b", "w1"), item("c", "w2"), item("d", "w3"), item("e", "w3", false), item("f", "w4", false)]).map((topic) => topic.entryId)).toEqual(["w1", "w2", "w3"])
   })
 
   // Owner request 2026-10-07: the overview as short points, the key words marked, and papers that
@@ -290,6 +290,18 @@ describe("the overview from per-paper answers", () => {
     { key: "k2", headline: "Low-dose antipsychotics matched standard doses", takeaway: "Low-dose antipsychotics showed similar discontinuation to standard doses.", part: "focus" as const },
     { key: "k3", headline: "Omega-3 added nothing", takeaway: "Adding omega-3 did not reduce symptoms.", part: "related" as const },
   ]
+  it("keeps the population, comparator and outcome a paper names, and drops one it does not", () => {
+    const withAbstract = [{ ...papers[0], abstract: "Adults with treatment-resistant depression received ketamine or midazolam. Depressive symptoms were measured at day 7." }]
+    const { kept } = judgeOverview([{
+      text: "reduced sadness and suicidal thoughts", sources: [1], kind: "benefit", treatment: "ketamine",
+      population: "adults with treatment-resistant depression", comparator: "midazolam", outcome: "quality of life in caregivers",
+    }], withAbstract)
+    expect(kept[0]).toMatchObject({ population: "adults with treatment-resistant depression", comparator: "midazolam" })
+    expect(kept[0].outcome).toBeUndefined()
+  })
+  it("writes an overview for a topic with a single summarised paper", () => {
+    expect(overviewTopics([{ key: "a", entryId: "w1", digest: { headline: "H1", takeaway: "T1", quote: "" } }])).toHaveLength(1)
+  })
   it("keeps the treatment a paper names, and takes the part of the topic from the paper, not from the model", () => {
     const { kept } = judgeOverview([
       { text: "reduced sadness and suicidal thoughts", sources: [1], kind: "benefit", treatment: "ketamine", group: "related" },

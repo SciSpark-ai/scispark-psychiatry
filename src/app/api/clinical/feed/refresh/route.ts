@@ -16,5 +16,6 @@ export const POST = ndjsonSkillRoute<Record<string, never>>(async (_input, vault
     summarise: true,
     useCache: true,
     keepHistory: true,
+    recordFindings: true,
   }),
 )

@@ -15,6 +15,7 @@ import { scoreCandidate, type ScoredItem } from "../score/score"
 import { JOURNAL_TIER_BOOST, journalTierOf, loadJournalTiers, type JournalTier } from "../score/journal-tiers"
 import { digestCards } from "../digest/card"
 import { OVERVIEW_VERSION, overviewTopics, writeTopicOverviews, type OverviewSentence } from "../digest/topic"
+import { backfillFindings, recordFindings } from "../evidence/store"
 import { saveHistory } from "../history/store"
 import { topicLabel } from "../topic-label"
 import { displayVenue } from "../text/venue"
@@ -41,6 +42,8 @@ export interface ClinicalFeedDeps {
   useCache?: boolean
   /** Keep this search in the history (history/store.ts). Off unless asked. */
   keepHistory?: boolean
+  /** Keep every listed paper as a finding for the condition pages. Off by default, on in the app. */
+  recordFindings?: boolean
 }
 
 const ref = (candidate: Candidate): PoolRef => ({ key: candidate.key, pmid: candidate.paper.ids.pmid, doi: candidate.paper.ids.doi })
@@ -298,6 +301,14 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   }
   await saveClinicalFeed(storage, feed)
   if (deps.keepHistory) await saveHistory(storage, feed)
+  if (deps.recordFindings) {
+    try {
+      await backfillFindings(storage, deps.pack.taxonomy)
+      await recordFindings(storage, feed, deps.pack.taxonomy)
+    } catch {
+      // The list is saved; a store that could not be written costs the condition pages this search, not the search itself.
+    }
+  }
   return feed
 }
 

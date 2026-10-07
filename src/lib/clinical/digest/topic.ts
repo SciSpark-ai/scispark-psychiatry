@@ -3,7 +3,7 @@ import { defineSkill } from "../../skills/types"
 import { runSkill } from "../../skills/runner"
 import { addCosts } from "../../llm/pricing"
 import type { CardDigest, DigestRunOpts } from "./card"
-import { numbers } from "./card"
+import { numbers, sharesWords } from "./card"
 import { negationWords, tidyOverviewSentence } from "../text/overview-text"
 
 export { tidyOverviewSentence }
@@ -29,9 +29,9 @@ export { tidyOverviewSentence }
  */
 
 /** The version of the overview skill; also part of the key its answers are kept under. */
-export const OVERVIEW_VERSION = "11"
+export const OVERVIEW_VERSION = "12"
 
-export const OVERVIEW_MIN_PAPERS = 2
+export const OVERVIEW_MIN_PAPERS = 1
 // One short answer per paper, so a long list is still one modest call.
 const OVERVIEW_MAX_PAPERS = 40
 /** One sentence about one thing. The model is asked for fewer words than this. */
@@ -79,6 +79,10 @@ export interface OverviewSentence {
   kind?: OverviewKind
   /** The treatment or exposure the finding is about, as the paper names it. The page joins findings on the same one. */
   treatment?: string
+  /** The PICO line of the paper, each part as the paper states it: who was studied, against what, on which outcome. */
+  population?: string
+  comparator?: string
+  outcome?: string
   /** Words of the sentence to mark, so the eye finds the point. Each is in `text` as written. */
   emphasis?: string[]
 }
@@ -95,6 +99,7 @@ const OverviewSchema = z.object({
   sentences: z.array(z.object({
     text: z.string(), sources: z.array(z.number().int()),
     group: z.enum(["focus", "related"]).nullable().default(null), kind: z.enum(OVERVIEW_KINDS).nullable().default(null), treatment: z.string().nullable().default(null), emphasis: z.array(z.string()).default([]),
+    population: z.string().nullable().default(null), comparator: z.string().nullable().default(null), outcome: z.string().nullable().default(null),
   })),
 })
 
@@ -121,6 +126,9 @@ Return "sentences": exactly one entry for every paper. Each entry:
   - "other": everything that is not about whether a treatment works or harms: associations, risk factors and mechanisms ("was linked to"), biomarkers, prediction, prevalence, measurement, and reviews that only say the evidence is uncertain.
   "benefit", "no-benefit" and "mixed" are about the illness and the patient: symptoms, remission, relapse, functioning, survival, adherence. A result on a brain measure, a biomarker, a blood level or a mechanism ("did not alter brain function for reward processing", "lowered C4A levels") is "other", whatever its direction.
   When the abstract does not let you tell whether the outcome improved, choose "other", never "no-benefit".
+- "population": who was studied, in a few words as the paper says it ("adults with treatment-resistant depression"); null if the paper does not say.
+- "comparator": what the treatment was compared with ("placebo", "quetiapine", "usual care"); null when there was no comparison group or the paper does not say.
+- "outcome": the main outcome the finding is about ("depressive symptoms at week 8", "relapse"); null if the paper does not say.
 - "group": null. "emphasis": an empty list.
 
 Rules:
@@ -142,7 +150,7 @@ export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof Over
     ),
 })
 
-/** The topics worth an overview: those with at least two listed papers that have a checked summary. */
+/** The topics worth an overview: those with at least one listed paper that has a checked summary. */
 export function overviewTopics(
   items: Array<{ key: string; entryId: string | null; digest?: CardDigest; matched?: "full" | "condition" | "treatment"; abstract?: string }>,
 ): Array<{ entryId: string; papers: OverviewPaper[] }> {
@@ -162,7 +170,7 @@ export function overviewTopics(
 
 /** Checks each sentence. `kept` have the keys of their papers as sources; `problems` say why the others were rejected. */
 export function judgeOverview(
-  sentences: Array<{ text: string; sources: number[]; group?: "focus" | "related" | null; kind?: OverviewKind | null; treatment?: string | null; emphasis?: string[] }>, papers: Array<Omit<OverviewPaper, "part"> & { part?: OverviewPaper["part"] }>,
+  sentences: Array<{ text: string; sources: number[]; group?: "focus" | "related" | null; kind?: OverviewKind | null; treatment?: string | null; emphasis?: string[]; population?: string | null; comparator?: string | null; outcome?: string | null }>, papers: Array<Omit<OverviewPaper, "part"> & { part?: OverviewPaper["part"] }>,
 ): { kept: OverviewSentence[]; problems: string[] } {
   const kept: OverviewSentence[] = []
   const problems: string[] = []
@@ -197,7 +205,11 @@ export function judgeOverview(
       if (fault) { problems.push(`${fault}:${treatment}`); treatment = undefined }
     }
     if (cited.length === 1) answered.add(cited[0].key)
-    kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
+    // A PICO part is kept only when the paper's own text has its words; a part the paper does not state is left out.
+    const sourceText = cited.map((paper) => `${paper.headline} ${paper.takeaway} ${paper.abstract ?? ""}`).join(" ")
+    const stated = (value: string | null | undefined) => { const phrase = value?.replace(/\s+/g, " ").trim(); return phrase && sharesWords(phrase, sourceText) ? phrase : undefined }
+    const [population, comparator, outcome] = [stated(sentence.population), stated(sentence.comparator), stated(sentence.outcome)]
+    kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(population ? { population } : {}), ...(comparator ? { comparator } : {}), ...(outcome ? { outcome } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
   }
   return { kept, problems }
 }

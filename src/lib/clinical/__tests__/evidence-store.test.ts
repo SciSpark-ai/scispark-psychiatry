@@ -6,7 +6,11 @@ import type { StoredFeed, StoredFeedItem } from "../feed/stored"
 import { saveHistory } from "../history/store"
 import { FINDINGS_PATH, readFindings } from "../evidence/file"
 import { backfillFindings, recordFindings } from "../evidence/store"
-import { paper } from "./helpers"
+import { MockProvider } from "../../llm/mock-provider"
+import { loadPsychiatryPack } from "../pack/load"
+import { runClinicalFeed } from "../feed/run"
+import { saveWatchEntries } from "../watch/store"
+import { llmResult, paper, SETTINGS, strongOk, watch } from "./helpers"
 
 const TAXONOMY = TaxonomySchema.parse({ version: "t", nodes: [
   { id: "depression", type: "condition", name: "Major depressive disorder", synonyms: ["depression"] },
@@ -23,7 +27,7 @@ const feed = (items: StoredFeedItem[], over: Partial<StoredFeed> = {}): StoredFe
   version: 1, generatedAt: "2026-10-07T10:00:00.000Z", mode: "whats-new", strictness: "standard", items, lowerConfidence: [], safetySignals: [],
   stats: { retrieved: 9, domain: 9, gated: 9, graded: 9, listed: items.length }, costUsd: null, warnings: [],
   topics: [{ id: "w1", condition: "depression", treatment: "Ketamine" }, { id: "w2", condition: "Schizophrenia" }, { id: "w3", condition: "A condition the pack lacks" }],
-  topicOverviews: { w1: [{ text: "reduced symptoms in adults", sources: ["pmid:1"], kind: "benefit", treatment: "ketamine", population: "adults with depression", comparator: "placebo", outcome: "depressive symptoms" } as never] },
+  topicOverviews: { w1: [{ text: "reduced symptoms in adults", sources: ["pmid:1"], kind: "benefit", treatment: "ketamine", population: "adults with depression", comparator: "placebo", outcome: "depressive symptoms" }] },
   ...over,
 })
 
@@ -82,5 +86,26 @@ describe("the findings store", () => {
     // Once the file exists, the kept searches are not read again.
     await saveHistory(storage, feed([item(6)], { generatedAt: "2026-10-06T10:00:00.000Z" }))
     expect(await backfillFindings(storage, TAXONOMY)).toBe(2)
+  })
+})
+
+describe("a search records its findings", () => {
+  it("stores the listed papers as findings when asked to, and not otherwise", async () => {
+    const pack = await loadPsychiatryPack()
+    const RCT = paper({ title: "Esketamine nasal spray versus quetiapine in treatment-resistant depression", ids: { pmid: "111" },
+      abstract: "METHODS: Adults with treatment-resistant depression were randomised to esketamine nasal spray or quetiapine.\nRESULTS: Remission at week 8 was 27% with esketamine and 18% with quetiapine.",
+      publicationTypes: ["Journal Article", "Randomized Controlled Trial"], fields: ["Depressive Disorder, Treatment-Resistant"], date: "2026-09-28" })
+    const grade = () => llmResult({ assessments: [{ index: 0, entryId: "w1", grade: 4, topicGrade: 4, quote: "randomised to esketamine nasal spray or quetiapine", conditionMatch: true, treatmentMatch: true }] }, "claude-haiku-4-5")
+    const run = async (storage: MemoryVaultStorage, extra: Record<string, unknown>) => {
+      await saveWatchEntries(storage, [watch({ id: "w1", condition: "treatment-resistant depression", treatment: "esketamine" })])
+      return runClinicalFeed(storage, { pack, enumerate: async () => ({ records: [RCT], total: 1, truncated: false }), settings: SETTINGS, now: () => new Date("2026-10-06T10:00:00.000Z"), providerOverride: { strong: strongOk(), fast: new MockProvider([grade()]) }, ...extra })
+    }
+    const off = new MemoryVaultStorage()
+    await run(off, {})
+    expect(await readFindings(off)).toEqual([])
+    const on = new MemoryVaultStorage()
+    await run(on, { recordFindings: true })
+    const [finding] = await readFindings(on)
+    expect(finding).toMatchObject({ key: "pmid:111", conditionCodes: ["treatment-resistant-depression"], design: "randomized-trial" })
   })
 })

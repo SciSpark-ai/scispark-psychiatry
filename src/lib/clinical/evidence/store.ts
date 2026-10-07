@@ -14,14 +14,11 @@ import type { Finding } from "./schema"
  * papers the feed has listed, not only saved ones). One finding per paper, however often it is listed.
  */
 
-/** The PICO keys an overview answer may carry (the stored-feed type gains them later). */
-type PicoKeys = { population?: string | null; comparator?: string | null; outcome?: string | null }
-
 function findingsOf(feed: StoredFeed, taxonomy: Taxonomy): Finding[] {
   const codeOf = (name: string | undefined) => (name ? findNode(taxonomy, name, "condition")?.id : undefined)
   return feed.items.map((item) => {
     const topic = feed.topics?.find((entry) => entry.id === item.entryId)
-    const answer: (NonNullable<StoredFeed["topicOverviews"]>[string][number] & PicoKeys) | undefined = (item.entryId ? feed.topicOverviews?.[item.entryId] : undefined)?.find((entry) => entry.sources.length === 1 && entry.sources[0] === item.key)
+    const answer: (NonNullable<StoredFeed["topicOverviews"]>[string][number]) | undefined = (item.entryId ? feed.topicOverviews?.[item.entryId] : undefined)?.find((entry) => entry.sources.length === 1 && entry.sources[0] === item.key)
     const treatment = answer?.treatment ?? null
     return {
       key: item.key, slug: paperSlug(item.paper), paper: item.paper,
