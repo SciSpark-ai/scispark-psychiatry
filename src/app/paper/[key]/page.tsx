@@ -27,8 +27,6 @@ import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { PaperActions, type DigestState, type EnrichState, type IngestState, type SaveState } from "@/components/paper/PaperActions"
 import { ClinicalDigestButton, ClinicalPaperDigest, ClinicalPaperNav } from "@/components/clinical/ClinicalPaperDigest"
 import { usePaperDigest } from "@/components/clinical/usePaperDigest"
-import { ClinicalTrialRecord } from "@/components/clinical/ClinicalTrialRecord"
-import { useTrialRecord } from "@/components/clinical/useTrialRecord"
 import paperStyles from "@/components/paper/PaperLayout.module.css"
 import { PaperFeedContext } from "@/components/paper/PaperFeedContext"
 import { RecommendationDetails } from "@/components/feed/RecommendationDetails"
@@ -120,7 +118,6 @@ function PaperPageContent() {
   const cardInfo = usePaperCardInfo(load.status === "ready" ? load.paper : null)
   const cardDigest = cardInfo?.digest ?? null
   const clinicalDigest = usePaperDigest(load.status === "ready" ? load.paper : null)
-  const trialRecord = useTrialRecord(load.status === "ready" ? load.paper : null, cardInfo?.design)
   const [digestState, setDigestState] = useState<DigestState>({ status: "idle" })
   const [ingestState, setIngestState] = useState<IngestState>({ phase: "idle" })
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" })
@@ -490,6 +487,7 @@ function PaperPageContent() {
                   digestState={digestState}
                   onGenerateDigest={handleGenerateDigest}
                   digestAction={<ClinicalDigestButton state={clinicalDigest} />}
+                  hideIngest
                   ingestState={ingestState}
                   onIngest={handleIngest}
                   onUndo={handleUndo}
@@ -502,8 +500,6 @@ function PaperPageContent() {
                 <article aria-label="Paper reading" className={paperStyles.reading}>
                   {/* Clinical edition: the nine-item digest in place of upstream's prose digest; once written it sits above the abstract, which stays open. */}
                   <ClinicalPaperDigest state={clinicalDigest} />
-                  {/* Clinical edition: the trial's arms and outcomes, extracted on request and checked by the reader (spec 7.7, 7.12). */}
-                  <ClinicalTrialRecord state={trialRecord} canExtract={cardInfo?.design === "randomized-trial" || cardInfo?.design === "clinical-trial"} />
                   {load.paper.abstract && (
                     <section id="paper-abstract" data-testid="paper-abstract" tabIndex={-1} className="mb-10 scroll-mt-6">
                       <h2 className="mb-3 font-heading text-[20px] font-semibold text-espresso">{CLINICAL_COPY.paper.originalAbstract}</h2>
@@ -535,7 +531,7 @@ function PaperPageContent() {
                     aria-label="Paper context"
                     className={`${paperStyles.rail} ${!page ? paperStyles.navigationOnly : ""} flex flex-col gap-6`}
                   >
-                    <ClinicalPaperNav hasSummary={Boolean(cardDigest)} digest={clinicalDigest.digest} hasRecord={Boolean(trialRecord.record)} hasAbstract={Boolean(load.paper.abstract)} />
+                    <ClinicalPaperNav hasSummary={Boolean(cardDigest)} digest={clinicalDigest.digest} hasAbstract={Boolean(load.paper.abstract)} />
                     {page && (
                       <div className="flex flex-col gap-4 [&>*]:mt-0">
                         <ProjectMembershipControl pageId={page.id} />

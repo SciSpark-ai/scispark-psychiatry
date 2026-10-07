@@ -101,7 +101,7 @@ export const CLINICAL_COPY = {
       inPubmed: (date: string) => `In PubMed ${date}`,
       separator: " · ",
       authorJoin: ", ",
-      moreAuthors: (count: number) => ` and ${count} more`,
+      moreAuthors: (count: number) => `… ${count} more …`,
       doi: (doi: string) => `DOI ${doi}`,
       pmid: (pmid: string) => `PMID ${pmid}`,
     },

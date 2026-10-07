@@ -121,13 +121,20 @@ describe("the clinical paper header", () => {
     expect(container.querySelector("[data-dates]")!.textContent).toBe("Published 2026-08-20 · In PubMed 2026-09-30")
     expect([...container.querySelectorAll("[data-ids] a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["DOI 10.1000/x", "https://doi.org/10.1000/x"], ["PMID 42", "https://pubmed.ncbi.nlm.nih.gov/42/"]])
   })
-  it("names the first authors and opens the full list on request", async () => {
+  it("keeps the authors on one line: the first three and the last two, the rest folded between them and opened on request", async () => {
     await render(<ClinicalPaperHeader paper={MANY} />)
     const authors = () => container.querySelector("[data-authors]")!
-    expect(authors().textContent).toBe("A. Author, B. Author, C. Author and 4 more")
+    expect(authors().textContent).toBe("A. Author, B. Author, C. Author, … 2 more …, F. Author, G. Author")
+    expect(authors().className).toContain("whitespace-nowrap")
     await act(async () => { (authors().querySelector("button") as HTMLButtonElement).click() })
-    expect(authors().textContent).toContain("G. Author")
+    expect(authors().textContent).toBe("A. Author, B. Author, C. Author, D. Author, E. Author, F. Author, G. Author")
+    expect(authors().className).not.toContain("whitespace-nowrap")
     expect(container.querySelector("h1")!.textContent).toBe(PAPER.title)
+  })
+  it("shows six authors or fewer in full", async () => {
+    await render(<ClinicalPaperHeader paper={{ ...MANY, authors: MANY.authors.slice(0, 6) }} />)
+    expect(container.querySelector("[data-authors] button")).toBeNull()
+    expect(container.querySelector("[data-authors]")!.textContent).toBe("A. Author, B. Author, C. Author, D. Author, E. Author, F. Author")
   })
   it("shows no chip for a design nobody has named", async () => {
     await render(<ClinicalPaperHeader paper={PAPER} design="randomized-trial" designSource="none" />)

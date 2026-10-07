@@ -65,6 +65,8 @@ export interface PaperActionsProps {
   onGenerateDigest: () => void
   /** Clinical edition: the button of the clinical digest, shown in place of "Generate digest". */
   digestAction?: ReactNode
+  /** Clinical edition: "Add to knowledge base" is not offered. */
+  hideIngest?: boolean
   ingestState: IngestState
   onIngest: () => void
   onUndo: () => void
@@ -88,6 +90,7 @@ export function PaperActions({
   digestState,
   onGenerateDigest,
   digestAction,
+  hideIngest,
   ingestState,
   onIngest,
   onUndo,
@@ -122,7 +125,7 @@ export function PaperActions({
         </Button>
         )}
 
-        {showIngestAction && (
+        {showIngestAction && !hideIngest && (
           <Button variant="secondary" onClick={onIngest} disabled={ingestBusy}>
             Add to knowledge base
           </Button>

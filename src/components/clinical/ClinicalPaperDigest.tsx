@@ -72,14 +72,13 @@ export function ClinicalPaperDigest({ state }: { state: PaperDigestState }) {
 }
 
 /** The side navigation of the paper page: its parts in the order they are on the page. */
-export function ClinicalPaperNav({ hasSummary, digest, hasRecord, hasAbstract }: { hasSummary: boolean; digest: StoredPaperDigest | null; hasRecord: boolean; hasAbstract: boolean }) {
+export function ClinicalPaperNav({ hasSummary, digest, hasAbstract }: { hasSummary: boolean; digest: StoredPaperDigest | null; hasAbstract: boolean }) {
   const links = [
     ...(hasSummary ? [{ href: "#paper-summary", label: D.nav.summary, sub: false }] : []),
     ...(digest ? [
       { href: "#paper-digest", label: D.nav.digest, sub: false },
       ...DIGEST_GROUPS.filter((group) => group.items.some((item) => digest.items[item])).map((group) => ({ href: `#digest-${group.id}`, label: D.groups[group.id], sub: true })),
     ] : []),
-    ...(hasRecord ? [{ href: "#paper-trial-record", label: CLINICAL_COPY.records.heading, sub: false }] : []),
     ...(hasAbstract ? [{ href: "#paper-abstract", label: D.nav.abstract, sub: false }] : []),
   ]
   if (links.length === 0) return null

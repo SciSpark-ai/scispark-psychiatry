@@ -96,16 +96,13 @@ describe("the digest on the paper page", () => {
   })
 
   it("lists the parts of the page in the side navigation, in the order they are on the page", async () => {
-    await render(<ClinicalPaperNav hasSummary digest={digest()} hasRecord={false} hasAbstract />)
+    await render(<ClinicalPaperNav hasSummary digest={digest()} hasAbstract />)
     expect([...container.querySelectorAll("nav a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
       ["AI summary", "#paper-summary"], ["Digest", "#paper-digest"], ["The study", "#digest-study"], ["Results", "#digest-results"], ["Appraisal", "#digest-appraisal"], ["Abstract", "#paper-abstract"],
     ])
     document.body.innerHTML = ""
-    await render(<ClinicalPaperNav hasSummary={false} digest={null} hasRecord={false} hasAbstract />)
+    await render(<ClinicalPaperNav hasSummary={false} digest={null} hasAbstract />)
     expect([...container.querySelectorAll("nav a")].map((link) => link.textContent)).toEqual(["Abstract"])
-    document.body.innerHTML = ""
-    await render(<ClinicalPaperNav hasSummary={false} digest={null} hasRecord hasAbstract />)
-    expect([...container.querySelectorAll("nav a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["Trial data", "#paper-trial-record"], ["Abstract", "#paper-abstract"]])
   })
 
   it("shows the sentence an item rests on when asked", async () => {

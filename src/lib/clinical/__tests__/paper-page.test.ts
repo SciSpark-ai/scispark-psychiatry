@@ -75,8 +75,10 @@ describe("the order of the paper page", () => {
     expect(abstract).toBeGreaterThan(-1)
     expect(source.indexOf("<ClinicalPaperDigest")).toBeGreaterThan(-1)
     expect(source.indexOf("<ClinicalPaperDigest")).toBeLessThan(abstract)
-    expect(source.indexOf("<ClinicalTrialRecord")).toBeGreaterThan(source.indexOf("<ClinicalPaperDigest"))
-    expect(source.indexOf("<ClinicalTrialRecord")).toBeLessThan(abstract)
+    // Decision D56: the trial-data panel is not on the paper page; D57: nor is "Add to knowledge base".
+    expect(source).not.toContain("<ClinicalTrialRecord")
+    expect(source).not.toContain("useTrialRecord")
+    expect(source).toContain("hideIngest")
     expect(source).not.toMatch(/<details className=\{paperStyles\.abstract\}/)
     expect(source).not.toContain("<PaperDigestView")
     expect(source).toContain("digestAction={<ClinicalDigestButton")

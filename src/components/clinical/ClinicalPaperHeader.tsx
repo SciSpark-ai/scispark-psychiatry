@@ -8,8 +8,9 @@ import { displayTitle } from "@/lib/papers/title"
 import { displayVenue } from "@/lib/papers/venue"
 
 const H = CLINICAL_COPY.paper.header
-/** How many authors are named before the rest is folded away. */
-const AUTHORS_SHOWN = 3
+/** With more authors than this the middle of the list is folded; the first three and the last two stay. */
+const AUTHORS_IN_FULL = 6
+const [AUTHORS_FIRST, AUTHORS_LAST] = [3, 2]
 
 /**
  * The top of the paper page in the clinical edition: what kind of study it is and the topic it was
@@ -21,7 +22,7 @@ export function ClinicalPaperHeader({ paper, headline, design, designSource, top
 }) {
   const [allAuthors, setAllAuthors] = useState(false)
   const names = paper.authors.map((author) => author.name)
-  const folded = !allAuthors && names.length > AUTHORS_SHOWN + 1
+  const folded = !allAuthors && names.length > AUTHORS_IN_FULL
   // A kind of study is shown only when someone has named it: PubMed, the model or a text rule.
   const named = design && designSource && designSource !== "none" && design !== "other" && design !== "unknown"
   const inferred = designSource === "model" || designSource === "text-rule"
@@ -52,9 +53,14 @@ export function ClinicalPaperHeader({ paper, headline, design, designSource, top
           </p>
         )}
         {names.length > 0 && (
-          <p data-authors="true" className="leading-relaxed text-secondary-dark">
-            <span>{(folded ? names.slice(0, AUTHORS_SHOWN) : names).join(H.authorJoin)}</span>
-            {folded && <button type="button" onClick={() => setAllAuthors(true)} className="text-accent-ink underline decoration-dotted hover:text-accent-ink-hover">{H.moreAuthors(names.length - AUTHORS_SHOWN)}</button>}
+          <p data-authors="true" className={`leading-relaxed text-secondary-dark ${folded ? "overflow-hidden text-ellipsis whitespace-nowrap" : ""}`}>
+            {folded ? (
+              <>
+                <span>{names.slice(0, AUTHORS_FIRST).join(H.authorJoin)}{H.authorJoin}</span>
+                <button type="button" onClick={() => setAllAuthors(true)} className="text-accent-ink underline decoration-dotted hover:text-accent-ink-hover">{H.moreAuthors(names.length - AUTHORS_FIRST - AUTHORS_LAST)}</button>
+                <span>{H.authorJoin}{names.slice(-AUTHORS_LAST).join(H.authorJoin)}</span>
+              </>
+            ) : <span>{names.join(H.authorJoin)}</span>}
           </p>
         )}
         {(paper.ids.doi || paper.ids.pmid) && (
