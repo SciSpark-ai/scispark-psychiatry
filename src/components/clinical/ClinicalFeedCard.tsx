@@ -77,7 +77,13 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
       {/* Tags are plain text, not pills: a pill's own background fights with the card's tint. */}
       <p className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-snug">
         {/* Topic first (the user's own watch entry, in the accent colour), then the study type in plain text. */}
-        {entryLabel && <span title={matchNote} className="font-semibold text-accent-ink">{entryLabel}</span>}
+        {entryLabel && (
+          <span
+            title={matchNote} className="font-semibold text-accent-ink"
+            // On a tinted card the topic takes the tint's own hue, deepened towards the text colour so it stays readable in both themes.
+            {...(tone === undefined ? {} : { "data-toned": "true", style: { color: "color-mix(in srgb, var(--card-tone) 62%, var(--text-primary))" } })}
+          >{entryLabel}</span>
+        )}
         {designNote && <span title={designNote} {...(inferredDesign ? { "data-inferred": "true" } : {})} className="text-espresso">{CLINICAL_COPY.designLabels[item.design]}</span>}
         {item.flags.includes("title-only") && <span className="text-muted-text">{CLINICAL_COPY.feed.noAbstract}</span>}
         {item.ungraded && <span className="text-muted-text">{CLINICAL_COPY.feed.notGraded}</span>}

@@ -152,4 +152,15 @@ describe("ClinicalFeedCard", () => {
     expect(design.className).toContain("text-espresso")
     expect(design.className).not.toContain("uppercase")
   })
+
+  it("writes the topic in a darker shade of the card's own tint, and in the accent colour when the card has no tint", async () => {
+    await mount(ITEM, new MemoryVaultStorage(), 1)
+    const toned = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Depression × Drug A")!
+    expect(toned.getAttribute("data-toned")).toBe("true")
+    document.body.innerHTML = ""
+    await mount(ITEM)
+    const plain = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Depression × Drug A")!
+    expect(plain.hasAttribute("data-toned")).toBe(false)
+    expect(plain.className).toContain("text-accent-ink")
+  })
 })
