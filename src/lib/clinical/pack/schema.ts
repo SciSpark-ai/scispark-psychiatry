@@ -14,6 +14,11 @@ export const TaxonomyNodeSchema = z.object({
   /** True only when the label was checked against NLM's lookup. */
   meshVerified: z.boolean().default(false),
   parents: z.array(z.string()).default([]),
+  /**
+   * Ids of nodes that count as this one when a paper is matched to a watch entry (owner decision
+   * 2026-10-06: ketamine counts for esketamine). Used for matching only, not for search queries.
+   */
+  related: z.array(z.string()).default([]),
   modality: z.enum(["drug", "psychotherapy", "neuromodulation", "other"]).optional(),
 })
 export type TaxonomyNode = z.infer<typeof TaxonomyNodeSchema>

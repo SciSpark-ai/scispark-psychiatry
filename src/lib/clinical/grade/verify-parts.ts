@@ -1,16 +1,22 @@
 import type { SpecialtyPack } from "../pack/schema"
 import { resolveFacet } from "../plan/queries"
+import { findNode, nodeTerms } from "../pack/taxonomy"
 import { mentions } from "../filter/gate"
 import type { GatedCandidate, MatchedPart, StageAGrade, WatchEntry } from "../types"
 
 /**
  * The model says which part of a watch entry a paper matches; this checks the claim against the
- * paper's own text, as the quote check does for grades. A part counts only if the title, abstract
- * or MeSH headings name it: one of the terms the taxonomy gives for it (names, synonyms, brands,
- * subtypes), or another form of a long single-word term ("depressed" for "depression").
+ * paper's own text, as the quote check does for grades. A part counts only if the paper names it:
+ * one of the terms the taxonomy gives for it (names, synonyms, brands, subtypes), or another form
+ * of a long single-word term ("depressed" for "depression").
  *
- * The check only ever lowers a claim: full to condition or treatment, or to no match at all. It
- * does not use related drugs: ketamine is not counted as esketamine.
+ * Owner decisions of 2026-10-06:
+ * - The condition must be named in the title or the MeSH headings. A mention in the abstract is not
+ *   enough: an abstract mentions many conditions in passing.
+ * - The treatment may be named anywhere in the title, abstract or MeSH headings, and a treatment the
+ *   taxonomy marks as related counts as the same (ketamine for esketamine).
+ *
+ * The check only ever lowers a claim: full to condition or treatment, or to no match at all.
  */
 
 const lower = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim()
@@ -30,12 +36,22 @@ export function verifyMatchedParts(grade: StageAGrade, candidate: GatedCandidate
   if (!grade.matched || grade.entryId === null) return grade
   const entry = entries.find((candidateEntry) => candidateEntry.id === grade.entryId)
   if (!entry) return grade
-  const text = lower(`${candidate.paper.title} ${candidate.paper.abstract ?? ""}`)
+  const title = lower(candidate.paper.title)
+  const titleAndAbstract = lower(`${candidate.paper.title} ${candidate.paper.abstract ?? ""}`)
   const headings = (candidate.paper.fields ?? []).map(lower)
+  const facetOf = (label: string, type: "condition" | "treatment") => {
+    const facet = resolveFacet(pack, label, type)
+    const node = findNode(pack.taxonomy, label, type)
+    const related = (node?.related ?? []).map((id) => pack.taxonomy.nodes.find((other) => other.id === id)).filter((other) => other !== undefined)
+    return {
+      words: [...facet.words, ...related.flatMap(nodeTerms)],
+      mesh: [...facet.mesh, ...related.flatMap((other) => (other.meshHeading ? [other.meshHeading] : []))],
+    }
+  }
   const part = (label: string | undefined, type: "condition" | "treatment") => {
     if (!label) return false
-    const facet = resolveFacet(pack, label, type)
-    return names(text, headings, facet.words, facet.mesh)
+    const facet = facetOf(label, type)
+    return names(type === "condition" ? title : titleAndAbstract, headings, facet.words, facet.mesh)
   }
   const claimsCondition = grade.matched !== "treatment"
   const claimsTreatment = grade.matched !== "condition"

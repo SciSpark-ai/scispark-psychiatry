@@ -25,7 +25,7 @@ describe("verifyMatchedParts", () => {
   it("lowers a claimed full match to a condition match when the text never names the treatment", async () => {
     const pack = await loadPsychiatryPack()
     expect(verifyMatchedParts(grade("m", "full"), p("Trazodone improves sleep architecture in depressed patients"), [MDD_ESK], pack).matched).toBe("condition")
-    expect(verifyMatchedParts(grade("m", "full"), p("Rapamycin with ketamine in depression"), [MDD_ESK], pack).matched).toBe("condition")
+    expect(verifyMatchedParts(grade("m", "full"), p("Probiotics reduced depressive symptoms in adults"), [MDD_ESK], pack).matched).toBe("condition")
   })
 
   it("lowers it to a treatment match when the text never names the condition", async () => {
@@ -52,5 +52,23 @@ describe("verifyMatchedParts", () => {
     const pack = await loadPsychiatryPack()
     const legacy = { ...grade("m", undefined) }
     expect(verifyMatchedParts(legacy, p("Trazodone in depressed patients"), [MDD_ESK], pack)).toEqual(legacy)
+  })
+
+  // Owner decisions 2026-10-06.
+  it("counts ketamine as the treatment of an esketamine entry, through the taxonomy's related treatments", async () => {
+    const pack = await loadPsychiatryPack()
+    expect(verifyMatchedParts(grade("m", "full"), p("Rapamycin with ketamine in depression"), [MDD_ESK], pack).matched).toBe("full")
+    expect(verifyMatchedParts(grade("m", "full"), p("Intravenous ketamine after surgery"), [MDD_ESK], pack).matched).toBe("treatment")
+  })
+
+  it("needs the condition in the title or the MeSH headings; a mention in the abstract is not enough", async () => {
+    const pack = await loadPsychiatryPack()
+    const passing = p("Older age and trauma linked to poor lithium response in bipolar disorder", "Patients also had episodes of depression.")
+    expect(verifyMatchedParts(grade("m", "condition"), passing, [MDD_ESK], pack).entryId).toBeNull()
+    const indexed = p("Lithium response and clinical course", "A cohort study.", ["Depressive Disorder, Major"])
+    expect(verifyMatchedParts(grade("m", "condition"), indexed, [MDD_ESK], pack).matched).toBe("condition")
+    // The treatment may still be named only in the abstract.
+    const treated = p("A new option for major depressive disorder", "Adults received esketamine nasal spray.")
+    expect(verifyMatchedParts(grade("m", "full"), treated, [MDD_ESK], pack).matched).toBe("full")
   })
 })
