@@ -22,6 +22,8 @@ function isWording(literal: string): boolean {
   if (!/[A-Za-z]{3,}/.test(text)) return false
   // CSS values are not wording: a custom property reference, a colour mix, or the currentColor keyword.
   if (/^var\(--[\w-]+\)$/.test(text) || /^color-mix\(/.test(text) || text === "currentColor") return false
+  // Names of keyboard keys, as the browser reports them, are not wording either.
+  if (["Enter", "Escape", "Tab", "ArrowDown", "ArrowUp"].includes(text)) return false
   return !text.split(/\s+/).every((token) => /^[a-z0-9\-_\[\]:/.%!@#]*$/.test(token))
 }
 

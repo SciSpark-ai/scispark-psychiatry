@@ -12,92 +12,139 @@ vi.mock("@/lib/vault/get-vault", () => ({ getOpenVault: async () => vault.curren
 
 import { WatchListEditor } from "../WatchListEditor"
 
-const suggestions = { conditions: ["Major depressive disorder"], treatments: ["Esketamine"], populations: ["Adults", "Older adults"] }
-let container: HTMLDivElement
+// The My topics page, redone on the owner's request of 2026-10-07: the topics you have and the form to
+// add one are two separate sections; fields are short, suggest as you type, and Enter adds the topic.
 
+const SUGGESTIONS = {
+  conditions: ["Major depressive disorder", "Schizophrenia", "ADHD", "Autism spectrum disorder"],
+  treatments: ["Esketamine", "Ketamine", "Methylphenidate"],
+  populations: ["Adults", "Children and adolescents"],
+  conditionAliases: ["depression", "autism"],
+  treatmentAliases: ["Spravato"],
+}
+
+let container: HTMLDivElement
 async function mount() {
   container = document.createElement("div")
   document.body.appendChild(container)
-  await act(async () => { createRoot(container).render(<WatchListEditor suggestions={suggestions} />) })
+  await act(async () => { createRoot(container).render(<WatchListEditor suggestions={SUGGESTIONS} />) })
   await act(async () => {})
 }
-const type = (input: HTMLInputElement | HTMLSelectElement, value: string) => {
+const storage = () => vault.current as MemoryVaultStorage
+const field = (label: string) => container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!
+const button = (text: string) => [...container.querySelectorAll("button")].find((entry) => entry.textContent === text) as HTMLButtonElement
+const type = async (input: HTMLInputElement | HTMLSelectElement, value: string) => act(async () => {
   const proto = input instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype
   Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(input, value)
   input.dispatchEvent(new Event(input instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }))
-}
-const button = (text: string) => [...container.querySelectorAll("button")].find((b) => b.textContent === text)!
+})
+const click = async (element: HTMLElement) => act(async () => { element.click() })
+const enter = async (input: HTMLInputElement) => act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })) })
+const rows = () => [...container.querySelectorAll("[data-testid=topic-row]")]
 
 beforeEach(() => { document.body.innerHTML = ""; vault.current = new MemoryVaultStorage() })
 
-describe("WatchListEditor", () => {
-  it("adds an entry with a condition, a treatment and a priority", async () => {
+describe("My topics", () => {
+  it("has two sections: the topics you follow, and adding one", async () => {
+    await saveWatchEntries(storage(), [{ id: "w1", condition: "Schizophrenia", priority: "normal", safetySignal: false }])
     await mount()
-    const [condition, treatment] = [...container.querySelectorAll("input[list]")] as HTMLInputElement[]
-    await act(async () => { type(condition, "depression"); type(treatment, "esketamine") })
-    await act(async () => { type(container.querySelectorAll("select")[1] as HTMLSelectElement, "high") })
-    await act(async () => { button("Add entry").click() })
-    const saved = await loadWatchEntries(vault.current as MemoryVaultStorage)
-    expect(saved).toHaveLength(1)
-    expect(saved[0]).toMatchObject({ condition: "depression", treatment: "esketamine", priority: "high" })
-    expect(container.textContent).toContain("depression × esketamine")
+    expect([...container.querySelectorAll("h2")].map((heading) => heading.textContent)).toEqual(["Your topics", "Add a topic", "Which studies to include"])
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0].querySelector("[data-topic-name]")!.textContent).toBe("Schizophrenia")
   })
 
-  it("refuses an empty entry", async () => {
+  it("says so when you follow nothing yet", async () => {
     await mount()
-    await act(async () => { button("Add entry").click() })
-    expect(container.querySelector('[role="alert"]')?.textContent).toMatch(/condition, a treatment, or both/)
-    expect(await loadWatchEntries(vault.current as MemoryVaultStorage)).toEqual([])
+    expect(container.textContent).toContain("You are not following any topic yet")
   })
 
-  it("pauses and removes entries", async () => {
-    await saveWatchEntries(vault.current as MemoryVaultStorage, [{ id: "w1", condition: "ptsd", priority: "normal", safetySignal: false }])
+  it("adds a topic with a condition and a treatment, from the button", async () => {
     await mount()
-    await act(async () => { type(container.querySelector('select[aria-label^="Priority: ptsd"]') as HTMLSelectElement, "paused") })
-    expect((await loadWatchEntries(vault.current as MemoryVaultStorage))[0].priority).toBe("paused")
-    await act(async () => { button("Remove").click() })
-    expect(await loadWatchEntries(vault.current as MemoryVaultStorage)).toEqual([])
+    await type(field("Condition"), "Major depressive disorder")
+    await type(field("Treatment (optional)"), "Esketamine")
+    expect(container.querySelector("[data-testid=topic-preview]")!.textContent).toContain("Major depressive disorder × Esketamine")
+    await click(button("Add topic"))
+    expect(await loadWatchEntries(storage())).toMatchObject([{ condition: "Major depressive disorder", treatment: "Esketamine", priority: "normal" }])
+    expect(rows()[0].querySelector("[data-topic-name]")!.textContent).toBe("Major depressive disorder × Esketamine")
+    expect(field("Condition").value).toBe("")
   })
 
-  // Owner decision 2026-10-06: What's new / Catch up and its window are chosen on Home, not here.
-  it("saves the design filter, and no longer offers the feed mode", async () => {
+  it("adds a topic with only a condition, by pressing Enter", async () => {
     await mount()
-    expect(container.querySelector('input[name="mode"]')).toBeNull()
-    const strictness = container.querySelector<HTMLSelectElement>('select[aria-label="Study design filter"]')!
-    await act(async () => { type(strictness, "strict") })
-    expect(await loadClinicalSettings(vault.current as MemoryVaultStorage)).toMatchObject({ strictness: "strict" })
+    await type(field("Condition"), "Schizophrenia")
+    await enter(field("Condition"))
+    expect(await loadWatchEntries(storage())).toMatchObject([{ condition: "Schizophrenia" }])
+    expect((await loadWatchEntries(storage()))[0].treatment).toBeUndefined()
   })
 
-  // Owner decision 2026-10-07: a topic may name two conditions, joined by AND or OR.
-  it("adds a topic with two conditions that must both be present, by default", async () => {
+  it("refuses an empty topic", async () => {
     await mount()
-    const condition = container.querySelector<HTMLInputElement>("input[list]")!
-    await act(async () => { type(condition, "ADHD") })
-    const second = container.querySelector<HTMLInputElement>('input[aria-label="Second condition (optional)"]')!
-    await act(async () => { type(second, "Autism") })
-    await act(async () => { button("Add entry").click() })
-    const saved = await loadWatchEntries(vault.current as MemoryVaultStorage)
-    expect(saved[0]).toMatchObject({ condition: "ADHD", condition2: "Autism", conditionJoin: "and" })
-    expect(container.textContent).toContain("ADHD + Autism")
+    await click(button("Add topic"))
+    expect(await loadWatchEntries(storage())).toEqual([])
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain("Enter a condition, a treatment, or both")
   })
 
-  it("adds a topic where either of two conditions is enough", async () => {
+  it("suggests names right under the field as you type, and fills the field when one is picked", async () => {
     await mount()
-    await act(async () => { type(container.querySelector<HTMLInputElement>("input[list]")!, "ADHD") })
-    await act(async () => { type(container.querySelector<HTMLInputElement>('input[aria-label="Second condition (optional)"]')!, "Autism") })
-    await act(async () => { type(container.querySelector<HTMLSelectElement>('select[aria-label="How the two conditions combine"]')!, "or") })
-    await act(async () => { button("Add entry").click() })
-    expect((await loadWatchEntries(vault.current as MemoryVaultStorage))[0]).toMatchObject({ condition2: "Autism", conditionJoin: "or" })
-    expect(container.textContent).toContain("ADHD or Autism")
+    await type(field("Treatment (optional)"), "ke")
+    const options = [...container.querySelectorAll('[data-testid=suggestions-treatment] [role="option"]')] as HTMLElement[]
+    expect(options.map((option) => option.textContent)).toEqual(["Ketamine", "Esketamine"])
+    await act(async () => { options[1].dispatchEvent(new MouseEvent("mousedown", { bubbles: true })) })
+    expect(field("Treatment (optional)").value).toBe("Esketamine")
+    expect(container.querySelector("[data-testid=suggestions-treatment]")).toBeNull()
   })
 
-  it("does not keep a second condition without a first", async () => {
+  it("asks about a likely misspelling before adding, and uses the correction when told to", async () => {
     await mount()
-    const treatment = ([...container.querySelectorAll("input[list]")] as HTMLInputElement[])[1]
-    await act(async () => { type(treatment, "Methylphenidate") })
-    await act(async () => { button("Add entry").click() })
-    const saved = await loadWatchEntries(vault.current as MemoryVaultStorage)
-    expect(saved[0].condition2).toBeUndefined()
-    expect(saved[0].conditionJoin).toBeUndefined()
+    await type(field("Treatment (optional)"), "esketamin")
+    await click(button("Add topic"))
+    expect(await loadWatchEntries(storage())).toEqual([])
+    expect(container.querySelector("[data-testid=spelling-check]")!.textContent).toContain("Did you mean Esketamine?")
+    await click(button("Use Esketamine"))
+    expect(await loadWatchEntries(storage())).toMatchObject([{ treatment: "Esketamine" }])
+  })
+
+  it("keeps an unusual term as typed when told to", async () => {
+    await mount()
+    await type(field("Condition"), "Schizophernia")
+    await click(button("Add topic"))
+    await click(button("Keep “Schizophernia”"))
+    expect(await loadWatchEntries(storage())).toMatchObject([{ condition: "Schizophernia" }])
+  })
+
+  it("adds a second condition that must also be present, or either of the two", async () => {
+    await mount()
+    await type(field("Condition"), "ADHD")
+    expect(container.querySelector('input[aria-label="Second condition"]')).toBeNull()
+    await click(button("+ Add a second condition"))
+    await type(field("Second condition"), "Autism spectrum disorder")
+    expect(container.querySelector("[data-testid=topic-preview]")!.textContent).toContain("ADHD + Autism spectrum disorder")
+    await click(button("Either one"))
+    expect(container.querySelector("[data-testid=topic-preview]")!.textContent).toContain("ADHD or Autism spectrum disorder")
+    await click(button("Add topic"))
+    expect(await loadWatchEntries(storage())).toMatchObject([{ condition: "ADHD", condition2: "Autism spectrum disorder", conditionJoin: "or" }])
+  })
+
+  it("changes a topic's priority, pauses it and removes it from its row", async () => {
+    await saveWatchEntries(storage(), [{ id: "w1", condition: "Schizophrenia", priority: "normal", safetySignal: false }, { id: "w2", condition: "ADHD", priority: "normal", safetySignal: false }])
+    await mount()
+    await type(rows()[0].querySelector("select") as HTMLSelectElement, "high")
+    expect((await loadWatchEntries(storage()))[0].priority).toBe("high")
+    await type(rows()[0].querySelector("select") as HTMLSelectElement, "paused")
+    expect((await loadWatchEntries(storage()))[0].priority).toBe("paused")
+    await click([...rows()[1].querySelectorAll("button")].find((entry) => entry.textContent === "Remove") as HTMLButtonElement)
+    expect((await loadWatchEntries(storage())).map((entry) => entry.id)).toEqual(["w1"])
+  })
+
+  it("saves which studies to include", async () => {
+    await mount()
+    await type(container.querySelector<HTMLSelectElement>('select[aria-label="Which studies to include"]')!, "strict")
+    expect(await loadClinicalSettings(storage())).toMatchObject({ strictness: "strict" })
+  })
+
+  it("keeps the fields short and the type large enough to read", async () => {
+    await mount()
+    expect(field("Condition").className).toContain("max-w-")
+    expect(container.querySelector("h2")!.className).toContain("text-espresso")
   })
 })
