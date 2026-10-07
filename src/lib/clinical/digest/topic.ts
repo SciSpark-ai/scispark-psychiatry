@@ -23,6 +23,7 @@ export { tidyOverviewSentence }
 export const OVERVIEW_MIN_PAPERS = 2
 const OVERVIEW_MAX_PAPERS = 20
 const SENTENCE_MAX_WORDS = 40
+const OVERVIEW_MAX_SENTENCES = 5
 
 export interface OverviewSentence { text: string; sources: string[] }
 export interface OverviewPaper { key: string; headline: string; takeaway: string }
@@ -127,7 +128,8 @@ export async function writeTopicOverviews(
         const again = await ask([...new Set(best.problems.map(problemText))]).catch(() => null)
         if (again && again.kept.length >= best.kept.length) best = again
       }
-      if (best && best.kept.length > 0) overviews[topic.entryId] = best.kept
+      // An overview is a glance, not a second list: at most five sentences.
+      if (best && best.kept.length > 0) overviews[topic.entryId] = best.kept.slice(0, OVERVIEW_MAX_SENTENCES)
       else dropped.push({ entryId: topic.entryId, reason: best?.problems[0] ?? "call-failed" })
     } catch {
       dropped.push({ entryId: topic.entryId, reason: "call-failed" })
