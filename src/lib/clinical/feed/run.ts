@@ -16,6 +16,7 @@ import { JOURNAL_TIER_BOOST, journalTierOf, loadJournalTiers, type JournalTier }
 import { digestCards } from "../digest/card"
 import { overviewTopics, writeTopicOverviews, type OverviewSentence } from "../digest/topic"
 import { saveHistory } from "../history/store"
+import { topicLabel } from "../topic-label"
 import { seenRecently } from "../seen/store"
 import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
 import { layerOf, selectFeed } from "../select/select"
@@ -52,6 +53,7 @@ const lower = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim()
 function namesWatchedTerm(candidates: GatedCandidate[], entries: WatchEntry[], pack: SpecialtyPack): Set<string> {
   const terms = [...new Set(entries.filter((entry) => entry.priority !== "paused").flatMap((entry) => [
     ...(entry.condition ? resolveFacet(pack, entry.condition, "condition").words : []),
+    ...(entry.condition2 ? resolveFacet(pack, entry.condition2, "condition").words : []),
     ...(entry.treatment ? resolveFacet(pack, entry.treatment, "treatment").words : []),
   ]).map(lower))]
   return new Set(candidates
@@ -220,7 +222,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
 
   // An AI overview per topic, written from the checked summaries of the listed papers (never from abstracts).
   const listedItems = selected.items.map(withDigest)
-  const entryLabel = (id: string) => { const entry = context.entries.find((candidate) => candidate.id === id); return entry ? [entry.condition, entry.treatment].filter(Boolean).join(" × ") : id }
+  const entryLabel = (id: string) => { const entry = context.entries.find((candidate) => candidate.id === id); return entry ? topicLabel(entry) : id }
   const topicOverviews: Record<string, OverviewSentence[]> = {}
   if (deps.summarise) {
     const pending = []
@@ -247,7 +249,9 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   const feed: StoredFeed = {
     version: 1, generatedAt, mode, lookBack: lookBackOf(context.settings), strictness: context.settings.strictness,
     items: listedItems,
-    topics: context.entries.map(({ id, condition, treatment }) => ({ id, ...(condition ? { condition } : {}), ...(treatment ? { treatment } : {}) })),
+    topics: context.entries.map(({ id, condition, condition2, conditionJoin, treatment }) => ({
+      id, ...(condition ? { condition } : {}), ...(condition2 ? { condition2, conditionJoin: conditionJoin ?? "and" } : {}), ...(treatment ? { treatment } : {}),
+    })),
     ...(Object.keys(topicOverviews).length > 0 ? { topicOverviews } : {}),
     lowerConfidence: selected.lowerConfidence.map(toStoredItem),
     ...(seenEarlier.length > 0 ? { seenEarlier: seenEarlier.map(withDigest) } : {}),

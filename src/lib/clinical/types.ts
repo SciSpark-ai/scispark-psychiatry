@@ -19,6 +19,12 @@ export const WatchEntrySchema = z
   .object({
     id: z.string().min(1),
     condition: z.string().min(1).optional(),
+    /**
+     * A second condition, joined to the first by `conditionJoin`: "and" (the default) lists only
+     * papers about both; "or" lists papers about either. The treatment is never joined this way.
+     */
+    condition2: z.string().min(1).optional(),
+    conditionJoin: z.enum(["and", "or"]).optional(),
     treatment: z.string().min(1).optional(),
     population: z.string().min(1).optional(),
     outcome: z.string().min(1).optional(),
@@ -28,6 +34,9 @@ export const WatchEntrySchema = z
   })
   .refine((entry) => entry.condition !== undefined || entry.treatment !== undefined, {
     message: "a watch entry needs a condition or a treatment",
+  })
+  .refine((entry) => entry.condition2 === undefined || entry.condition !== undefined, {
+    message: "a second condition needs a first one",
   })
 export type WatchEntry = z.infer<typeof WatchEntrySchema>
 

@@ -55,7 +55,11 @@ export function verifyMatchedParts(grade: StageAGrade, candidate: GatedCandidate
   }
   const claimsCondition = grade.matched !== "treatment"
   const claimsTreatment = grade.matched !== "condition"
-  const onCondition = claimsCondition && part(entry.condition, "condition")
+  // Two conditions: "and" needs both named, "or" needs either.
+  const first = part(entry.condition, "condition")
+  const second = entry.condition2 ? part(entry.condition2, "condition") : null
+  const conditionNamed = second === null ? first : entry.conditionJoin === "or" ? first || second : first && second
+  const onCondition = claimsCondition && conditionNamed
   const onTreatment = claimsTreatment && part(entry.treatment, "treatment")
   const wantsBoth = Boolean(entry.condition) && Boolean(entry.treatment)
   const matched: MatchedPart | undefined = wantsBoth

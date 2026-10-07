@@ -46,7 +46,9 @@ const StoredFeedSchema = z.object({
   /** Matching papers that were already displayed on an earlier visit; not recommended again. */
   seenEarlier: z.array(StoredItemSchema).optional(),
   /** The active topics when the list was built, so an earlier list can be reopened with its own labels. */
-  topics: z.array(z.object({ id: z.string(), condition: z.string().optional(), treatment: z.string().optional() })).optional(),
+  topics: z.array(z.object({
+    id: z.string(), condition: z.string().optional(), condition2: z.string().optional(), conditionJoin: z.enum(["and", "or"]).optional(), treatment: z.string().optional(),
+  })).optional(),
   /** AI overview of each topic's papers, by watch entry id: checked sentences with the papers they rest on. */
   topicOverviews: z.record(z.string(), z.array(z.object({ text: z.string(), sources: z.array(z.string()) }))).optional(),
   safetySignals: z.array(z.object({ paper: PaperSchema, key: z.string() })),

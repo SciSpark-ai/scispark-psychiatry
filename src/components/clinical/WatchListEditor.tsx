@@ -6,6 +6,7 @@ import type { VaultStorage } from "@/lib/vault/storage"
 import { Card } from "@/components/ui/Card"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
+import { topicLabel } from "@/lib/clinical/topic-label"
 import {
   GATE_STRICTNESS, PRIORITIES, type ClinicalSettings, type Priority, type WatchEntry,
 } from "@/lib/clinical/types"
@@ -22,14 +23,14 @@ const PRIORITY_LABEL: Record<Priority, string> = { high: W.high, normal: W.norma
 const STRICTNESS_LABEL = { strict: W.strict, standard: W.standard, open: W.open } as const
 const field = "rounded-btn border border-border-warm bg-light-surface px-3 py-1.5 text-[13px] text-espresso"
 
-const label = (entry: WatchEntry) => [entry.condition, entry.treatment].filter(Boolean).join(" × ")
+const label = (entry: WatchEntry) => topicLabel(entry)
 
 export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions }) {
   const [storage, setStorage] = useState<VaultStorage | null>(null)
   const [entries, setEntries] = useState<WatchEntry[]>([])
   const [settings, setSettings] = useState<ClinicalSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [draft, setDraft] = useState({ condition: "", treatment: "", population: "", priority: "normal" as Priority, safetySignal: false })
+  const [draft, setDraft] = useState({ condition: "", condition2: "", conditionJoin: "and" as "and" | "or", treatment: "", population: "", priority: "normal" as Priority, safetySignal: false })
 
   useEffect(() => {
     let cancelled = false
@@ -67,10 +68,12 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
     const entry: WatchEntry = {
       id: newEntryId(), priority: draft.priority, safetySignal: draft.safetySignal,
       ...(condition ? { condition } : {}), ...(treatment ? { treatment } : {}),
+      // A second condition only means something next to a first one.
+      ...(condition && draft.condition2.trim() ? { condition2: draft.condition2.trim(), conditionJoin: draft.conditionJoin } : {}),
       ...(draft.population ? { population: draft.population } : {}),
     }
     await persist([...entries, entry])
-    setDraft({ condition: "", treatment: "", population: "", priority: "normal", safetySignal: false })
+    setDraft({ condition: "", condition2: "", conditionJoin: "and", treatment: "", population: "", priority: "normal", safetySignal: false })
   }
 
   const update = (id: string, patch: Partial<WatchEntry>) => persist(entries.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)))
@@ -120,6 +123,20 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
           <label className="text-[12px] text-muted-text">{W.priority}
             <select className={`${field} mt-1 w-full`} value={draft.priority} onChange={(event) => setDraft({ ...draft, priority: event.target.value as Priority })}>
               {PRIORITIES.map((priority) => <option key={priority} value={priority}>{PRIORITY_LABEL[priority]}</option>)}
+            </select>
+          </label>
+        </div>
+        {/* Two conditions in one topic: both required, or either. The treatment is not combined this way. */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-[12px] text-muted-text">{W.condition2}
+            <input aria-label={W.condition2} className={`${field} mt-1 w-full`} list="watch-conditions" value={draft.condition2} disabled={!draft.condition.trim()}
+              onChange={(event) => setDraft({ ...draft, condition2: event.target.value })} />
+          </label>
+          <label className="text-[12px] text-muted-text">{W.conditionJoin}
+            <select aria-label={W.conditionJoin} className={`${field} mt-1 w-full`} value={draft.conditionJoin} disabled={!draft.condition2.trim()}
+              onChange={(event) => setDraft({ ...draft, conditionJoin: event.target.value as "and" | "or" })}>
+              <option value="and">{W.joinAnd}</option>
+              <option value="or">{W.joinOr}</option>
             </select>
           </label>
         </div>

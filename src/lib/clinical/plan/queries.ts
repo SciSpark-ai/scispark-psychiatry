@@ -1,6 +1,7 @@
 import type { WatchEntry } from "../types"
 import type { Journal, SpecialtyPack, TaxonomyNode } from "../pack/schema"
 import { findNode, nodeTerms, withDescendants } from "../pack/taxonomy"
+import { topicLabel } from "../topic-label"
 
 export interface PlannedQuery {
   /** Full PubMed query text, window included. */
@@ -110,14 +111,21 @@ export function journalQueries(pack: SpecialtyPack, tier: "A" | "B", window: Dat
 export function entryQuery(pack: SpecialtyPack, entry: WatchEntry, window: DateWindow): PlannedQuery | null {
   if (entry.priority === "paused") return null
   const clauses: string[] = []
-  if (entry.condition) clauses.push(facetClause(resolveFacet(pack, entry.condition, "condition")))
+  if (entry.condition) {
+    const first = facetClause(resolveFacet(pack, entry.condition, "condition"))
+    const second = entry.condition2 ? facetClause(resolveFacet(pack, entry.condition2, "condition")) : null
+    // Two conditions: both required (two ANDed clauses) or either (one ORed clause).
+    if (!second) clauses.push(first)
+    else if (entry.conditionJoin === "or") clauses.push(`(${first} OR ${second})`)
+    else clauses.push(first, second)
+  }
   if (entry.treatment) clauses.push(facetClause(resolveFacet(pack, entry.treatment, "treatment")))
   if (clauses.length === 0) return null
   return {
     query: [...clauses, windowClause(window), DESIGN_HINT].join(" AND "),
     entryId: entry.id,
     tier: "entry",
-    rationale: [entry.condition, entry.treatment].filter(Boolean).join(" × "),
+    rationale: topicLabel(entry),
   }
 }
 

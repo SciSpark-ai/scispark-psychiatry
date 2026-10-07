@@ -67,4 +67,37 @@ describe("WatchListEditor", () => {
     await act(async () => { type(strictness, "strict") })
     expect(await loadClinicalSettings(vault.current as MemoryVaultStorage)).toMatchObject({ strictness: "strict" })
   })
+
+  // Owner decision 2026-10-07: a topic may name two conditions, joined by AND or OR.
+  it("adds a topic with two conditions that must both be present, by default", async () => {
+    await mount()
+    const condition = container.querySelector<HTMLInputElement>("input[list]")!
+    await act(async () => { type(condition, "ADHD") })
+    const second = container.querySelector<HTMLInputElement>('input[aria-label="Second condition (optional)"]')!
+    await act(async () => { type(second, "Autism") })
+    await act(async () => { button("Add entry").click() })
+    const saved = await loadWatchEntries(vault.current as MemoryVaultStorage)
+    expect(saved[0]).toMatchObject({ condition: "ADHD", condition2: "Autism", conditionJoin: "and" })
+    expect(container.textContent).toContain("ADHD + Autism")
+  })
+
+  it("adds a topic where either of two conditions is enough", async () => {
+    await mount()
+    await act(async () => { type(container.querySelector<HTMLInputElement>("input[list]")!, "ADHD") })
+    await act(async () => { type(container.querySelector<HTMLInputElement>('input[aria-label="Second condition (optional)"]')!, "Autism") })
+    await act(async () => { type(container.querySelector<HTMLSelectElement>('select[aria-label="How the two conditions combine"]')!, "or") })
+    await act(async () => { button("Add entry").click() })
+    expect((await loadWatchEntries(vault.current as MemoryVaultStorage))[0]).toMatchObject({ condition2: "Autism", conditionJoin: "or" })
+    expect(container.textContent).toContain("ADHD or Autism")
+  })
+
+  it("does not keep a second condition without a first", async () => {
+    await mount()
+    const treatment = ([...container.querySelectorAll("input[list]")] as HTMLInputElement[])[1]
+    await act(async () => { type(treatment, "Methylphenidate") })
+    await act(async () => { button("Add entry").click() })
+    const saved = await loadWatchEntries(vault.current as MemoryVaultStorage)
+    expect(saved[0].condition2).toBeUndefined()
+    expect(saved[0].conditionJoin).toBeUndefined()
+  })
 })

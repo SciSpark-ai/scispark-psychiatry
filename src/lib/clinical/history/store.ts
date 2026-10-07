@@ -1,5 +1,6 @@
 import type { VaultStorage } from "../../vault/storage"
 import { FEED_PATH, parseStoredFeed, type StoredFeed } from "../feed/stored"
+import { topicLabel } from "../topic-label"
 
 /**
  * Every search is kept: one file per run, holding the list exactly as it was (papers, summaries,
@@ -39,7 +40,7 @@ export async function listHistory(storage: VaultStorage): Promise<HistoryEntry[]
     entries.push({
       id, generatedAt: feed.generatedAt, lookBack: feed.lookBack ?? (feed.mode === "catch-up" ? "6m" : "30d"),
       listed: feed.items.length, found: feed.stats.retrieved,
-      topics: (feed.topics ?? []).map((topic) => [topic.condition, topic.treatment].filter(Boolean).join(" × ")),
+      topics: (feed.topics ?? []).map(topicLabel),
     })
   }
   return entries.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))

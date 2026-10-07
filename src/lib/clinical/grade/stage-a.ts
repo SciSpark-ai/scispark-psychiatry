@@ -54,6 +54,7 @@ Rules:
 - "entryId" is the id of the best-matching entry, or null when nothing matches (then grade must be 0).
 - "quote" must be copied VERBATIM from the paper's title or abstract (at least 8 characters) and must be the passage that justifies your grades. If you cannot quote support for a grade above 0, give 0.
 - Judge only from the text given. Do not use outside knowledge about whether the paper is good.
+- An entry may have a second condition ("condition2") with "conditionJoin": with "and" the paper must be about BOTH conditions for conditionMatch to be true; with "or" either one is enough.
 - "conditionMatch": true if the paper is about the entry's condition (the condition itself or a subtype of it), false if not, null if the entry has no condition. "treatmentMatch": true if the paper studies the entry's treatment (the same treatment under any name, formulation or closely related form, such as ketamine for esketamine), false if it studies only other treatments, null if the entry has no treatment. Answer each on its own: a paper about the condition that studies a different treatment is conditionMatch true, treatmentMatch false. Pick the entry for which the most parts are true.
 - "design" is the kind of study THIS paper reports, one of: ${MODEL_DESIGNS.join(", ")}. "randomized-trial" only if this paper reports a trial that allocated participants at random; "clinical-trial" for other interventional studies (single-arm, open-label, pilot); "cohort" for observational studies of patients; "review" for a narrative review; "protocol" for a study plan with no results; "preclinical" for animal or laboratory work; "other" when none fits. Use null if the text does not say.
 - Return one assessment per candidate, using the candidate's index.
@@ -70,7 +71,7 @@ export const stageASkill = defineSkill<StageAInput, z.infer<typeof AssessmentsSc
         messages: [
           { role: "system", content: SYSTEM_PROMPT() },
           { role: "user", content: JSON.stringify({
-            watchEntries: input.entries.map(({ id, condition, treatment, population, outcome }) => ({ id, condition, treatment, population, outcome })),
+            watchEntries: input.entries.map(({ id, condition, condition2, conditionJoin, treatment, population, outcome }) => ({ id, condition, condition2, conditionJoin: condition2 ? (conditionJoin ?? "and") : undefined, treatment, population, outcome })),
             examplePapers: input.exemplars,
             candidates: input.candidates,
           }) },

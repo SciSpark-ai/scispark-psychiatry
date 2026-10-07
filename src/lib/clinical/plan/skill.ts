@@ -36,7 +36,7 @@ export const planSkill = defineSkill<{ entries: WatchEntry[] }, z.infer<typeof E
         maxTokens: 4096,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: JSON.stringify({ watchEntries: input.entries.map(({ id, condition, treatment, population, outcome }) => ({ id, condition, treatment, population, outcome })) }) },
+          { role: "user", content: JSON.stringify({ watchEntries: input.entries.map(({ id, condition, condition2, conditionJoin, treatment, population, outcome }) => ({ id, condition, condition2, conditionJoin: condition2 ? (conditionJoin ?? "and") : undefined, treatment, population, outcome })) }) },
         ],
       },
       ExtraQueriesSchema,

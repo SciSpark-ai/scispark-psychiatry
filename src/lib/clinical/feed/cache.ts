@@ -36,7 +36,8 @@ const GRADE_SCHEME = 2
 export function entriesKey(entries: WatchEntry[]): string {
   return `scheme ${GRADE_SCHEME} ` + JSON.stringify(entries
     .filter((entry) => entry.priority !== "paused")
-    .map(({ id, condition, treatment, population, outcome }) => [id, condition ?? "", treatment ?? "", population ?? "", outcome ?? ""])
+    .map(({ id, condition, condition2, conditionJoin, treatment, population, outcome }) =>
+      [id, condition ?? "", treatment ?? "", population ?? "", outcome ?? "", ...(condition2 ? [condition2, conditionJoin ?? "and"] : [])])
     .sort((a, b) => a[0].localeCompare(b[0])))
 }
 
