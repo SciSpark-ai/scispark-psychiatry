@@ -43,7 +43,7 @@ export function EvidenceTable({ body }: { body: string }) {
                 <td className="border-b border-border-warm px-3 py-2.5">{row.trials}</td>
                 <td className="border-b border-border-warm px-3 py-2.5">{row.comparators.join(", ") || T.none}</td>
                 <td className="border-b border-border-warm px-3 py-2.5">{row.outcomes.join(", ") || T.none}</td>
-                <td className="border-b border-border-warm px-3 py-2.5">{T.direction(row.favours, row.against, row.unclear, row.notComputable, row.trials)}</td>
+                <td className="border-b border-border-warm px-3 py-2.5">{T.direction(row)}</td>
                 <td className="border-b border-border-warm px-3 py-2.5">{row.latestYear ?? T.none}</td>
               </tr>
             ))}

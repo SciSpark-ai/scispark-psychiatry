@@ -4,7 +4,7 @@ import { withVaultExclusive } from "../../vault/exclusive"
 import type { VaultStorage } from "../../vault/storage"
 import { slugifyTitle } from "../../wiki/authoring"
 import { CLINICAL_COPY } from "../copy"
-import { TrialRecordSchema, fieldPaths, getField, isNumberPath, withField, type NumberField, type TextField, type TrialRecord } from "./schema"
+import { TrialRecordSchema, fieldPaths, getField, isNumberPath, withField, type RecordField, type TrialRecord } from "./schema"
 
 /**
  * Trial records on disk: one JSON file per paper under `records/`, every write a changeset, so that
@@ -70,7 +70,7 @@ export async function saveRecord(storage: VaultStorage, record: TrialRecord, opt
  * is no longer that, the change is refused, so that one of two edits made at once is not lost unseen.
  */
 export async function editField(
-  storage: VaultStorage, slug: string, path: string, change: FieldChange, expected: TextField | NumberField, opts: { now?: () => Date } = {},
+  storage: VaultStorage, slug: string, path: string, change: FieldChange, expected: RecordField, opts: { now?: () => Date } = {},
 ): Promise<TrialRecord> {
   return withVaultExclusive(storage, "clinical-records", async () => {
     const record = await loadRecord(storage, slug)
@@ -79,10 +79,10 @@ export async function editField(
     // An unknown path: withField throws its own `no such field` invariant error.
     if (!current) return withField(record, path, expected)
     if (current.value !== expected.value || current.state !== expected.state) throw new RecordConflictError(CLINICAL_COPY.records.conflict)
-    let next: TextField | NumberField
+    let next: RecordField
     if (change.action === "confirm") {
       if (current.value === null) throw new Error(CLINICAL_COPY.records.nothingToConfirm)
-      next = { ...current, state: "human-confirmed" } as TextField | NumberField
+      next = { ...current, state: "human-confirmed" } as RecordField
     } else if (isNumberPath(path)) {
       if (change.value !== null && (typeof change.value !== "number" || !Number.isFinite(change.value))) throw new Error(CLINICAL_COPY.records.notANumber)
       next = { value: change.value, quote: null, state: "human-edited" }

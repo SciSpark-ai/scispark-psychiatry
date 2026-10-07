@@ -113,7 +113,7 @@ export function checkExtraction(output: Extraction, sourceText: string, taxonomy
     const treatment = textField(arm.treatment)
     if (!treatment.value) return []
     seen.add(arm.id)
-    return [{ id: arm.id, role: arm.role, treatment, treatmentCode: code(arm.treatmentCode, "treatment"), n: numberField(arm.n) }]
+    return [{ id: arm.id, role: arm.role, roleState: "unverified" as const, treatment, treatmentCode: code(arm.treatmentCode, "treatment"), n: numberField(arm.n) }]
   })
   const outcomeIds = new Set<string>()
   const outcomes: Outcome[] = output.outcomes.flatMap((outcome) => {
@@ -127,7 +127,7 @@ export function checkExtraction(output: Extraction, sourceText: string, taxonomy
       armsDone.add(result.armId)
       return [{ armId: result.armId, n: numberField(result.n), mean: numberField(result.mean), sd: numberField(result.sd), events: numberField(result.events) }]
     })
-    return [{ id: outcome.id, name, instrument: textField(outcome.instrument), timepoint: textField(outcome.timepoint), kind: outcome.kind, lowerIsBetter: outcome.lowerIsBetter, primary: outcome.primary, results }]
+    return [{ id: outcome.id, name, instrument: textField(outcome.instrument), timepoint: textField(outcome.timepoint), kind: outcome.kind, lowerIsBetter: outcome.lowerIsBetter, lowerIsBetterState: "unverified" as const, primary: outcome.primary, primaryState: "unverified" as const, results }]
   })
   return { condition: textField(output.condition), conditionCode: code(output.conditionCode, "condition"), arms, outcomes, dropped }
 }

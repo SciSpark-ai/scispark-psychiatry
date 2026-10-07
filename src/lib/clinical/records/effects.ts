@@ -1,18 +1,30 @@
 // src/lib/clinical/records/effects.ts
-import type { Arm, Outcome } from "./schema"
+import { isChecked, type Arm, type Outcome } from "./schema"
 
 /**
- * Effect sizes from arm-level numbers (spec 7.7). Positive favours the treatment: Hedges g above 0,
- * a risk ratio above 1. Null whenever the numbers do not allow one; a caller shows "not computable".
+ * Effect sizes from arm-level numbers (spec 7.7). Null whenever the numbers do not allow one; a
+ * caller shows "not computable".
+ *
+ * Hedges g is turned so that above 0 favours the treatment. A risk ratio is not turned: it is the
+ * treatment's risk over the comparator's, as a paper prints it (relapse in 10 of 100 against 20 of
+ * 100 is 0.50), and only the direction reads it on the side that fits the kind of event.
+ *
+ * The direction rests on three things a model wrote: which result is the better one and the role of
+ * the two arms. Until a person has confirmed or set them, no effect and no direction is given.
  */
 
 export interface Effect { measure: "g" | "rr"; estimate: number; low: number; high: number }
-export type Direction = "favours-treatment" | "favours-control" | "no-clear-difference" | "not-computable"
+export type Direction = "favours-treatment" | "favours-control" | "no-clear-difference" | "not-computable" | "unconfirmed"
+export interface OutcomeEffect {
+  effect: Effect | null; direction: Direction
+  /** The ids of the two arms that were compared, or null when the outcome has no such pair. */
+  compared: { treatment: string; control: string } | null
+}
 
 const Z = 1.959964
 const ok = (...values: Array<number | null | undefined>): boolean => values.every((value) => typeof value === "number" && Number.isFinite(value))
 
-/** Standardised mean difference with the small-sample correction, and its 95% interval. */
+/** Standardised mean difference with the small-sample correction, and its 95% interval. Above 0 favours the treatment. */
 export function hedgesG(
   treatment: { n: number | null; mean: number | null; sd: number | null }, control: { n: number | null; mean: number | null; sd: number | null }, lowerIsBetter: boolean,
 ): Effect | null {
@@ -28,12 +40,12 @@ export function hedgesG(
   return ok(g, se) ? { measure: "g", estimate: g, low: g - Z * se, high: g + Z * se } : null
 }
 
-/** Risk ratio and its 95% interval, turned round when the event is a bad one. */
-export function riskRatio(treatment: { n: number | null; events: number | null }, control: { n: number | null; events: number | null }, lowerIsBetter: boolean): Effect | null {
+/** Risk ratio and its 95% interval: the treatment's risk over the comparator's, whatever the event. */
+export function riskRatio(treatment: { n: number | null; events: number | null }, control: { n: number | null; events: number | null }): Effect | null {
   const { n: n1, events: e1 } = treatment
   const { n: n2, events: e2 } = control
   if (!ok(n1, e1, n2, e2) || n1! <= 0 || n2! <= 0 || e1! <= 0 || e2! <= 0 || e1! > n1! || e2! > n2!) return null
-  const log = Math.log(e1! / n1! / (e2! / n2!)) * (lowerIsBetter ? -1 : 1)
+  const log = Math.log(e1! / n1! / (e2! / n2!))
   const se = Math.sqrt(1 / e1! - 1 / n1! + 1 / e2! - 1 / n2!)
   return ok(log, se) ? { measure: "rr", estimate: Math.exp(log), low: Math.exp(log - Z * se), high: Math.exp(log + Z * se) } : null
 }
@@ -43,15 +55,25 @@ export function riskRatio(treatment: { n: number | null; events: number | null }
  * arm that has results. The direction is read from the interval: it favours a side only when the interval
  * excludes no difference.
  */
-export function outcomeEffect(outcome: Outcome, arms: Arm[], treatmentArmId?: string): { effect: Effect | null; direction: Direction } {
-  const resultOf = (role: Arm["role"]) => outcome.results.find((result) => arms.some((arm) => arm.id === result.armId && arm.role === role))
+export function outcomeEffect(outcome: Outcome, arms: Arm[], treatmentArmId?: string): OutcomeEffect {
+  const armOf = (armId: string) => arms.find((arm) => arm.id === armId)
+  const resultOf = (role: Arm["role"]) => outcome.results.find((result) => armOf(result.armId)?.role === role)
   const t = treatmentArmId ? outcome.results.find((result) => result.armId === treatmentArmId) : resultOf("treatment")
   const c = resultOf("control")
-  if (!t || !c || outcome.lowerIsBetter === null) return { effect: null, direction: "not-computable" }
+  if (!t || !c) return { effect: null, direction: "not-computable", compared: null }
+  const compared = { treatment: t.armId, control: c.armId }
+  if (!isChecked(outcome.lowerIsBetterState) || !isChecked(armOf(t.armId)?.roleState) || !isChecked(armOf(c.armId)?.roleState)) return { effect: null, direction: "unconfirmed", compared }
+  const lowerIsBetter = outcome.lowerIsBetter
+  if (lowerIsBetter === null) return { effect: null, direction: "not-computable", compared }
   const effect = outcome.kind === "continuous"
-    ? hedgesG({ n: t.n.value, mean: t.mean.value, sd: t.sd.value }, { n: c.n.value, mean: c.mean.value, sd: c.sd.value }, outcome.lowerIsBetter)
-    : riskRatio({ n: t.n.value, events: t.events.value }, { n: c.n.value, events: c.events.value }, outcome.lowerIsBetter)
-  if (!effect) return { effect: null, direction: "not-computable" }
+    ? hedgesG({ n: t.n.value, mean: t.mean.value, sd: t.sd.value }, { n: c.n.value, mean: c.mean.value, sd: c.sd.value }, lowerIsBetter)
+    : riskRatio({ n: t.n.value, events: t.events.value }, { n: c.n.value, events: c.events.value })
+  if (!effect) return { effect: null, direction: "not-computable", compared }
+  // Hedges g is already turned. A risk ratio is not: for a bad event the treatment did better below 1.
   const none = effect.measure === "g" ? 0 : 1
-  return { effect, direction: effect.low > none ? "favours-treatment" : effect.high < none ? "favours-control" : "no-clear-difference" }
+  const above = effect.low > none
+  const below = effect.high < none
+  const turned = effect.measure === "rr" && lowerIsBetter
+  const direction: Direction = (turned ? below : above) ? "favours-treatment" : (turned ? above : below) ? "favours-control" : "no-clear-difference"
+  return { effect, direction, compared }
 }

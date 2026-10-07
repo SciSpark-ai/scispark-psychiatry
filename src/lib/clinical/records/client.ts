@@ -3,7 +3,7 @@ import type { PaperRecord } from "../../papers/types"
 import { paperSlug } from "../../wiki/authoring"
 import { CLINICAL_COPY } from "../copy"
 import type { Design } from "../types"
-import type { NumberField, TextField, TrialRecord } from "./schema"
+import type { RecordField, TrialRecord } from "./schema"
 import type { FieldChange } from "./store"
 import type { TreatmentRow } from "./table"
 
@@ -25,7 +25,7 @@ export async function extractRecordRemote(paper: PaperRecord, design: Design, fe
   return (await unwrap<{ record: TrialRecord }>(await fetchFn(URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ paper, design }) }))).record
 }
 
-export async function editFieldRemote(slug: string, path: string, change: FieldChange, expected: TextField | NumberField, fetchFn: typeof fetch = fetch): Promise<TrialRecord> {
+export async function editFieldRemote(slug: string, path: string, change: FieldChange, expected: RecordField, fetchFn: typeof fetch = fetch): Promise<TrialRecord> {
   return (await unwrap<{ record: TrialRecord }>(await fetchFn(URL, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug, path, change, expected }) }))).record
 }
 

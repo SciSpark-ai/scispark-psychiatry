@@ -250,14 +250,15 @@ export const CLINICAL_COPY = {
       columns: ["Treatment", "Type", "Trials", "Compared with", "Primary outcomes", "Direction of effect", "Latest trial"],
       modalities: { drug: "Drug", psychotherapy: "Psychotherapy", neuromodulation: "Neuromodulation", other: "Other" },
       unknownModality: "Not in the pack",
-      direction: (favours: number, against: number, unclear: number, notComputable: number, trials: number) => {
-        const parts = [
-          favours > 0 ? `Favours the treatment in ${favours} of ${trials} ${trials === 1 ? "trial" : "trials"}` : "",
-          against > 0 ? `${favours > 0 ? "favours" : "Favours"} the comparator in ${against}` : "",
-          unclear > 0 ? `${favours + against > 0 ? "no" : "No"} clear difference in ${unclear}` : "",
-          notComputable > 0 ? `${favours + against + unclear > 0 ? "not" : "Not"} computable in ${notComputable}` : "",
-        ].filter(Boolean)
-        return parts.join("; ")
+      direction: (row: { favours: number; against: number; unclear: number; notComputable: number; unconfirmed: number; trials: number }) => {
+        const text = [
+          row.favours > 0 ? `favours the treatment in ${row.favours} of ${row.trials} ${row.trials === 1 ? "trial" : "trials"}` : "",
+          row.against > 0 ? `favours the comparator in ${row.against}` : "",
+          row.unclear > 0 ? `no clear difference in ${row.unclear}` : "",
+          row.notComputable > 0 ? `not computable in ${row.notComputable}` : "",
+          row.unconfirmed > 0 ? `direction not yet confirmed in ${row.unconfirmed}` : "",
+        ].filter(Boolean).join("; ")
+        return text.charAt(0).toUpperCase() + text.slice(1)
       },
       toCheck: (count: number) => `${count} ${count === 1 ? "trial has" : "trials have"} values still to check`,
       empty: (condition: string) => `No trial data has been extracted for ${condition} yet. Open a trial from your feed and choose “Extract trial data”.`,
@@ -281,7 +282,9 @@ export const CLINICAL_COPY = {
     unknown: "Not reported",
     confirm: "Confirm", edit: "Edit", save: "Save", cancel: "Cancel", sourceSentence: "Source sentence",
     measures: { g: "Hedges g", rr: "Risk ratio" },
-    directions: { "favours-treatment": "favours the treatment", "favours-control": "favours the comparator", "no-clear-difference": "no clear difference", "not-computable": "Effect not computable from the values reported" },
+    directions: { "favours-treatment": "favours the treatment", "favours-control": "favours the comparator", "no-clear-difference": "no clear difference", "not-computable": "Effect not computable from the values reported",
+      unconfirmed: "No direction is shown yet: first confirm which result is the better one for this outcome, and the role of both groups.",
+    },
     effect: (measure: string, estimate: string, low: string, high: string, direction: string) => `${measure} ${estimate} (95% CI ${low} to ${high}) · ${direction}`,
     effectNote: "Computed by this app from the numbers above, not taken from the paper and not written by AI. One trial is not a meta-analysis.",
   },

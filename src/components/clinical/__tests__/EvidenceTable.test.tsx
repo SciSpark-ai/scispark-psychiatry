@@ -11,7 +11,7 @@ vi.mock("@/lib/clinical/records/client", () => client)
 import { EvidenceTable } from "../EvidenceTable"
 import { clinicalFence } from "../clinical-fence"
 
-const ROW = { key: "esketamine", treatment: "Esketamine", modality: "drug", trials: 3, comparators: ["Quetiapine", "placebo"], outcomes: ["remission (MADRS)"], favours: 2, against: 0, unclear: 1, notComputable: 0, latestYear: 2026, toCheck: 1, papers: [{ slug: "a-trial", title: "A trial" }] }
+const ROW = { key: "esketamine", treatment: "Esketamine", modality: "drug", trials: 3, comparators: ["Quetiapine", "placebo"], outcomes: ["remission (MADRS)"], favours: 2, against: 0, unclear: 1, notComputable: 0, unconfirmed: 0, latestYear: 2026, toCheck: 1, papers: [{ slug: "a-trial", title: "A trial" }] }
 let container: HTMLDivElement
 async function render(node: React.ReactNode) {
   container = document.createElement("div")
@@ -32,6 +32,11 @@ describe("the treatment-options table in a page", () => {
     expect(container.textContent).toContain("1 trial has values still to check")
     expect(container.querySelector('a[href="/paper/a-trial#paper-trial-record"]')).not.toBeNull()
     expect(container.textContent).toContain("Counted from the trial data you have extracted. Not a meta-analysis")
+  })
+  it("says in the direction cell how many trials have a direction nobody has confirmed yet", async () => {
+    client.loadTreatmentTableRemote.mockResolvedValue({ condition: { code: "depression", name: "Major depressive disorder" }, rows: [{ ...ROW, favours: 1, unclear: 0, unconfirmed: 2 }] })
+    await render(<EvidenceTable body="condition: depression" />)
+    expect(container.querySelector("tbody tr:first-child td:nth-child(6)")!.textContent).toBe("Favours the treatment in 1 of 3 trials; direction not yet confirmed in 2")
   })
   it("says so when there are no records yet, when the block is not a query, and when the table cannot be had", async () => {
     client.loadTreatmentTableRemote.mockResolvedValue({ condition: { code: "depression", name: "Major depressive disorder" }, rows: [] })
