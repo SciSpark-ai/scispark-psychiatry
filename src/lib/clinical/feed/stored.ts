@@ -25,6 +25,8 @@ const StoredItemSchema = z.object({
   ungraded: z.boolean(),
   score: z.number(),
   flags: z.array(z.string()),
+  /** AI-written headline and takeaway, present only when every code check passed (digest/card.ts). */
+  digest: z.object({ headline: z.string(), takeaway: z.string(), quote: z.string() }).optional(),
 })
 export type StoredFeedItem = z.infer<typeof StoredItemSchema>
 

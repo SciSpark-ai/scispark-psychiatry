@@ -59,4 +59,16 @@ describe("ClinicalFeedCard", () => {
     expect(await readReaderHandoffBySlug(storage, paperSlug(ITEM.paper))).toMatchObject({ title: ITEM.paper.title })
     expect(push).toHaveBeenCalledWith(`/paper/${paperSlug(ITEM.paper)}`)
   })
+
+  it("leads with the AI headline and takeaway when the paper has them, marked as AI-written, and keeps the real title", async () => {
+    await mount({ ...ITEM, digest: { headline: "Drug A beat placebo for depression", takeaway: "Drug A improved response at week 8.", quote: "Drug A improved response at week 8." } })
+    const heading = container.querySelector("h3")!
+    expect(heading.textContent).toBe("Drug A beat placebo for depression")
+    expect(container.textContent).toContain("AI summary")
+    expect(container.textContent).toContain("Drug A improved response at week 8.")
+    expect(container.textContent).toContain("Drug A versus placebo in adults with depression: a randomised trial")
+    expect(container.textContent).not.toContain("Authors' conclusion")
+    const note = [...container.querySelectorAll("[title]")].find((el) => el.textContent?.includes("AI summary"))!
+    expect(note.getAttribute("title")).toContain("Drug A improved response at week 8.")
+  })
 })

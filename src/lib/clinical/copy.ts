@@ -32,6 +32,9 @@ export const CLINICAL_COPY = {
     },
     matchedOn: (quote: string) => `Matched on this sentence: “${quote}”`,
     conclusionLabel: "Authors' conclusion",
+    aiSummaryLabel: "AI summary",
+    aiSummaryNote: (quote: string) =>
+      `Written by the AI model from the abstract, not by the authors. It rests on this sentence: “${quote}” Read the paper before relying on it.`,
     noAbstract: "No abstract",
     notGraded: "Not graded",
     published: (date: string) => `Published ${date}`,
@@ -48,6 +51,7 @@ export const CLINICAL_COPY = {
     truncated: (total: number, returned: number, rationale: string) => `A query matched ${total} records and only ${returned} were read (${rationale}).`,
     gradingFailed: "AI grading did not complete. Check your AI connection in Settings, then try again.",
     gradingBatchesFailed: (count: number) => `${count} grading batch(es) failed; those papers are shown ungraded.`,
+    summariesFailed: "Some AI summaries could not be written; those cards show the authors' conclusions instead.",
     nothingMatched: "No papers matched your watch entries well enough. Your previous feed is still shown.",
   },
   stages: {

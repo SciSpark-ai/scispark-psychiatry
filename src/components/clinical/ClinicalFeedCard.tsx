@@ -60,9 +60,15 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
         {item.ungraded && <Chip>{CLINICAL_COPY.feed.notGraded}</Chip>}
       </div>
       <button type="button" onClick={() => void open()} className="text-left" title={displayTitle(paper.title)}>
-        <h3 className="line-clamp-3 font-heading text-[17px] leading-snug tracking-heading-card text-espresso">{displayTitle(paper.title)}</h3>
+        <h3 className="line-clamp-3 font-heading text-[17px] leading-snug tracking-heading-card text-espresso">{item.digest ? item.digest.headline : displayTitle(paper.title)}</h3>
+        {item.digest && <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-muted-text">{displayTitle(paper.title)}</p>}
       </button>
-      {conclusion && (
+      {item.digest ? (
+        <div>
+          <p className="text-[11px] uppercase tracking-wide text-muted-text"><span title={F.aiSummaryNote(item.digest.quote)} className="cursor-help underline decoration-dotted">{F.aiSummaryLabel}</span></p>
+          <p className="text-[13px] leading-relaxed text-espresso">{item.digest.takeaway}</p>
+        </div>
+      ) : conclusion && (
         <div>
           <p className="text-[11px] uppercase tracking-wide text-muted-text">{F.conclusionLabel}</p>
           <p className="line-clamp-4 text-[13px] leading-relaxed text-espresso">{conclusion}</p>

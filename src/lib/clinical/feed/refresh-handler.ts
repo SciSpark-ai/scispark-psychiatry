@@ -12,6 +12,7 @@ export interface RefreshDeps {
   settings?: LLMSettings
   providerOverride?: Partial<Record<Tier, LLMProvider>>
   now?: () => Date
+  summarise?: boolean
 }
 
 /** The body of POST /api/clinical/feed/refresh: runs the funnel and streams each stage as a progress event. */
@@ -23,6 +24,7 @@ export async function handleRefresh(vault: VaultStorage, emit: (event: object) =
     settings,
     providerOverride: deps.providerOverride,
     now: deps.now,
+    summarise: deps.summarise,
     onStage: (stage) => emit({ type: "progress", stage }),
   })
 }

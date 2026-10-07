@@ -10,12 +10,13 @@ import { MODES, windowFor } from "../modes"
 import type { SpecialtyPack } from "../pack/schema"
 import { planQueries } from "../plan/skill"
 import { retrieve, type EnumerateFn } from "../retrieve/pool"
-import { scoreCandidate } from "../score/score"
+import { scoreCandidate, type ScoredItem } from "../score/score"
+import { digestCards } from "../digest/card"
 import { selectFeed, SHORTLIST_GRADE } from "../select/select"
 import type { Candidate, ClinicalStage, DropRecord, GatedCandidate, StageAGrade, WatchEntry } from "../types"
 import { assembleContext } from "./context"
 import { saveRunLog, type PoolRef, type RunLog } from "./run-log"
-import { loadClinicalFeed, saveClinicalFeed, toSafetyRef, toStoredItem, type StoredFeed } from "./stored"
+import { loadClinicalFeed, saveClinicalFeed, toSafetyRef, toStoredItem, type StoredFeed, type StoredFeedItem } from "./stored"
 import { CLINICAL_COPY } from "../copy"
 
 export interface ClinicalFeedDeps {
@@ -25,6 +26,8 @@ export interface ClinicalFeedDeps {
   providerOverride?: Partial<Record<Tier, LLMProvider>>
   now?: () => Date
   onStage?: (stage: ClinicalStage) => void
+  /** Write an AI headline and takeaway for each listed paper (one more `fast` call per 12 papers). Off unless asked. */
+  summarise?: boolean
 }
 
 const ref = (candidate: Candidate): PoolRef => ({ key: candidate.key, pmid: candidate.paper.ids.pmid, doi: candidate.paper.ids.doi })
@@ -130,10 +133,22 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     scoreCandidate({ candidate, grade: graded.grades.get(candidate.key) as StageAGrade, mode, now: now(), journals: deps.pack.journals }))
   const selected = selectFeed(scored, context.entries)
 
+  const summaries = deps.summarise
+    ? await digestCards(selected.items.map((item) => ({ key: item.candidate.key, paper: item.candidate.paper, design: item.candidate.design })), runOpts)
+    : null
+  if (summaries) {
+    costUsd = addCosts(costUsd, summaries.costUsd)
+    if (summaries.failed) warnings.push(CLINICAL_COPY.run.summariesFailed)
+  }
+  const withDigest = (item: ScoredItem): StoredFeedItem => {
+    const digest = summaries?.digests.get(item.candidate.key)
+    return digest ? { ...toStoredItem(item), digest } : toStoredItem(item)
+  }
+
   const generatedAt = now().toISOString()
   const feed: StoredFeed = {
     version: 1, generatedAt, mode, strictness: context.settings.strictness,
-    items: selected.items.map(toStoredItem),
+    items: selected.items.map(withDigest),
     lowerConfidence: selected.lowerConfidence.map(toStoredItem),
     safetySignals: gate.safety.map(toSafetyRef),
     stats: { retrieved: retrieved.candidates.length, domain: domain.kept.length, gated: gate.gated.length, graded: capped.kept.length, listed: selected.items.length },
