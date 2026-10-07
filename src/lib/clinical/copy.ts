@@ -236,6 +236,9 @@ export const CLINICAL_COPY = {
     nothingToConfirm: "There is nothing to confirm: no value was read for this field.",
     conflict: "This value was changed elsewhere since you opened the page. Reload to see it.",
     notFound: "No trial data has been extracted for this paper.",
+    badSlug: "That is not a paper this app knows.",
+    badRequest: "The request was not understood.",
+    requestFailed: (status: number) => `The trial data could not be reached (${status}).`,
   },
 } as const
 
