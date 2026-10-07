@@ -45,3 +45,4 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/components/wiki/PageEditor.tsx, src/app/wiki/[...id]/page.tsx | `fence` and `initialTab` props; a condition page opens on its preview with the evidence table drawn | spec 7.6 | Slice 3 |
 | src/app/wiki/page.tsx (+ its test's mocks) | the "New condition page" control beside "New note" | decision D19, spec 7.9 | Slice 3 |
 | src/lib/papers/resolve.ts (+ test) | `resolvePaperBySlug` has a last fallback: the paper kept in a stored trial record (`records/<slug>.json`), so the links from the treatment-options table and the review inbox to `/paper/<slug>` still open once the paper has left the feed cache | spec 7.6, 7.12; final review I6 | Slice 3 |
+| src/lib/papers/resolve.ts (+ test) | one more last fallback: a paper only the findings store still knows opens from its finding | spec D54 | Slice 3 |

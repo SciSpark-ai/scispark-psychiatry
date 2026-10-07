@@ -6,6 +6,7 @@ import { readReaderHandoff, readReaderHandoffBySlug } from "../reader/handoff"
 import { loadTrendingPaperRecords } from "../trending/cache"
 import { paperSlug } from "../wiki/authoring"
 import { readRecord } from "../clinical/records/file"
+import { readFindings } from "../clinical/evidence/file"
 import { paperKey, type PaperRecord } from "./types"
 
 /**
@@ -151,7 +152,8 @@ export async function resolvePaperByKey(storage: VaultStorage, key: string): Pro
  * Clinical edition: last of all, the paper kept in a stored trial record
  * (`records/<slug>.json`). The treatment-options table and the review inbox
  * link to `/paper/<slug>`, and a trial that has left the feed cache without
- * being ingested is in none of the sources above.
+ * being ingested is in none of the sources above. After that, the paper kept in a stored finding
+ * (`.scispark/clinical/findings.json`), for a paper only the evidence pages still know.
  */
 export async function resolvePaperBySlug(storage: VaultStorage, slug: string): Promise<PaperRecord | null> {
   const candidate = await findPaperCandidate(storage, (c) => paperSlug(c) === slug)
@@ -165,6 +167,12 @@ export async function resolvePaperBySlug(storage: VaultStorage, slug: string): P
   try {
     const paper = (await readRecord(storage, slug)).record?.paper
     if (paper && paperSlug(paper) === slug) return paper
+  } catch {
+    // Best-effort, same as the candidate scan above.
+  }
+  try {
+    const found = (await readFindings(storage)).find((finding) => finding.slug === slug)?.paper
+    if (found && paperSlug(found) === slug) return found
   } catch {
     // Best-effort, same as the candidate scan above.
   }

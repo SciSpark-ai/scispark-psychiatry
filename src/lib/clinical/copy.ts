@@ -306,6 +306,11 @@ export const CLINICAL_COPY = {
     effect: (measure: string, estimate: string, low: string, high: string, note: string, compared: string, direction: string) => `${measure} ${estimate} (95% CI ${low} to ${high}${note}) · ${compared} · ${direction}`,
     effectNote: "Computed by this app from the numbers above, not taken from the paper and not written by AI. One trial is not a meta-analysis.",
   },
+  evidence: {
+    badRequest: "The request was not understood.",
+    noSuchCondition: "That condition is not in the pack.",
+    requestFailed: (status: number) => `The evidence could not be reached (${status}).`,
+  },
 } as const
 
 export type StageKey = keyof typeof CLINICAL_COPY.stages
