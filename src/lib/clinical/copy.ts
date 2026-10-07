@@ -93,6 +93,20 @@ export const CLINICAL_COPY = {
     aiSummary: "AI summary",
     aiSummaryNote: (quote: string) => `Written by AI from the abstract, not by the authors. It rests on this sentence: “${quote}” Read the abstract before relying on it.`,
     originalAbstract: "Abstract",
+    /** The nine-item digest on the paper page. */
+    digest: {
+      heading: "Digest",
+      labels: {
+        question: "Research question", design: "Study design", population: "Population", intervention: "Intervention and comparator",
+        mainResult: "Main result", safety: "Safety", limitations: "Limitations", conclusion: "Authors' conclusion", funding: "Funding and conflicts of interest",
+      },
+      none: "No digest yet. Writing one reads the paper, the full text when it can be had, and uses your AI model.",
+      write: "Write digest", writing: "Reading the paper…", update: "Update from full text",
+      fromFullText: "Written by AI from the full text", fromExcerpt: "Written by AI from the first part of the full text",
+      fromAbstract: "Written by AI from the abstract only. The full text could not be read.",
+      notInPaper: "Not stated in the paper.", notInAbstract: "Not stated in the abstract.",
+      unverified: "Check this against the paper: a number here was not found in the text.",
+    },
   },
   readLater: {
     heading: "Read later",

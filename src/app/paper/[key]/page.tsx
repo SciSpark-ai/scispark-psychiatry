@@ -25,7 +25,7 @@ import { ClinicalPaperSummary } from "@/components/clinical/ClinicalPaperSummary
 import { useCardDigest } from "@/components/clinical/useCardDigest"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { PaperActions, type DigestState, type EnrichState, type IngestState, type SaveState } from "@/components/paper/PaperActions"
-import { PaperDigestNavigation, PaperDigestView } from "@/components/paper/PaperDigestView"
+import { ClinicalPaperDigest } from "@/components/clinical/ClinicalPaperDigest"
 import paperStyles from "@/components/paper/PaperLayout.module.css"
 import { PaperFeedContext } from "@/components/paper/PaperFeedContext"
 import { RecommendationDetails } from "@/components/feed/RecommendationDetails"
@@ -482,6 +482,7 @@ function PaperPageContent() {
                   enrichState={enrichState}
                   digestState={digestState}
                   onGenerateDigest={handleGenerateDigest}
+                  hideDigest
                   ingestState={ingestState}
                   onIngest={handleIngest}
                   onUndo={handleUndo}
@@ -500,12 +501,8 @@ function PaperPageContent() {
                     </section>
                   )}
 
-                  {digestState.status === "done" && (
-                    <>
-                      <PaperDigestNavigation digest={digestState.digest} compact />
-                      <PaperDigestView digest={digestState.digest} fromCache={digestState.fromCache} source={digestState.source} />
-                    </>
-                  )}
+                  {/* Clinical edition: nine short items in place of upstream's prose digest (PaperDigestView). */}
+                  <ClinicalPaperDigest paper={load.paper} />
 
                   {feedContext && (
                     <div className={digestState.status === "done" ? "mt-10" : undefined}>
@@ -525,12 +522,11 @@ function PaperPageContent() {
 
                 </article>
 
-                {(page || digestState.status === "done") && (
+                {page && (
                   <aside
                     aria-label="Paper context"
                     className={`${paperStyles.rail} ${!page ? paperStyles.navigationOnly : ""} flex flex-col gap-6`}
                   >
-                    {digestState.status === "done" && <PaperDigestNavigation digest={digestState.digest} />}
                     {page && (
                       <div className="flex flex-col gap-4 [&>*]:mt-0">
                         <ProjectMembershipControl pageId={page.id} />

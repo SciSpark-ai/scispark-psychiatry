@@ -70,7 +70,10 @@ describe("the order of the paper page", () => {
     const source = readFileSync("src/app/paper/[key]/page.tsx", "utf8")
     const abstract = source.indexOf('data-testid="paper-abstract"')
     expect(abstract).toBeGreaterThan(-1)
-    expect(abstract).toBeLessThan(source.indexOf("<PaperDigestView"))
+    expect(abstract).toBeLessThan(source.indexOf("<ClinicalPaperDigest"))
+    // One digest and one button for it: upstream's prose digest and its button are not on this page.
+    expect(source).not.toContain("<PaperDigestView")
+    expect(source).toContain("hideDigest")
     expect(source).not.toMatch(/<details className=\{paperStyles\.abstract\}/)
   })
 })

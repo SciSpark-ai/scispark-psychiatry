@@ -30,4 +30,7 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/app/paper/[key]/page.tsx | the paper page shows the feed's AI headline and summary, and the abstract by section with readable labels | owner request 2026-10-07 | after first runs |
 | src/app/paper/[key]/page.tsx | upstream's "At a glance" panel (`PaperMeta`) is not shown; the AI summary and its tags take its place | owner decision 2026-10-07 | after first runs |
 | src/app/paper/[key]/page.tsx | the abstract is an always-open section above the digest, no longer a fold under it | owner decision 2026-10-07 | after first runs |
+| src/app/paper/[key]/page.tsx | the clinical nine-item digest (`ClinicalPaperDigest`) is shown in place of upstream's prose digest and its section links | owner decision 2026-10-07 | after first runs |
+| src/components/paper/PaperActions.tsx | optional `hideDigest` prop hides the "Generate digest" button; the clinical digest has its own | owner decision 2026-10-07 | after first runs |
+| src/components/paper/__tests__/PaperAutoEnrich.test.tsx | the "restores a digest on page load" test now expects the clinical digest, since the prose digest is no longer on the page | owner decision 2026-10-07 | after first runs |
 | src/components/paper/__tests__/PaperAutoEnrich.test.tsx | follows the above: no "At a glance" heading after the automatic enrich | owner decision 2026-10-07 | after first runs |

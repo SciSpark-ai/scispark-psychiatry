@@ -32,6 +32,12 @@ const PAPER: PaperRecord = {
 
 const TLDR = "A wearable ear-EEG method for tracking auditory attention."
 
+const CLINICAL_DIGEST = {
+  version: 1, unverified: [],
+  items: { question: "Can ear-EEG decode attention?", design: null, population: null, intervention: null, mainResult: "Decoding accuracy was above chance.", safety: null, limitations: null, conclusion: null, funding: null },
+  source: { access: "full-text", locator: "arXiv", checkedAt: "2026-10-07T10:00:00.000Z", truncated: false, notes: [] },
+}
+
 const SAVED_DIGEST = {
   summary: "The study evaluates a wearable ear-EEG system for auditory attention decoding.",
   laySummary: "The researchers tested whether small ear sensors can tell what a listener is focusing on.",
@@ -222,6 +228,11 @@ describe("paper page automatic enrich", () => {
         expect(init?.method).toBe("GET")
         return new Response(JSON.stringify({ result: { digest: SAVED_DIGEST } }), { status: 200 })
       }
+      // Clinical edition: the page shows the clinical nine-item digest, restored the same way.
+      if (url.includes("/api/clinical/paper-digest")) {
+        expect(init?.method).toBe("GET")
+        return new Response(JSON.stringify({ result: { digest: CLINICAL_DIGEST } }), { status: 200 })
+      }
       if (url.includes("/api/projects")) {
         return new Response(JSON.stringify({ projects: [] }), { status: 200 })
       }
@@ -235,9 +246,10 @@ describe("paper page automatic enrich", () => {
     })
     await flush()
 
-    expect(host.textContent).toContain("Paper digest")
-    expect(host.textContent).toContain(SAVED_DIGEST.summary)
-    const digestCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes("/api/skills/digest"))
+    expect(host.textContent).toContain("Research question")
+    expect(host.textContent).toContain(CLINICAL_DIGEST.items.mainResult)
+    expect(host.textContent).not.toContain("Paper digest")
+    const digestCalls = fetchMock.mock.calls.filter(([input]) => String(input).includes("/api/clinical/paper-digest"))
     expect(digestCalls).toHaveLength(1)
     expect(digestCalls[0]?.[1]?.method).toBe("GET")
 

@@ -63,6 +63,8 @@ export interface PaperActionsProps {
   enrichState: EnrichState
   digestState: DigestState
   onGenerateDigest: () => void
+  /** Clinical edition: the paper page has its own digest with its own button. */
+  hideDigest?: boolean
   ingestState: IngestState
   onIngest: () => void
   onUndo: () => void
@@ -85,6 +87,7 @@ export function PaperActions({
   enrichState,
   digestState,
   onGenerateDigest,
+  hideDigest,
   ingestState,
   onIngest,
   onUndo,
@@ -106,6 +109,7 @@ export function PaperActions({
         <PaperSaveButton saved={!showSaveAction || saveState.status === "done"} busy={saveState.status === "saving"} onSave={onSave} />
         {pageState.state === "ingested" && <Chip tone="accent">In your knowledge base</Chip>}
 
+        {!hideDigest && (
         <Button
           onClick={onGenerateDigest}
           disabled={digestState.status === "loading" || (digestState.status === "done" && (digestState.refreshing || digestState.source?.access === "full-text"))}
@@ -116,6 +120,7 @@ export function PaperActions({
               ? digestState.source?.access === "full-text" ? "Digest generated" : "Update digest from full text"
               : "Generate digest"}
         </Button>
+        )}
 
         {showIngestAction && (
           <Button variant="secondary" onClick={onIngest} disabled={ingestBusy}>
