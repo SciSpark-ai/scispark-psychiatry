@@ -207,7 +207,10 @@ export function judgeOverview(
     if (cited.length === 1) answered.add(cited[0].key)
     // A PICO part is kept only when the paper's own text has its words; a part the paper does not state is left out.
     const sourceText = cited.map((paper) => `${paper.headline} ${paper.takeaway} ${paper.abstract ?? ""}`).join(" ")
-    const stated = (value: string | null | undefined) => { const phrase = value?.replace(/\s+/g, " ").trim(); return phrase && sharesWords(phrase, sourceText) ? phrase : undefined }
+    const stated = (value: string | null | undefined) => { const phrase = value?.replace(/\s+/g, " ").trim(); if (!phrase) return undefined
+      // A phrase with no word of four letters or more ("TAU", "ECT") cannot be checked by shared words: it must be printed.
+      const checkable = /[a-z][a-z-]{3,}/i.test(phrase)
+      return (checkable ? sharesWords(phrase, sourceText) : flat(sourceText).includes(flat(phrase))) ? phrase : undefined }
     const [population, comparator, outcome] = [stated(sentence.population), stated(sentence.comparator), stated(sentence.outcome)]
     kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(population ? { population } : {}), ...(comparator ? { comparator } : {}), ...(outcome ? { outcome } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
   }

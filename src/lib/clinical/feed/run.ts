@@ -234,7 +234,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     return { ...toStoredItem(item), ...(journalBand ? { journalBand } : {}), ...(digest ? { digest } : {}) }
   }
 
-  // An AI overview per topic, written from the checked summaries of the listed papers (never from abstracts).
+  // An AI overview per topic, written from the checked summaries of the listed papers (the abstract goes along, so that each paper can be sorted by what it reports).
   const listedItems = selected.items.map(withDigest)
   const entryLabel = (id: string) => { const entry = context.entries.find((candidate) => candidate.id === id); return entry ? topicLabel(entry) : id }
   const topicOverviews: Record<string, OverviewSentence[]> = {}
@@ -299,16 +299,16 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   if (emptyListIsFailure({ listed: feed.items.length, matchesAlreadySeen, previousListed: previous?.items.length ?? 0 })) {
     throw new Error(CLINICAL_COPY.run.nothingMatched)
   }
+  if (deps.recordFindings) {
+    // Two steps, each on its own: a failed backfill must not skip this search. A failure costs the Evidence pages
+    // this search, not the search itself, so it is a warning saved with the list.
+    const failed = [() => backfillFindings(storage, deps.pack.taxonomy), () => recordFindings(storage, feed, deps.pack.taxonomy)]
+    let anyFailed = false
+    for (const step of failed) { try { await step() } catch { anyFailed = true } }
+    if (anyFailed) feed.warnings.push(CLINICAL_COPY.run.findingsNotKept)
+  }
   await saveClinicalFeed(storage, feed)
   if (deps.keepHistory) await saveHistory(storage, feed)
-  if (deps.recordFindings) {
-    try {
-      await backfillFindings(storage, deps.pack.taxonomy)
-      await recordFindings(storage, feed, deps.pack.taxonomy)
-    } catch {
-      // The list is saved; a store that could not be written costs the condition pages this search, not the search itself.
-    }
-  }
   return feed
 }
 

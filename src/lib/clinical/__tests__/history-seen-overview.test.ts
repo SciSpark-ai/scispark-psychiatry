@@ -298,6 +298,10 @@ describe("the overview from per-paper answers", () => {
     }], withAbstract)
     expect(kept[0]).toMatchObject({ population: "adults with treatment-resistant depression", comparator: "midazolam" })
     expect(kept[0].outcome).toBeUndefined()
+    // A short phrase with no long word ("TAU") is kept only when the paper prints it.
+    const tau = (abstract: string) => judgeOverview([{ text: "reduced sadness", sources: [1], kind: "benefit", treatment: "ketamine", comparator: "TAU" }], [{ ...papers[0], abstract }]).kept[0].comparator
+    expect(tau("Ketamine was compared with TAU in adults.")).toBe("TAU")
+    expect(tau("Ketamine was compared with placebo in adults.")).toBeUndefined()
   })
   it("writes an overview for a topic with a single summarised paper", () => {
     expect(overviewTopics([{ key: "a", entryId: "w1", digest: { headline: "H1", takeaway: "T1", quote: "" } }])).toHaveLength(1)

@@ -10,6 +10,8 @@ import { MockProvider } from "../../llm/mock-provider"
 import { loadPsychiatryPack } from "../pack/load"
 import { runClinicalFeed } from "../feed/run"
 import { saveWatchEntries } from "../watch/store"
+import { CLINICAL_COPY } from "../copy"
+import { loadClinicalFeed } from "../feed/stored"
 import { llmResult, paper, SETTINGS, strongOk, watch } from "./helpers"
 
 const TAXONOMY = TaxonomySchema.parse({ version: "t", nodes: [
@@ -107,5 +109,22 @@ describe("a search records its findings", () => {
     await run(on, { recordFindings: true })
     const [finding] = await readFindings(on)
     expect(finding).toMatchObject({ key: "pmid:111", conditionCodes: ["treatment-resistant-depression"], design: "randomized-trial" })
+  })
+
+  it("still lists the papers, with a warning, when the findings cannot be written", async () => {
+    const pack = await loadPsychiatryPack()
+    const RCT = paper({ title: "Esketamine nasal spray versus quetiapine in treatment-resistant depression", ids: { pmid: "111" },
+      abstract: "METHODS: Adults with treatment-resistant depression were randomised to esketamine nasal spray or quetiapine.",
+      publicationTypes: ["Journal Article", "Randomized Controlled Trial"], fields: ["Depressive Disorder, Treatment-Resistant"], date: "2026-09-28" })
+    const grade = llmResult({ assessments: [{ index: 0, entryId: "w1", grade: 4, topicGrade: 4, quote: "randomised to esketamine nasal spray or quetiapine", conditionMatch: true, treatmentMatch: true }] }, "claude-haiku-4-5")
+    class FailingFindings extends MemoryVaultStorage {
+      async write(path: string, content: string) { if (path === FINDINGS_PATH) throw new Error("disk full"); return super.write(path, content) }
+    }
+    const storage = new FailingFindings()
+    await saveWatchEntries(storage, [watch({ id: "w1", condition: "treatment-resistant depression", treatment: "esketamine" })])
+    const feed = await runClinicalFeed(storage, { pack, enumerate: async () => ({ records: [RCT], total: 1, truncated: false }), settings: SETTINGS, now: () => new Date("2026-10-06T10:00:00.000Z"), providerOverride: { strong: strongOk(), fast: new MockProvider([grade]) }, recordFindings: true })
+    expect(feed.items.map((entry) => entry.key)).toEqual(["pmid:111"])
+    expect(feed.warnings).toContain(CLINICAL_COPY.run.findingsNotKept)
+    expect((await loadClinicalFeed(storage))?.warnings).toContain(CLINICAL_COPY.run.findingsNotKept)
   })
 })

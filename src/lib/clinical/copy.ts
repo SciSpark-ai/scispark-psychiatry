@@ -156,6 +156,7 @@ export const CLINICAL_COPY = {
     gradingFailed: "AI grading did not complete. Check your AI connection in Settings, then try again.",
     gradingBatchesFailed: (count: number) => `${count} grading batch(es) failed; the papers in them are not in this list. Refresh to try them again.`,
     overCap: (count: number, cap: number) => `${count} more papers were found than the ${cap} that one search grades; they were not looked at. A shorter time range leaves fewer out.`,
+    findingsNotKept: "This search's papers could not be added to your Evidence pages. The list itself is complete.",
     summariesFailed: "Some AI summaries could not be written; those cards show the authors' conclusions instead.",
     nothingMatched: "No papers matched your watch entries well enough. Your previous feed is still shown.",
   },
