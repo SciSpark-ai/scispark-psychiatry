@@ -60,3 +60,23 @@ describe("renderMarkdown block keys", () => {
     expect(html).toContain("<li>item</li>")
   })
 })
+
+describe("a fenced block a caller knows how to draw", () => {
+  it("hands the language and the body to the caller, and draws what it returns in place of the code block", () => {
+    const seen: Array<[string, string]> = []
+    const html = renderToStaticMarkup(<>{renderMarkdown("Before\n\n```evidence-table\ncondition: depression\n```\n\nAfter", {
+      fence: (language, body) => { seen.push([language, body]); return <div data-drawn="yes">table here</div> },
+    })}</>)
+    expect(seen).toEqual([["evidence-table", "condition: depression"]])
+    expect(html).toContain('<div data-drawn="yes">table here</div>')
+    expect(html).not.toContain("<pre")
+    expect(html.indexOf("Before")).toBeLessThan(html.indexOf("table here"))
+    expect(html.indexOf("table here")).toBeLessThan(html.indexOf("After"))
+  })
+  it("draws an ordinary code block when the caller declines, or when there is no caller", () => {
+    const declined = renderToStaticMarkup(<>{renderMarkdown("```js\nlet a = 1\n```", { fence: () => null })}</>)
+    expect(declined).toContain("<pre")
+    expect(declined).toContain("let a = 1")
+    expect(renderToStaticMarkup(<>{renderMarkdown("```evidence-table\ncondition: depression\n```")}</>)).toContain("condition: depression")
+  })
+})

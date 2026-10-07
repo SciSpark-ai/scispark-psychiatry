@@ -238,6 +238,27 @@ export const CLINICAL_COPY = {
     notFound: "No trial data has been extracted for this paper.",
     badSlug: "That is not a paper this app knows.",
     badRequest: "The request was not understood.",
+    noSuchCondition: "That condition is not in the pack.",
+    table: {
+      columns: ["Treatment", "Type", "Trials", "Compared with", "Primary outcomes", "Direction of effect", "Latest trial"],
+      modalities: { drug: "Drug", psychotherapy: "Psychotherapy", neuromodulation: "Neuromodulation", other: "Other" },
+      unknownModality: "Not in the pack",
+      direction: (favours: number, against: number, unclear: number, notComputable: number, trials: number) => {
+        const parts = [
+          favours > 0 ? `Favours the treatment in ${favours} of ${trials} ${trials === 1 ? "trial" : "trials"}` : "",
+          against > 0 ? `${favours > 0 ? "favours" : "Favours"} the comparator in ${against}` : "",
+          unclear > 0 ? `${favours + against > 0 ? "no" : "No"} clear difference in ${unclear}` : "",
+          notComputable > 0 ? `${favours + against + unclear > 0 ? "not" : "Not"} computable in ${notComputable}` : "",
+        ].filter(Boolean)
+        return parts.join("; ")
+      },
+      toCheck: (count: number) => `${count} ${count === 1 ? "trial has" : "trials have"} values still to check`,
+      empty: (condition: string) => `No trial data has been extracted for ${condition} yet. Open a trial from your feed and choose “Extract trial data”.`,
+      notAQuery: "This block does not name a condition. It should read: condition: <the pack's id of the condition>.",
+      note: "Counted from the trial data you have extracted. Not a meta-analysis: trials are counted, not pooled.",
+      loading: "Counting…",
+      none: "-",
+    },
     requestFailed: (status: number) => `The trial data could not be reached (${status}).`,
     heading: "Trial data",
     extract: "Extract trial data", extracting: "Reading the paper…",

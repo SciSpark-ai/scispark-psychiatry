@@ -12,6 +12,7 @@ import { isDeletablePage, backlinkCount, deletePage } from "@/lib/wiki/delete"
 import type { VaultStorage } from "@/lib/vault/storage"
 import type { WikiPage } from "@/lib/vault/types"
 import { PageEditor } from "@/components/wiki/PageEditor"
+import { clinicalFence } from "@/components/clinical/clinical-fence"
 import { Backlinks } from "@/components/wiki/Backlinks"
 import DeleteConfirmCard from "@/components/wiki/DeleteConfirmCard"
 
@@ -194,7 +195,7 @@ export default function WikiPageDetail() {
           </span>
         </div>
 
-        {bundle && <PageEditor value={body} onChange={setBody} bundle={bundle} />}
+        {bundle && <PageEditor key={page?.id} value={body} onChange={setBody} bundle={bundle} fence={clinicalFence} initialTab={page?.frontmatter.type === "condition" ? "preview" : "edit"} />}
       </div>
 
       <aside className="w-full lg:w-64 flex-shrink-0">

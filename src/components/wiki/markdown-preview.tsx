@@ -103,7 +103,14 @@ const HEADING_LINE_RE = /^(#{1,6})\s+(.+)$/
 const LIST_LINE_RE = /^([-*]|\d+\.)\s+(.+)$/
 
 /** Renders `markdown` as React nodes. See module doc comment for scope. */
-export function renderMarkdown(markdown: string, { links = true, preserveLineBreaks = false }: { links?: boolean; preserveLineBreaks?: boolean } = {}): ReactNode {
+export function renderMarkdown(
+  markdown: string,
+  { links = true, preserveLineBreaks = false, fence }: {
+    links?: boolean; preserveLineBreaks?: boolean
+    /** Clinical edition: lets a caller draw a fenced block of a language it knows. Returning null or undefined draws the ordinary code block. */
+    fence?: (language: string, body: string) => ReactNode | null | undefined
+  } = {},
+): ReactNode {
   const inline = (text: string, key: string) => renderInline(text, key, links)
   const lines = markdown.split("\n")
   const blocks: ReactNode[] = []
@@ -130,6 +137,7 @@ export function renderMarkdown(markdown: string, { links = true, preserveLineBre
     }
 
     if (line.startsWith("```")) {
+      const language = line.slice(3).trim()
       const codeLines: string[] = []
       i++
       while (i < lines.length && !lines[i].startsWith("```")) {
@@ -144,10 +152,15 @@ export function renderMarkdown(markdown: string, { links = true, preserveLineBre
       // the element's key collides with the next block's (the "two
       // children with the same key, b-4" bug, 2026-07-18).
       const k = key++
+      const drawn = fence?.(language, codeLines.join("\n"))
       blocks.push(
-        <pre key={`b-${k}`} className="bg-card-surface rounded-[6px] p-3 overflow-x-auto text-[13px] font-mono my-2">
-          <code>{codeLines.join("\n")}</code>
-        </pre>,
+        drawn !== null && drawn !== undefined
+          ? <div key={`b-${k}`}>{drawn}</div>
+          : (
+            <pre key={`b-${k}`} className="bg-card-surface rounded-[6px] p-3 overflow-x-auto text-[13px] font-mono my-2">
+              <code>{codeLines.join("\n")}</code>
+            </pre>
+          ),
       )
       continue
     }

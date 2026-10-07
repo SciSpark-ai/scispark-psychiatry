@@ -5,6 +5,7 @@ import { CLINICAL_COPY } from "../copy"
 import type { Design } from "../types"
 import type { NumberField, TextField, TrialRecord } from "./schema"
 import type { FieldChange } from "./store"
+import type { TreatmentRow } from "./table"
 
 // Browser-side callers of /api/clinical/records. Types only from ./store and ./extract: both reach the server's file system.
 
@@ -26,4 +27,10 @@ export async function extractRecordRemote(paper: PaperRecord, design: Design, fe
 
 export async function editFieldRemote(slug: string, path: string, change: FieldChange, expected: TextField | NumberField, fetchFn: typeof fetch = fetch): Promise<TrialRecord> {
   return (await unwrap<{ record: TrialRecord }>(await fetchFn(URL, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug, path, change, expected }) }))).record
+}
+
+export interface TreatmentTable { condition: { code: string; name: string }; rows: TreatmentRow[] }
+/** The treatment-options table of a condition. Spends nothing. */
+export async function loadTreatmentTableRemote(condition: string, fetchFn: typeof fetch = fetch): Promise<TreatmentTable> {
+  return unwrap<TreatmentTable>(await fetchFn(`${URL}/table?condition=${encodeURIComponent(condition)}`, { method: "GET" }))
 }

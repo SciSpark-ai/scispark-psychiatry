@@ -29,7 +29,7 @@
  * future Milkdown swap (M11 polish) only touches this file.
  */
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import type { Bundle } from "@/lib/vault/bundle"
 import { preprocessWikilinks, renderMarkdown } from "./markdown-preview"
 
@@ -37,10 +37,14 @@ interface PageEditorProps {
   value: string
   onChange: (value: string) => void
   bundle: Bundle
+  /** Clinical edition: draws fenced blocks the caller knows (see renderMarkdown). */
+  fence?: (language: string, body: string) => ReactNode | null | undefined
+  /** Clinical edition: the tab shown first. A page that is mostly a generated view opens on its preview. */
+  initialTab?: "edit" | "preview"
 }
 
-export function PageEditor({ value, onChange, bundle }: PageEditorProps) {
-  const [tab, setTab] = useState<"edit" | "preview">("edit")
+export function PageEditor({ value, onChange, bundle, fence, initialTab = "edit" }: PageEditorProps) {
+  const [tab, setTab] = useState<"edit" | "preview">(initialTab)
 
   return (
     <div className="border border-border-warm rounded-card overflow-hidden">
@@ -76,7 +80,7 @@ export function PageEditor({ value, onChange, bundle }: PageEditorProps) {
           {value.trim() === "" ? (
             <p className="text-[13px] text-muted-text">Nothing to preview yet.</p>
           ) : (
-            renderMarkdown(preprocessWikilinks(value, bundle))
+            renderMarkdown(preprocessWikilinks(value, bundle), { fence })
           )}
         </div>
       )}

@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS } from "../../llm/settings"
 import { setServerVaultForTests } from "../vault"
 import { setSkillTestOverrides } from "../skill-route"
 import * as route from "../../../app/api/clinical/records/route"
+import * as tableRoute from "../../../app/api/clinical/records/table/route"
 import { llmResult, paper } from "../../clinical/__tests__/helpers"
 
 const ABSTRACT = "Adults with treatment-resistant depression were randomised to esketamine nasal spray (n = 336) or quetiapine (n = 340). Remission occurred in 91 of 336 patients with esketamine and 60 of 340 with quetiapine."
@@ -83,5 +84,22 @@ describe("/api/clinical/records", () => {
     expect((await confirmed.json()).result.record.arms[0].n.state).toBe("human-confirmed")
     expect((await patch({ slug: SLUG, path: "arms.a1.n", change: { action: "edit", value: 1 }, expected: seen })).status).toBe(409)
     expect((await patch({ slug: "no-such-paper", path: "arms.a1.n", change: { action: "confirm" }, expected: seen })).status).toBe(404)
+  })
+})
+
+describe("/api/clinical/records/table", () => {
+  const table = (condition: string) => tableRoute.GET(new Request(`http://x/api/clinical/records/table?condition=${encodeURIComponent(condition)}`))
+  it("builds the table of a condition from the stored records, taking in its subtypes", async () => {
+    setSkillTestOverrides({ providerOverride: { strong: new MockProvider([llmResult(ANSWER, "claude-sonnet-5")]) }, fetchFn: offline })
+    await post({ paper: PAPER, design: "randomized-trial" })
+    const { result } = await (await table("depression")).json()
+    expect(result.condition.code).toBe("depression")
+    expect(result.rows.map((row: { key: string; trials: number }) => [row.key, row.trials])).toEqual([["esketamine", 1]])
+  })
+  it("answers 404 for a condition the pack does not have and 400 for a malformed one", async () => {
+    expect((await table("no-such-condition")).status).toBe(404)
+    expect((await table("../etc")).status).toBe(400)
+    // A treatment is not a condition.
+    expect((await table("esketamine")).status).toBe(404)
   })
 })
