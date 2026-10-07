@@ -6,6 +6,7 @@ import { MemoryVaultStorage } from "@/lib/vault/memory-storage"
 import { readReaderHandoffBySlug } from "@/lib/reader/handoff"
 import { paperSlug } from "@/lib/wiki/authoring"
 import type { StoredFeedItem } from "@/lib/clinical/feed/stored"
+import { loadFeedback } from "@/lib/clinical/feedback/store"
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -26,10 +27,10 @@ const ITEM: StoredFeedItem = {
 }
 
 let container: HTMLDivElement
-async function mount(item: StoredFeedItem, storage = new MemoryVaultStorage()) {
+async function mount(item: StoredFeedItem, storage = new MemoryVaultStorage(), tone?: number) {
   container = document.createElement("div")
   document.body.appendChild(container)
-  await act(async () => { createRoot(container).render(<ClinicalFeedCard item={item} storage={storage} saved={false} onSave={() => {}} entryLabel="Depression × Drug A" />) })
+  await act(async () => { createRoot(container).render(<ClinicalFeedCard item={item} storage={storage} saved={false} onSave={() => {}} entryLabel="Depression × Drug A" tone={tone} />) })
   return storage
 }
 
@@ -98,5 +99,40 @@ describe("ClinicalFeedCard", () => {
     document.body.innerHTML = ""
     await mount({ ...ITEM, design: "other", designSource: "none" })
     expect(container.textContent).not.toContain("Other design")
+  })
+
+  it("has a thumbs-up and a thumbs-down button without text, and records each", async () => {
+    const storage = await mount(ITEM)
+    const up = container.querySelector<HTMLButtonElement>('button[aria-label="Useful to me"]')!
+    const down = container.querySelector<HTMLButtonElement>('button[aria-label="Not for me"]')!
+    expect(up.textContent).toBe("")
+    expect(down.textContent).toBe("")
+    expect(container.textContent).not.toContain("Would change my practice")
+    await act(async () => { down.click() })
+    expect(down.getAttribute("aria-pressed")).toBe("true")
+    expect((await loadFeedback(storage)).map((e) => e.kind)).toEqual(["not-relevant"])
+    await act(async () => { up.click() })
+    expect((await loadFeedback(storage)).map((e) => e.kind)).toEqual(["relevant"])
+  })
+
+  it("tints the card with the colour of its watch entry, and leaves a card without one plain", async () => {
+    await mount(ITEM, new MemoryVaultStorage(), 2)
+    const card = container.querySelector<HTMLElement>("[data-testid=clinical-feed-card]")!
+    expect(card.getAttribute("data-tone")).toBe("2")
+    expect(card.style.getPropertyValue("--card-tone")).toBe("var(--band-breakthrough)")
+    document.body.innerHTML = ""
+    await mount(ITEM)
+    expect(container.querySelector("[data-testid=clinical-feed-card]")!.hasAttribute("data-tone")).toBe(false)
+  })
+
+  it("draws an inferred design tag exactly like a PubMed one; only the hover text differs", async () => {
+    await mount(ITEM)
+    const assigned = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Randomized trial")!
+    const assignedClass = assigned.className
+    document.body.innerHTML = ""
+    await mount({ ...ITEM, designSource: "model" })
+    const inferred = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Randomized trial")!
+    expect(inferred.className).toBe(assignedClass)
+    expect(inferred.getAttribute("title")).toContain("not assigned by PubMed")
   })
 })

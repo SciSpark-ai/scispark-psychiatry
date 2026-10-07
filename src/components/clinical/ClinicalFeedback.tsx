@@ -1,17 +1,22 @@
 "use client"
 
 import { useState } from "react"
+import { ThumbsDown, ThumbsUp } from "lucide-react"
 import type { VaultStorage } from "@/lib/vault/storage"
 import { recordFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 
-const BUTTONS: Array<{ kind: FeedbackKind; label: string }> = [
-  { kind: "relevant", label: CLINICAL_COPY.feedback.relevant },
-  { kind: "practice-change", label: CLINICAL_COPY.feedback.practiceChange },
-  { kind: "not-relevant", label: CLINICAL_COPY.feedback.notRelevant },
-]
+const F = CLINICAL_COPY.feedback
+const BUTTONS = [
+  { kind: "relevant", label: F.up, note: F.upNote, Icon: ThumbsUp },
+  { kind: "not-relevant", label: F.down, note: F.downNote, Icon: ThumbsDown },
+] as const
 
-/** Three feedback controls (D30). A vote is stored locally; "not relevant" keeps the paper out of later runs. */
+/**
+ * Thumbs up and thumbs down (owner decision 2026-10-06, replacing the three text buttons of D30).
+ * A vote is stored locally; thumbs down keeps the paper out of later runs. The store still accepts
+ * the earlier "practice-change" votes, which count as positive.
+ */
 export function ClinicalFeedback({ storage, paperKey, title, initial, onVote }: {
   storage: VaultStorage; paperKey: string; title: string; initial?: FeedbackKind; onVote?: (kind: FeedbackKind) => void
 }) {
@@ -25,19 +30,21 @@ export function ClinicalFeedback({ storage, paperKey, title, initial, onVote }: 
       setCurrent(kind)
       onVote?.(kind)
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : CLINICAL_COPY.feedback.saveFailed)
+      setError(failure instanceof Error ? failure.message : F.saveFailed)
     }
   }
 
+  const pressed = (kind: FeedbackKind) => current === kind || (kind === "relevant" && current === "practice-change")
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
-      {BUTTONS.map(({ kind, label }) => (
+    <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+      {BUTTONS.map(({ kind, label, note, Icon }) => (
         <button
-          key={kind} type="button" aria-pressed={current === kind} onClick={() => void vote(kind)}
-          className={`rounded-pill border px-3 py-1 text-[12px] transition-colors focus-visible:ring-2 focus-visible:ring-orange ${
-            current === kind ? "border-orange bg-orange/10 text-accent-ink" : "border-border-warm text-muted-text hover:bg-card-surface/60"}`}
+          key={kind} type="button" aria-label={label} title={note} aria-pressed={pressed(kind)} onClick={() => void vote(kind)}
+          className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-orange ${
+            pressed(kind) ? "bg-orange/15 text-accent-ink" : "text-muted-text hover:bg-card-surface hover:text-espresso"}`}
         >
-          {label}
+          <Icon size={17} fill={pressed(kind) ? "currentColor" : "none"} aria-hidden="true" />
         </button>
       ))}
       {error && <span role="alert" className="text-[12px] text-espresso">{error}</span>}

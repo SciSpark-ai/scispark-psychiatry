@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type CSSProperties } from "react"
 import { useRouter } from "next/navigation"
 import type { VaultStorage } from "@/lib/vault/storage"
 import { paperSlug } from "@/lib/wiki/authoring"
@@ -19,11 +19,22 @@ import { ClinicalFeedback } from "./ClinicalFeedback"
 const F = CLINICAL_COPY.feed
 const isMatchGrade = (grade: number): grade is 1 | 2 | 3 | 4 => grade >= 1 && grade <= 4 && Number.isInteger(grade)
 
-export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vote }: {
+/**
+ * One tint per watch entry, from the brand's band colours, so the papers of a topic can be told
+ * apart at a glance. The tint is a pale wash of the colour over the normal card surface.
+ */
+export const CARD_TONES = [
+  "var(--band-impact)", "var(--band-method)", "var(--band-breakthrough)", "var(--band-evidence)",
+  "var(--band-trending)", "var(--band-application)", "var(--band-dataset)", "var(--band-review)",
+] as const
+
+export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vote, tone }: {
   item: StoredFeedItem; storage: VaultStorage; saved: boolean; onSave: (key: string) => void
   /** Human label of the matched watch entry, when there is one. */
   entryLabel?: string
   vote?: FeedbackKind
+  /** Position of the matched watch entry in the watch list; picks the card's tint. */
+  tone?: number
 }) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
@@ -53,11 +64,15 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   }
 
   return (
-    <Card className="flex flex-col gap-2.5 p-4" data-testid="clinical-feed-card">
+    <Card
+      data-testid="clinical-feed-card"
+      {...(tone === undefined ? {} : { "data-tone": String(tone), style: { "--card-tone": CARD_TONES[tone % CARD_TONES.length] } as CSSProperties })}
+      className={`flex flex-col gap-2.5 p-4 ${tone === undefined ? "" : "border-[color-mix(in_srgb,var(--card-tone)_28%,var(--border))] bg-[color-mix(in_srgb,var(--card-tone)_9%,var(--surface-light))]"}`}
+    >
       <div className="flex flex-wrap items-center gap-2">
         {item.designSource === "publication-type"
           ? <Chip tone="accent" title={CLINICAL_COPY.designNote}>{CLINICAL_COPY.designLabels[item.design]}</Chip>
-          : inferredDesign && <Chip data-inferred="true" title={CLINICAL_COPY.designInferredNote} className="border border-dashed border-border-warm bg-transparent italic">{CLINICAL_COPY.designLabels[item.design]}</Chip>}
+          : inferredDesign && <Chip tone="accent" data-inferred="true" title={CLINICAL_COPY.designInferredNote}>{CLINICAL_COPY.designLabels[item.design]}</Chip>}
         {entryLabel && <Chip title={matchNote}>{entryLabel}{matched !== null ? ` · ${F.matchLabels[matched]}` : ""}</Chip>}
         {item.flags.includes("title-only") && <Chip>{CLINICAL_COPY.feed.noAbstract}</Chip>}
         {item.ungraded && <Chip>{CLINICAL_COPY.feed.notGraded}</Chip>}

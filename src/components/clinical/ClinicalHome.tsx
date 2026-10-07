@@ -86,6 +86,7 @@ export function ClinicalHome() {
 
   const { entries, settings, feed, saved, votes } = data
   const labels = new Map(entries.map((entry) => [entry.id, entryLabel(entry)]))
+  const tones = new Map(entries.map((entry, index) => [entry.id, index]))
   const shown = feed ? Array.from({ length: pages }, (_, page) => feedPage(feed, page)).flat() : []
   const markSaved = (key: string) => setData((current) => (current ? { ...current, saved: new Set(current.saved).add(key) } : current))
 
@@ -133,7 +134,7 @@ export function ClinicalHome() {
           <div className="grid gap-4 lg:grid-cols-2">
             {shown.map((item) => (
               <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
-                entryLabel={item.entryId ? labels.get(item.entryId) : undefined} vote={votes.get(item.key)} />
+                entryLabel={item.entryId ? labels.get(item.entryId) : undefined} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
             ))}
           </div>
           {pages < pageCount(feed) && (
@@ -147,7 +148,7 @@ export function ClinicalHome() {
               <div className="mt-3 grid gap-4 lg:grid-cols-2">
                 {feed.lowerConfidence.map((item) => (
                   <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
-                    entryLabel={item.entryId ? labels.get(item.entryId) : undefined} vote={votes.get(item.key)} />
+                    entryLabel={item.entryId ? labels.get(item.entryId) : undefined} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
                 ))}
               </div>
             </details>
@@ -158,7 +159,7 @@ export function ClinicalHome() {
               <div className="mt-3 grid gap-4 lg:grid-cols-2">
                 {(feed.seenEarlier ?? []).map((item) => (
                   <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
-                    entryLabel={item.entryId ? labels.get(item.entryId) : undefined} vote={votes.get(item.key)} />
+                    entryLabel={item.entryId ? labels.get(item.entryId) : undefined} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
                 ))}
               </div>
             </details>

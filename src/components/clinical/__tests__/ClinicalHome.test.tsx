@@ -117,8 +117,10 @@ describe("ClinicalHome", () => {
     await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
     await saveClinicalFeed(storage, feedOf([item(1)]))
     await mount()
-    await act(async () => { byText("Would change my practice").click() })
-    expect(byText("Would change my practice").getAttribute("aria-pressed")).toBe("true")
-    expect((await loadFeedback(storage)).map((e) => [e.paperKey, e.kind])).toEqual([["pmid:1", "practice-change"]])
+    // Owner decision 2026-10-06: two icon buttons (thumbs up, thumbs down) replace the three text buttons.
+    const up = () => container.querySelector<HTMLButtonElement>('button[aria-label="Useful to me"]')!
+    await act(async () => { up().click() })
+    expect(up().getAttribute("aria-pressed")).toBe("true")
+    expect((await loadFeedback(storage)).map((e) => [e.paperKey, e.kind])).toEqual([["pmid:1", "relevant"]])
   })
 })

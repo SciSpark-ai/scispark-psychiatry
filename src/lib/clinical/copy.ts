@@ -65,7 +65,12 @@ export const CLINICAL_COPY = {
     grade: "Matching papers to your watch list",
     select: "Building your list",
   },
-  feedback: { relevant: "Relevant to me", practiceChange: "Would change my practice", notRelevant: "Not relevant", saveFailed: "Your vote could not be saved." },
+  /** Two icon buttons on a card: thumbs up and thumbs down. The words are their accessible names and hover text. */
+  feedback: {
+    up: "Useful to me", upNote: "Useful to me: show more like this",
+    down: "Not for me", downNote: "Not for me: do not show this paper again",
+    saveFailed: "Your vote could not be saved.",
+  },
   designLabels: {
     "meta-analysis": "Meta-analysis", "systematic-review": "Systematic review", "randomized-trial": "Randomized trial",
     guideline: "Guideline", cohort: "Observational", "clinical-trial": "Clinical trial", review: "Review",
