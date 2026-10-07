@@ -20,8 +20,8 @@ const rel = (file: string) => path.relative(SRC, file)
 function isWording(literal: string): boolean {
   const text = literal.replace(/\$\{[^}]*\}/g, " ").trim()
   if (!/[A-Za-z]{3,}/.test(text)) return false
-  // CSS values are not wording: a custom property reference, or the currentColor keyword.
-  if (/^var\(--[\w-]+\)$/.test(text) || text === "currentColor") return false
+  // CSS values are not wording: a custom property reference, a colour mix, or the currentColor keyword.
+  if (/^var\(--[\w-]+\)$/.test(text) || /^color-mix\(/.test(text) || text === "currentColor") return false
   return !text.split(/\s+/).every((token) => /^[a-z0-9\-_\[\]:/.%!@#]*$/.test(token))
 }
 

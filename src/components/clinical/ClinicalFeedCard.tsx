@@ -66,8 +66,13 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   return (
     <Card
       data-testid="clinical-feed-card"
-      {...(tone === undefined ? {} : { "data-tone": String(tone), style: { "--card-tone": CARD_TONES[tone % CARD_TONES.length] } as CSSProperties })}
-      className={`flex flex-col gap-2.5 p-4 ${tone === undefined ? "" : "border-[color-mix(in_srgb,var(--card-tone)_28%,var(--border))] bg-[color-mix(in_srgb,var(--card-tone)_9%,var(--surface-light))]"}`}
+      // Inline, not utility classes: the tint has to win over the card's own background class.
+      {...(tone === undefined ? {} : { "data-tone": String(tone), style: {
+        "--card-tone": CARD_TONES[tone % CARD_TONES.length],
+        backgroundColor: "color-mix(in srgb, var(--card-tone) 10%, var(--surface-light))",
+        borderColor: "color-mix(in srgb, var(--card-tone) 30%, var(--border))",
+      } as CSSProperties })}
+      className="flex flex-col gap-2.5 p-4"
     >
       <div className="flex flex-wrap items-center gap-2">
         {item.designSource === "publication-type"
