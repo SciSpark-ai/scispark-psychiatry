@@ -96,16 +96,21 @@ export function ClinicalHome() {
   // Only what was displayed counts: the pages opened so far, not the whole stored list.
   const inTab = (data?.feed?.items ?? []).filter((item) => topic === null || item.entryId === topic)
   const displayedKeys = inTab.slice(0, pages * PAGE_SIZE).map((item) => item.key).join("\n")
+  // Recorded under the time range of the list on screen: only a new search of the same range leaves these papers out.
+  const shownLookBack = data?.feed ? (data.feed.lookBack ?? lookBackOf({ mode: data.feed.mode, catchUpMonths: 6, windowDays: 30 })) : "30d"
   useEffect(() => {
-    if (storage && displayedKeys) void recordSeen(storage, displayedKeys.split("\n")).catch(() => {})
-  }, [storage, displayedKeys])
+    if (storage && displayedKeys) void recordSeen(storage, displayedKeys.split("\n"), new Date(), shownLookBack).catch(() => {})
+  }, [storage, displayedKeys, shownLookBack])
 
   if (!data || !storage) {
     return <div className="p-7">{error ? <p role="alert" className="text-[13px] text-red-600">{CLINICAL_COPY.errorPrefix} {error}</p> : <p className="text-[14px] text-muted-text">{CLINICAL_COPY.loading}</p>}</div>
   }
 
   const { entries, settings, feed, saved, votes } = data
-  const { topicOf, toneOf } = topicLookup(entries)
+  // A list is labelled with the topics it was built for (kept with it), so an earlier list reopened
+  // from the history still reads correctly after the topics have changed.
+  const listTopics: WatchEntry[] = feed?.topics ? feed.topics.map((entry) => ({ ...entry, priority: "normal", safetySignal: false })) : entries
+  const { topicOf, toneOf } = topicLookup(listTopics)
   const seenToday = (feed?.seenEarlier ?? []).filter((item) => data.seenToday.has(item.key))
   const shown = inTab.slice(0, pages * PAGE_SIZE)
   const current = lookBackOf(settings)
@@ -113,8 +118,10 @@ export function ClinicalHome() {
   const optionLabel = (key: LookBack) => CLINICAL_COPY.feed.lookBackOptions[key]
   const tabs = [
     { id: null as string | null, label: CLINICAL_COPY.feed.allTopics, count: feed?.items.length ?? 0 },
-    ...entries.map((entry) => ({ id: entry.id as string | null, label: entryLabel(entry), count: (feed?.items ?? []).filter((item) => item.entryId === entry.id).length })),
+    ...listTopics.map((entry) => ({ id: entry.id as string | null, label: entryLabel(entry), count: (feed?.items ?? []).filter((item) => item.entryId === entry.id).length })),
   ]
+  const overview = topic !== null ? feed?.topicOverviews?.[topic] : undefined
+  const headlineOf = new Map((feed?.items ?? []).map((item) => [item.key, item.digest?.headline ?? item.paper.title]))
   // The count line of the tab: how many papers, how many match a condition and a treatment together,
   // how many are in leading journals, and the most common designs that someone has named.
   const designCounts = DESIGNS
@@ -126,7 +133,7 @@ export function ClinicalHome() {
   const stats = [
     { key: "papers", text: CLINICAL_COPY.feed.overview.papers(inTab.length) },
     ...[
-      { key: "full", label: CLINICAL_COPY.feed.overview.full, count: inTab.filter((item) => item.matched === "full" && entries.some((entry) => entry.id === item.entryId && entry.condition && entry.treatment)).length },
+      { key: "full", label: CLINICAL_COPY.feed.overview.full, count: inTab.filter((item) => item.matched === "full" && listTopics.some((entry) => entry.id === item.entryId && entry.condition && entry.treatment)).length },
       { key: "leading", label: CLINICAL_COPY.feed.overview.leading, count: inTab.filter((item) => item.journalBand === 1).length },
       ...designCounts.map((entry) => ({ key: entry.design, label: CLINICAL_COPY.designLabels[entry.design], count: entry.count })),
     ].filter((entry) => entry.count > 0).map((entry) => ({ key: entry.key, text: `${entry.label} ${entry.count}` })),
@@ -135,26 +142,27 @@ export function ClinicalHome() {
 
   return (
     <div className="p-7">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div className="min-w-0">
+      {/* The title and the controls share one line; the status line sits beneath them. */}
+      <div className="mb-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <h1 className="font-heading text-[26px] font-semibold tracking-heading text-espresso">{CLINICAL_COPY.feed.heading}</h1>
-          {feed && entries.length > 0 && (
-            <p data-testid="clinical-feed-status" className="mt-1 text-[14px] text-secondary-dark">
-              {CLINICAL_COPY.feed.status(feed.stats.listed, feed.stats.retrieved, optionLabel(feedLookBack), new Date(feed.generatedAt).toLocaleString())}
-            </p>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            <select aria-label={CLINICAL_COPY.feed.lookBack} title={CLINICAL_COPY.feed.lookBack} value={current}
+              onChange={(event) => void changeSettings(settingsForLookBack(event.target.value as LookBack))}
+              className="rounded-pill border border-border-warm bg-transparent px-3 py-1.5 text-[13px] text-espresso">
+              {LOOK_BACK.map((key) => <option key={key} value={key}>{optionLabel(key)}</option>)}
+            </select>
+            <button type="button" onClick={() => void refresh()} disabled={running || entries.length === 0}
+              className="rounded-pill bg-orange px-4 py-1.5 text-[13px] font-medium text-on-accent hover:bg-orange/90 disabled:opacity-50">
+              {running ? CLINICAL_COPY.feed.refreshing : CLINICAL_COPY.feed.refresh}
+            </button>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <select aria-label={CLINICAL_COPY.feed.lookBack} title={CLINICAL_COPY.feed.lookBack} value={current}
-            onChange={(event) => void changeSettings(settingsForLookBack(event.target.value as LookBack))}
-            className="rounded-pill border border-border-warm bg-transparent px-3 py-1.5 text-[13px] text-espresso">
-            {LOOK_BACK.map((key) => <option key={key} value={key}>{optionLabel(key)}</option>)}
-          </select>
-          <button type="button" onClick={() => void refresh()} disabled={running || entries.length === 0}
-            className="rounded-pill bg-orange px-4 py-1.5 text-[13px] font-medium text-on-accent hover:bg-orange/90 disabled:opacity-50">
-            {running ? CLINICAL_COPY.feed.refreshing : CLINICAL_COPY.feed.refresh}
-          </button>
-        </div>
+        {feed && entries.length > 0 && (
+          <p data-testid="clinical-feed-status" className="mt-1 text-[14px] text-secondary-dark">
+            {CLINICAL_COPY.feed.status(feed.stats.listed, feed.stats.retrieved, optionLabel(feedLookBack), new Date(feed.generatedAt).toLocaleString())}
+          </p>
+        )}
       </div>
 
       {running && stage && <p role="status" aria-live="polite" className="mb-4 text-[13px] text-muted-text">{CLINICAL_COPY.stages[stage]}…</p>}
@@ -182,6 +190,22 @@ export function ClinicalHome() {
           <p data-testid="clinical-feed-overview" className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-secondary-dark">
             {stats.map((stat, index) => <span key={stat.key} data-stat="true" className={index === 0 ? "font-semibold text-espresso" : ""}>{stat.text}</span>)}
           </p>
+          {overview && overview.length > 0 && (
+            <div data-testid="clinical-topic-overview" className="mb-5 rounded-card border border-border-warm/70 bg-light-surface px-4 py-3">
+              <p className="mb-1 text-[12px] font-medium uppercase tracking-wide text-muted-text"><span title={CLINICAL_COPY.feed.aiOverviewNote} className="cursor-help underline decoration-dotted">{CLINICAL_COPY.feed.aiOverview}</span></p>
+              <p className="text-[15px] leading-relaxed text-espresso">
+                {overview.map((sentence) => (
+                  <span key={sentence.text}>
+                    {sentence.text}
+                    {sentence.sources.map((key) => {
+                      const position = inTab.findIndex((item) => item.key === key)
+                      return <sup key={key} data-source="true" title={headlineOf.get(key) ?? key} className="ml-0.5 cursor-help text-[11px] text-accent-ink">{position >= 0 ? position + 1 : "·"}</sup>
+                    })}{" "}
+                  </span>
+                ))}
+              </p>
+            </div>
+          )}
           {feed.items.length === 0 && <p className="mb-4 text-[14px] text-espresso">{CLINICAL_COPY.feed.nothingNew}</p>}
           {feed.warnings.length > 0 && <ul className="mb-4 list-disc pl-5 text-[12px] text-muted-text">{feed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           <div className="grid gap-4 lg:grid-cols-2">

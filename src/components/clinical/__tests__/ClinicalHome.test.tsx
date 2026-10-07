@@ -240,4 +240,37 @@ describe("ClinicalHome", () => {
     await act(async () => {})
     expect(await seen()).toContain("pmid:50")
   })
+
+  it("shows a topic's AI overview on its tab, marked as AI-written, with the papers each sentence rests on", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "Depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1), item(2)], { topicOverviews: { w1: [{ text: "Two trials reported benefit.", sources: ["pmid:1", "pmid:2"] }] } }))
+    await mount()
+    expect(container.querySelector("[data-testid=clinical-topic-overview]")).toBeNull()
+    await act(async () => { ([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[])[1].click() })
+    const overview = container.querySelector("[data-testid=clinical-topic-overview]")!
+    expect(overview.textContent).toContain("AI overview")
+    expect(overview.textContent).toContain("Two trials reported benefit.")
+    expect([...overview.querySelectorAll("[data-source]")].map((source) => source.getAttribute("title"))).toEqual(["Paper 1", "Paper 2"])
+  })
+
+  it("labels an earlier list with the topics it was built for, even after the topics have changed", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "new", condition: "ADHD", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1)], { topics: [{ id: "w1", condition: "Depression", treatment: "Esketamine" }] }))
+    await mount()
+    expect(([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[]).map((tab) => tab.textContent)).toEqual(["All 1", "Depression × Esketamine 1"])
+    expect(container.querySelector("[data-topic]")!.textContent).toBe("Depression × Esketamine")
+  })
+
+  it("records what was displayed under the time range of the list on screen", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1)], { lookBack: "7d" }))
+    await mount()
+    await act(async () => {})
+    const file = JSON.parse((await storage.read(".scispark/clinical/seen.json")) as string)
+    expect(Object.keys(file.byLookBack["7d"])).toEqual(["pmid:1"])
+    expect(file.byLookBack["30d"] ?? {}).toEqual({})
+  })
 })

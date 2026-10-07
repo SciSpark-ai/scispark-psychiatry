@@ -8,26 +8,55 @@ import { withVaultExclusive } from "../../vault/exclusive"
  */
 export const SEEN_PATH = ".scispark/clinical/seen.json"
 
-interface SeenFile { version: 1; seen: Record<string, string> }
+/**
+ * `seen` holds every displayed paper with the first time it was shown. `byLookBack` holds the same
+ * per time range ("30d", "7d", ...): a paper is left out of a new list only when it was already
+ * shown under the same range (owner decision 2026-10-07), so choosing another range shows it again.
+ */
+interface SeenFile { version: 1; seen: Record<string, string>; byLookBack?: Record<string, Record<string, string>> }
+const DEFAULT_LOOK_BACK = "30d"
 
 async function read(storage: VaultStorage): Promise<SeenFile> {
   try {
     const raw = await storage.read(SEEN_PATH)
     const parsed = raw === null ? null : (JSON.parse(raw) as Partial<SeenFile>)
-    if (parsed && parsed.version === 1 && parsed.seen && typeof parsed.seen === "object") return { version: 1, seen: parsed.seen }
+    if (parsed && parsed.version === 1 && parsed.seen && typeof parsed.seen === "object") {
+      return { version: 1, seen: parsed.seen, ...(parsed.byLookBack && typeof parsed.byLookBack === "object" ? { byLookBack: parsed.byLookBack } : {}) }
+    }
   } catch {
     // An unreadable file is treated as "nothing seen": the worst case is a repeat, never a lost paper.
   }
   return { version: 1, seen: {} }
 }
 
+/** A file written before ranges were kept apart counts as seen under the default range. */
+const ranges = (file: SeenFile): Record<string, Record<string, string>> => file.byLookBack ?? { [DEFAULT_LOOK_BACK]: { ...file.seen } }
+
 export async function loadSeen(storage: VaultStorage): Promise<Set<string>> {
   return new Set(Object.keys((await read(storage)).seen))
 }
 
-/** When each paper was first displayed. */
-export async function loadSeenTimes(storage: VaultStorage): Promise<Map<string, string>> {
-  return new Map(Object.entries((await read(storage)).seen))
+/** When each paper was first displayed: under one time range, or under any when none is given. */
+export async function loadSeenTimes(storage: VaultStorage, lookBack?: string): Promise<Map<string, string>> {
+  const file = await read(storage)
+  return new Map(Object.entries(lookBack === undefined ? file.seen : (ranges(file)[lookBack] ?? {})))
+}
+
+/** Records the first time each paper was displayed, overall and under the list's time range. */
+export async function recordSeen(storage: VaultStorage, keys: string[], at: Date = new Date(), lookBack: string = DEFAULT_LOOK_BACK): Promise<void> {
+  if (keys.length === 0) return
+  await withVaultExclusive(storage, "clinical-seen", async () => {
+    const file = await read(storage)
+    const byLookBack = ranges(file)
+    const range = (byLookBack[lookBack] ??= {})
+    const fresh = keys.filter((key) => !(key in range))
+    if (fresh.length === 0) return
+    for (const key of fresh) {
+      range[key] = at.toISOString()
+      file.seen[key] ??= at.toISOString()
+    }
+    await storage.write(SEEN_PATH, JSON.stringify({ version: 1, seen: file.seen, byLookBack }))
+  })
 }
 
 /**
@@ -39,16 +68,4 @@ export const SEEN_EARLIER_HOURS = 24
 
 export function seenRecently(seenAt: string | undefined, now: Date): boolean {
   return seenAt !== undefined && now.getTime() - new Date(seenAt).getTime() < SEEN_EARLIER_HOURS * 3_600_000
-}
-
-/** Records the first time each paper was displayed. */
-export async function recordSeen(storage: VaultStorage, keys: string[], at: Date = new Date()): Promise<void> {
-  if (keys.length === 0) return
-  await withVaultExclusive(storage, "clinical-seen", async () => {
-    const file = await read(storage)
-    const fresh = keys.filter((key) => !(key in file.seen))
-    if (fresh.length === 0) return
-    for (const key of fresh) file.seen[key] = at.toISOString()
-    await storage.write(SEEN_PATH, JSON.stringify(file))
-  })
 }

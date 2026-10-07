@@ -14,6 +14,8 @@ import { retrieve, type EnumerateFn } from "../retrieve/pool"
 import { scoreCandidate, type ScoredItem } from "../score/score"
 import { JOURNAL_TIER_BOOST, journalTierOf, loadJournalTiers, type JournalTier } from "../score/journal-tiers"
 import { digestCards } from "../digest/card"
+import { overviewTopics, writeTopicOverviews, type OverviewSentence } from "../digest/topic"
+import { saveHistory } from "../history/store"
 import { seenRecently } from "../seen/store"
 import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
 import { layerOf, selectFeed } from "../select/select"
@@ -35,6 +37,8 @@ export interface ClinicalFeedDeps {
   summarise?: boolean
   /** Reuse grades and summaries from earlier runs (feed/cache.ts). Off unless asked. */
   useCache?: boolean
+  /** Keep this search in the history (history/store.ts). Off unless asked. */
+  keepHistory?: boolean
 }
 
 const ref = (candidate: Candidate): PoolRef => ({ key: candidate.key, pmid: candidate.paper.ids.pmid, doi: candidate.paper.ids.doi })
@@ -214,10 +218,37 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     return { ...toStoredItem(item), ...(journalBand ? { journalBand } : {}), ...(digest ? { digest } : {}) }
   }
 
+  // An AI overview per topic, written from the checked summaries of the listed papers (never from abstracts).
+  const listedItems = selected.items.map(withDigest)
+  const entryLabel = (id: string) => { const entry = context.entries.find((candidate) => candidate.id === id); return entry ? [entry.condition, entry.treatment].filter(Boolean).join(" × ") : id }
+  const topicOverviews: Record<string, OverviewSentence[]> = {}
+  if (deps.summarise) {
+    const pending = []
+    for (const topic of overviewTopics(listedItems)) {
+      const hash = topic.papers.map((paper) => paper.key).join("|")
+      const kept = cache?.overviews?.[topic.entryId]
+      if (kept && kept.hash === hash) topicOverviews[topic.entryId] = kept.value
+      else pending.push({ ...topic, label: entryLabel(topic.entryId), hash })
+    }
+    if (pending.length > 0) {
+      const written = await writeTopicOverviews(pending, runOpts)
+      costUsd = addCosts(costUsd, written.costUsd)
+      for (const topic of pending) {
+        const overview = written.overviews[topic.entryId]
+        if (!overview) continue
+        topicOverviews[topic.entryId] = overview
+        if (cache) (cache.overviews ??= {})[topic.entryId] = { hash: topic.hash, at: now().toISOString(), value: overview }
+      }
+      if (cache) await saveFeedCache(storage, cache, now())
+    }
+  }
+
   const generatedAt = now().toISOString()
   const feed: StoredFeed = {
     version: 1, generatedAt, mode, lookBack: lookBackOf(context.settings), strictness: context.settings.strictness,
-    items: selected.items.map(withDigest),
+    items: listedItems,
+    topics: context.entries.map(({ id, condition, treatment }) => ({ id, ...(condition ? { condition } : {}), ...(treatment ? { treatment } : {}) })),
+    ...(Object.keys(topicOverviews).length > 0 ? { topicOverviews } : {}),
     lowerConfidence: selected.lowerConfidence.map(toStoredItem),
     ...(seenEarlier.length > 0 ? { seenEarlier: seenEarlier.map(withDigest) } : {}),
     safetySignals: gate.safety.map(toSafetyRef),
@@ -245,6 +276,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     throw new Error(CLINICAL_COPY.run.nothingMatched)
   }
   await saveClinicalFeed(storage, feed)
+  if (deps.keepHistory) await saveHistory(storage, feed)
   return feed
 }
 

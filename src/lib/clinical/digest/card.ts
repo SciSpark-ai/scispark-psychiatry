@@ -82,7 +82,7 @@ const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).len
 const plainNumbers = (text: string) => text
   .replace(/(\d)[\u00b7\u2027\u2219](?=\d)/g, "$1.")
   .replace(/(\d)[,\u00a0\u2009\u202f ](?=\d{3}(?!\d))/g, "$1")
-const numbers = (text: string) => plainNumbers(text).match(/\d+(?:\.\d+)?/g) ?? []
+export const numbers = (text: string) => plainNumbers(text).match(/\d+(?:\.\d+)?/g) ?? []
 
 /** Checks one answer. Returns the digest, or the reason it is rejected. */
 export function checkDigest(answer: Pick<DigestAnswer, "headline" | "takeaway" | "source">, paper: PaperRecord): { digest: CardDigest } | { reason: string } {

@@ -7,6 +7,7 @@ import { loadClinicalSettings, loadWatchEntries } from "../watch/store"
 import type { ClinicalSettings, WatchEntry } from "../types"
 import { CLINICAL_COPY } from "../copy"
 import { loadSeenTimes } from "../seen/store"
+import { lookBackOf } from "../modes"
 
 export interface RunContext {
   entries: WatchEntry[]
@@ -25,14 +26,16 @@ export async function assembleContext(storage: VaultStorage): Promise<RunContext
   const entries = (await loadWatchEntries(storage)).filter((entry) => entry.priority !== "paused")
   if (entries.length === 0) throw new Error(CLINICAL_COPY.run.noEntries)
   const feedback = await loadFeedback(storage)
-  const seenAt = await loadSeenTimes(storage)
+  const settings = await loadClinicalSettings(storage)
+  // Only papers already shown under the same time range are left out of the new list.
+  const seenAt = await loadSeenTimes(storage, lookBackOf(settings))
   const bundle = await loadBundle(storage)
   const saved = [...bundle.pages.values()]
     .filter((page) => page.frontmatter.type === "paper")
     .map((page) => paperKey(paperRecordFromFrontmatter(page.frontmatter)))
   return {
     entries,
-    settings: await loadClinicalSettings(storage),
+    settings,
     exclude: new Set([...saved, ...dismissedKeys(feedback)]),
     seen: new Set(seenAt.keys()),
     seenAt,

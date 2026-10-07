@@ -25,14 +25,15 @@ const html = () => renderToStaticMarkup(<Sidebar collapsed={false} />)
 describe("Sidebar nav map (SP1)", () => {
   it("shows the grouped real-surface map", () => {
     const out = html()
-    for (const label of ["Discover", "Knowledge", "Home", "Sparky", "Read later", "My topics", "Wiki", "Graph", "Psychiatry"]) {
+    for (const label of ["Discover", "Knowledge", "Home", "Sparky", "Read later", "History", "My topics", "Wiki", "Graph", "Psychiatry"]) {
       expect(out, label).toContain(label)
     }
-    for (const href of ["/", "/watch", "/read-later", "/wiki", "/viz", "/chat"]) {
+    for (const href of ["/", "/watch", "/read-later", "/feed-history", "/wiki", "/viz", "/chat"]) {
       expect(out, href).toContain(`href="${href}"`)
     }
     // Clinical edition (D32): Trending, Idea Spark and the fork-mock pages are hidden.
-    for (const label of ["Trending", "Idea Spark", "Projects", "History"]) expect(out, label).not.toContain(label)
+    // "History" is now the clinical search history (/feed-history); upstream's own /history page stays hidden.
+    for (const label of ["Trending", "Idea Spark", "Projects"]) expect(out, label).not.toContain(label)
     for (const href of ["/spark", "/projects", "/trending", "/history"]) expect(out, href).not.toContain(`href="${href}"`)
     expect(out).not.toContain('href="/papers"')
   })

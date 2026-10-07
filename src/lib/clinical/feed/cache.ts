@@ -1,6 +1,7 @@
 import type { PaperRecord } from "../../papers/types"
 import type { VaultStorage } from "../../vault/storage"
 import type { CardDigest } from "../digest/card"
+import type { OverviewSentence } from "../digest/topic"
 import type { StageAGrade, WatchEntry } from "../types"
 
 /**
@@ -24,6 +25,8 @@ export interface FeedCache {
   entriesKey: string
   grades: Record<string, Kept<StageAGrade>>
   digests: Record<string, Kept<CardDigest>>
+  /** Topic overviews by watch entry id; `hash` is the list of papers the overview was written for. */
+  overviews?: Record<string, Kept<OverviewSentence[]>>
 }
 
 /** Everything about the active watch entries that a grade depends on. */
@@ -55,7 +58,10 @@ export async function loadFeedCache(storage: VaultStorage, entries: WatchEntry[]
     if (raw === null) return empty(key)
     const parsed = JSON.parse(raw) as Partial<FeedCache>
     if (parsed.version !== 1 || typeof parsed.grades !== "object" || typeof parsed.digests !== "object") return empty(key)
-    return { version: 1, entriesKey: key, grades: parsed.entriesKey === key ? (parsed.grades ?? {}) : {}, digests: parsed.digests ?? {} }
+    return {
+      version: 1, entriesKey: key, grades: parsed.entriesKey === key ? (parsed.grades ?? {}) : {}, digests: parsed.digests ?? {},
+      overviews: parsed.entriesKey === key && parsed.overviews && typeof parsed.overviews === "object" ? parsed.overviews : {},
+    }
   } catch {
     return empty(key)
   }
@@ -64,7 +70,7 @@ export async function loadFeedCache(storage: VaultStorage, entries: WatchEntry[]
 export async function saveFeedCache(storage: VaultStorage, cache: FeedCache, now: Date): Promise<void> {
   const oldest = new Date(now.getTime() - KEEP_DAYS * 86_400_000).toISOString()
   const fresh = <T>(kept: Record<string, Kept<T>>) => Object.fromEntries(Object.entries(kept).filter(([, entry]) => entry.at >= oldest))
-  await storage.write(CACHE_PATH, JSON.stringify({ ...cache, grades: fresh(cache.grades), digests: fresh(cache.digests) }))
+  await storage.write(CACHE_PATH, JSON.stringify({ ...cache, grades: fresh(cache.grades), digests: fresh(cache.digests), overviews: fresh(cache.overviews ?? {}) }))
 }
 
 export function cachedGrade(cache: FeedCache, key: string, paper: PaperRecord): StageAGrade | undefined {

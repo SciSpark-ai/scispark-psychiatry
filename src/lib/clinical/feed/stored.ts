@@ -45,6 +45,10 @@ const StoredFeedSchema = z.object({
   lowerConfidence: z.array(StoredItemSchema),
   /** Matching papers that were already displayed on an earlier visit; not recommended again. */
   seenEarlier: z.array(StoredItemSchema).optional(),
+  /** The active topics when the list was built, so an earlier list can be reopened with its own labels. */
+  topics: z.array(z.object({ id: z.string(), condition: z.string().optional(), treatment: z.string().optional() })).optional(),
+  /** AI overview of each topic's papers, by watch entry id: checked sentences with the papers they rest on. */
+  topicOverviews: z.record(z.string(), z.array(z.object({ text: z.string(), sources: z.array(z.string()) }))).optional(),
   safetySignals: z.array(z.object({ paper: PaperSchema, key: z.string() })),
   stats: z.object({ retrieved: z.number(), domain: z.number(), gated: z.number(), graded: z.number(), listed: z.number() }),
   costUsd: z.number().nullable(),
@@ -63,15 +67,19 @@ export function toStoredItem(item: ScoredItem): StoredFeedItem {
 
 export const toSafetyRef = (candidate: GatedCandidate) => ({ paper: candidate.paper, key: candidate.key })
 
-export async function loadClinicalFeed(storage: VaultStorage): Promise<StoredFeed | null> {
-  const raw = await storage.read(FEED_PATH)
-  if (raw === null) return null
+/** A stored list from its file text; null when the text is not a valid list. */
+export function parseStoredFeed(raw: string): StoredFeed | null {
   try {
     const parsed = StoredFeedSchema.safeParse(JSON.parse(raw))
     return parsed.success ? parsed.data : null
   } catch {
     return null
   }
+}
+
+export async function loadClinicalFeed(storage: VaultStorage): Promise<StoredFeed | null> {
+  const raw = await storage.read(FEED_PATH)
+  return raw === null ? null : parseStoredFeed(raw)
 }
 
 export async function saveClinicalFeed(storage: VaultStorage, feed: StoredFeed): Promise<void> {

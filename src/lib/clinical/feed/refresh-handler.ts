@@ -14,6 +14,7 @@ export interface RefreshDeps {
   now?: () => Date
   summarise?: boolean
   useCache?: boolean
+  keepHistory?: boolean
 }
 
 /** The body of POST /api/clinical/feed/refresh: runs the funnel and streams each stage as a progress event. */
@@ -27,6 +28,7 @@ export async function handleRefresh(vault: VaultStorage, emit: (event: object) =
     now: deps.now,
     summarise: deps.summarise,
     useCache: deps.useCache,
+    keepHistory: deps.keepHistory,
     onStage: (stage) => emit({ type: "progress", stage }),
   })
 }

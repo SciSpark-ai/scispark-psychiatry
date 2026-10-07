@@ -14,5 +14,6 @@ export const POST = ndjsonSkillRoute<Record<string, never>>(async (_input, vault
     providerOverride: getSkillTestOverrides().providerOverride,
     summarise: true,
     useCache: true,
+    keepHistory: true,
   }),
 )

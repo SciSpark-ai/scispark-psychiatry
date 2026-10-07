@@ -31,6 +31,8 @@ export const CLINICAL_COPY = {
     lookBack: "Look back",
     lookBackOptions: { "3d": "3 days", "7d": "1 week", "14d": "2 weeks", "30d": "30 days", "3m": "3 months", "6m": "6 months", "12m": "12 months" },
     allTopics: "All",
+    aiOverview: "AI overview",
+    aiOverviewNote: "Written by AI from the summaries of the papers listed under this topic. The numbers after a sentence are the papers it rests on. Read the papers before relying on it.",
     topicsLabel: "Topics",
     /** The count line of a tab. */
     overview: {
@@ -70,6 +72,16 @@ export const CLINICAL_COPY = {
     heading: "Read later",
     intro: "Papers you put aside from your feed.",
     empty: "Nothing put aside yet. Use the clock on a paper to keep it here.",
+  },
+  history: {
+    heading: "History",
+    intro: "Every search you have run. Open one to see its list again on Home, or delete it.",
+    empty: "No searches yet. Each time you press Refresh, the list is kept here.",
+    papers: (count: number) => `${count} ${count === 1 ? "paper" : "papers"}`,
+    open: "Open",
+    delete: "Delete",
+    confirmDelete: "Delete for good",
+    failed: "The history could not be changed.",
   },
   /** Errors and warnings of a feed run; shown on Home. */
   run: {
