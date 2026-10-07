@@ -91,6 +91,9 @@ describe("a card", () => {
     const jumped = container.querySelector<HTMLElement>("[data-testid=clinical-feed-card]")!
     expect(jumped.getAttribute("data-highlighted")).toBe("true")
     expect(jumped.className).toContain("[--card-strength:10%]")
+    // ...and a thicker border in the card's own colour, which a hover does not have.
+    expect(jumped.className).toContain("border-2")
+    expect(plain.className).not.toContain("border-2")
     expect(jumped.className).not.toContain("ring-")
   })
 })

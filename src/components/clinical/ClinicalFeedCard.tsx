@@ -97,11 +97,12 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
         "--card-tone": CARD_TONES[tone % CARD_TONES.length],
         // --card-strength is raised by the hover and highlight classes below: the tint deepens a little.
         backgroundColor: "color-mix(in srgb, var(--card-tone) var(--card-strength, 2%), var(--surface-light))",
-        borderColor: "color-mix(in srgb, var(--card-tone) 14%, var(--border))",
+        // Jumped to from the overview: the border takes the card's own colour, clearly, on top of the lift.
+        borderColor: highlighted ? "color-mix(in srgb, var(--card-tone) 75%, var(--border))" : "color-mix(in srgb, var(--card-tone) 14%, var(--border))",
       } as CSSProperties })}
       {...(highlighted ? { "data-highlighted": "true" } : {})}
       // A card stands out by a slightly deeper tint and a lift: gently under the pointer, more when jumped to.
-      className={`flex cursor-pointer flex-col gap-2.5 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:[--card-strength:6%] ${highlighted ? "-translate-y-1 shadow-xl [--card-strength:10%]" : ""}`}
+      className={`flex cursor-pointer flex-col gap-2.5 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:[--card-strength:6%] ${highlighted ? "-translate-y-1 border-2 shadow-xl [--card-strength:10%]" : ""}`}
     >
       {/* Tags are plain text, not pills: a pill's own background fights with the card's tint. */}
       <p className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-snug">

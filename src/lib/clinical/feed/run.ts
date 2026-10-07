@@ -17,6 +17,7 @@ import { digestCards } from "../digest/card"
 import { overviewTopics, writeTopicOverviews, type OverviewSentence } from "../digest/topic"
 import { saveHistory } from "../history/store"
 import { topicLabel } from "../topic-label"
+import { displayVenue } from "../text/venue"
 import { seenRecently } from "../seen/store"
 import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
 import { layerOf, selectFeed } from "../select/select"
@@ -130,6 +131,12 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   const failedQueries = retrieved.queryLog.filter((entry) => entry.error).length
   if (previous && previous.items.length > 0 && failedQueries * 2 >= retrieved.queryLog.length) {
     throw new Error(CLINICAL_COPY.run.tooManyQueriesFailed(failedQueries, retrieved.queryLog.length))
+  }
+
+  // Journal names as they should be read, not as PubMed's catalogue prints them.
+  for (const candidate of retrieved.candidates) {
+    const venue = displayVenue(candidate.paper.venue, deps.pack.journals)
+    if (venue) candidate.paper = { ...candidate.paper, venue }
   }
 
   deps.onStage?.("filter")

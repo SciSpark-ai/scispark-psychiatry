@@ -5,8 +5,15 @@
  */
 export interface AbstractSection { label?: string; text: string }
 
-/** A line that starts a section: a short label in capitals, a colon, then the text. */
-const LABELLED = /^([A-Z][A-Z0-9 ,/&'()-]{2,48}):\s*(.*)$/
+/** The words abstracts use for their sections. Recognised however they are capitalised. */
+const WORD = String.raw`(?:background|introduction|context|rationale|importance|objectives?|aims?|purpose|hypothes[ie]s|design|setting|participants|patients|subjects|materials? and methods|methods?|methodology|interventions?|exposures?|main outcomes?(?: and measures?)?|measurements?|measures|outcomes?|results?|findings|discussion|conclusions?(?: and relevance)?|interpretation|significance|implications|limitations|funding|trial registration|registration|keywords?)`
+const KNOWN = String.raw`${WORD}(?:\s*(?:/|and|&)\s*${WORD})*`
+/** A line that starts a section: a known section word in any capitals, or any short label in capitals; a colon; the text. */
+const LABELLED = new RegExp(String.raw`^(${KNOWN}|[A-Z][A-Z0-9 ,/&'()-]{2,48}):\s*(.*)$`, "i")
+/** A label in capitals must really be in capitals; only the known words may be in ordinary case. */
+const isLabel = (label: string) => new RegExp(`^${KNOWN}$`, "i").test(label) || label === label.toUpperCase()
+/** Where a new section begins inside a line: after the end of a sentence, before a known word and its colon. */
+const INLINE = new RegExp(String.raw`(?<=[.!?])\s+(?=${KNOWN}:\s)`, "gi")
 
 const readable = (label: string) => {
   const lower = label.toLowerCase().replace(/\s+/g, " ").trim()
@@ -14,11 +21,11 @@ const readable = (label: string) => {
 }
 
 export function abstractSections(abstract: string | undefined): AbstractSection[] {
-  const lines = (abstract ?? "").split("\n").map((line) => line.trim()).filter(Boolean)
+  const lines = (abstract ?? "").split("\n").flatMap((line) => line.split(INLINE)).map((line) => line.trim()).filter(Boolean)
   const sections: AbstractSection[] = []
   for (const line of lines) {
     const match = LABELLED.exec(line)
-    if (match) sections.push({ label: readable(match[1]), text: match[2].trim() })
+    if (match && isLabel(match[1])) sections.push({ label: readable(match[1]), text: match[2].trim() })
     else if (sections.length > 0) sections[sections.length - 1].text = `${sections[sections.length - 1].text} ${line}`.trim()
     else sections.push({ text: line })
   }

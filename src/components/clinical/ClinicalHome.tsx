@@ -149,7 +149,8 @@ export function ClinicalHome() {
     const scroll = () => document.getElementById(`paper-${position + 1}`)?.scrollIntoView?.({ block: "center" })
     setTimeout(scroll, 60)
     setTimeout(scroll, 300)
-    setTimeout(() => setJumped((current) => (current === position + 1 ? null : current)), 2200)
+    // Long enough to find the card and start reading it; a hover, by contrast, ends with the pointer.
+    setTimeout(() => setJumped((current) => (current === position + 1 ? null : current)), 6000)
   }
   const markSaved = (key: string) => setData((current) => (current ? { ...current, saved: new Set(current.saved).add(key) } : current))
 

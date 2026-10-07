@@ -30,7 +30,7 @@ describe("abstractSections", () => {
     expect(abstractSections(undefined)).toEqual([])
   })
   it("does not take a sentence with a colon for a label", () => {
-    expect(abstractSections("Results: mixed. We found three things: a, b and c.")).toEqual([{ text: "Results: mixed. We found three things: a, b and c." }])
+    expect(abstractSections("Caveat: mixed. We found three things: a, b and c.")).toEqual([{ text: "Caveat: mixed. We found three things: a, b and c." }])
   })
 })
 
