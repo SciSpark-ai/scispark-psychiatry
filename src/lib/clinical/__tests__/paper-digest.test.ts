@@ -3,6 +3,7 @@ import { MemoryVaultStorage } from "../../vault/memory-storage"
 import { MockProvider } from "../../llm/mock-provider"
 import { paperSlug } from "../../wiki/authoring"
 import { generatePaperDigest, loadCachedPaperDigest, PAPER_DIGEST_ITEMS } from "../digest/paper"
+import { readPaperTextPatiently } from "../digest/paper-text"
 import { llmResult, paper, SETTINGS } from "./helpers"
 
 // The digest on the paper page (owner decision 2026-10-07): nine short items in a fixed order,
@@ -88,5 +89,22 @@ describe("the clinical paper digest", () => {
     await storage.write(`.scispark/clinical/paper-digests/${paperSlug(RCT)}.json`, "{not json")
     expect(await loadCachedPaperDigest(storage, paperSlug(RCT))).toBeNull()
     expect(await loadCachedPaperDigest(storage, "../settings")).toBeNull()
+  })
+})
+
+// Found 2026-10-07: a paper that is in PubMed Central came back "request returned 502" once and was read on the next try.
+describe("reading the paper for the digest", () => {
+  const text = (access: "full-text" | "abstract", notes: string[]) => ({ paperKey: "pmid:111", access, text: "T", locator: "L", checkedAt: "2026-10-07T10:00:00.000Z", truncated: false, notes })
+  it("tries once more when the full text failed for a passing reason", async () => {
+    const answers = [text("abstract", ["Full-text request returned 502"]), text("full-text", [])]
+    let calls = 0
+    expect((await readPaperTextPatiently(async () => answers[calls++])).access).toBe("full-text")
+    expect(calls).toBe(2)
+  })
+  it("does not try again when there is no open full text to be had", async () => {
+    let calls = 0
+    const read = async () => { calls++; return text("abstract", ["No matching open-access repository text found"]) }
+    expect((await readPaperTextPatiently(read)).access).toBe("abstract")
+    expect(calls).toBe(1)
   })
 })

@@ -4,6 +4,7 @@ import { loadSettings } from "@/lib/llm/settings"
 import { loadPaperText } from "@/lib/papers/full-text"
 import { PaperTextInfoSchema } from "@/lib/papers/text-contract"
 import { paperSlug } from "@/lib/wiki/authoring"
+import { readPaperTextPatiently } from "@/lib/clinical/digest/paper-text"
 import { generatePaperDigest, loadCachedPaperDigest, type StoredPaperDigest } from "@/lib/clinical/digest/paper"
 import type { PaperRecord } from "@/lib/papers/types"
 
@@ -27,7 +28,7 @@ export const POST = jsonSkillRoute<{ paper: PaperRecord }, { digest: StoredPaper
   const cached = await loadCachedPaperDigest(vault, paperSlug(paper))
   if (cached?.source.access === "full-text") return { digest: cached, fromCache: true }
   const overrides = getSkillTestOverrides()
-  const acquired = await loadPaperText(vault, paper, { fetchFn: overrides.fetchFn })
+  const acquired = await readPaperTextPatiently(() => loadPaperText(vault, paper, { fetchFn: overrides.fetchFn }))
   const { digest, fromCache } = await generatePaperDigest(vault, paper, {
     fullText: acquired.access === "full-text" ? acquired.text : undefined,
     source: PaperTextInfoSchema.parse(acquired),
