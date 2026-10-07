@@ -492,6 +492,14 @@ function PaperPageContent() {
 
               <div className={paperStyles.layout}>
                 <article aria-label="Paper reading" className={paperStyles.reading}>
+                  {/* Clinical edition: the authors' abstract is always open and comes before the digest. */}
+                  {load.paper.abstract && (
+                    <section data-testid="paper-abstract" className="mb-10">
+                      <h2 className="mb-3 font-heading text-[20px] font-semibold text-espresso">{CLINICAL_COPY.paper.originalAbstract}</h2>
+                      <ClinicalAbstract text={load.paper.abstract} />
+                    </section>
+                  )}
+
                   {digestState.status === "done" && (
                     <>
                       <PaperDigestNavigation digest={digestState.digest} compact />
@@ -515,12 +523,6 @@ function PaperPageContent() {
 
                   {load.pageState.state === "ingested" && page && <PaperSynthesis bundle={load.bundle} page={page} />}
 
-                  {load.paper.abstract && (
-                    <details className={paperStyles.abstract} open={digestState.status !== "done" && load.pageState.state !== "ingested"}>
-                      <summary>{CLINICAL_COPY.paper.originalAbstract}</summary>
-                      <ClinicalAbstract text={load.paper.abstract} />
-                    </details>
-                  )}
                 </article>
 
                 {(page || digestState.status === "done") && (

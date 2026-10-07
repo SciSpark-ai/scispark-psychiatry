@@ -62,3 +62,15 @@ describe("author names", () => {
     expect(toCandidate(record, { query: "q", tier: "entry" })!.paper.authors.map((author) => author.name)).toEqual(["Jens Møllegaard Jepsen", "Dost Öngür", "İsmet Kırpınar", "Ana O'Neil"])
   })
 })
+
+// Owner decision 2026-10-07: the paper page reads header, AI summary, abstract, digest, in that order.
+describe("the order of the paper page", () => {
+  it("shows the abstract open, above the digest, not folded away under it", async () => {
+    const { readFileSync } = await import("node:fs")
+    const source = readFileSync("src/app/paper/[key]/page.tsx", "utf8")
+    const abstract = source.indexOf('data-testid="paper-abstract"')
+    expect(abstract).toBeGreaterThan(-1)
+    expect(abstract).toBeLessThan(source.indexOf("<PaperDigestView"))
+    expect(source).not.toMatch(/<details className=\{paperStyles\.abstract\}/)
+  })
+})
