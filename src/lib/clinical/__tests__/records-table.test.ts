@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { TaxonomySchema } from "../pack/schema"
 import { fieldPaths, getField, withField, type TrialRecord } from "../records/schema"
 import { buildTreatmentTable } from "../records/table"
-import { evidenceBlock, parseEvidenceQuery } from "../records/query"
+import { conditionBlock, evidenceBlock, parseEvidenceQuery } from "../records/query"
 import { CLINICAL_COPY } from "../copy"
 import { RECORD, num, unconfirmed } from "./records-fixture"
 
@@ -84,6 +84,9 @@ describe("the block a page holds", () => {
     expect(evidenceBlock("depression")).toBe("```evidence-table\ncondition: depression\n```")
     expect(parseEvidenceQuery("condition: depression")).toEqual({ condition: "depression" })
     expect(parseEvidenceQuery("  condition:   treatment-resistant-depression  \n")).toEqual({ condition: "treatment-resistant-depression" })
+  })
+  it("has a second block for the evidence of a condition", () => {
+    expect(conditionBlock("depression")).toBe("```condition-evidence\ncondition: depression\n```")
   })
   it("reads anything else as no query", () => {
     expect(parseEvidenceQuery("")).toBeNull()

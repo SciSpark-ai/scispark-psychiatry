@@ -6,12 +6,12 @@ import { slugifyTitle } from "../../wiki/authoring"
 import { loadRouting } from "../../wiki/schema-routing"
 import { CLINICAL_COPY } from "../copy"
 import type { Taxonomy } from "../pack/schema"
-import { evidenceBlock } from "./query"
+import { conditionBlock } from "./query"
 
 /**
  * Makes the wiki page of a condition when the reader asks for one (decision D19: pages are created
  * by the user). The page holds the pack's id of the condition and a block that is drawn as the
- * treatment-options table. An existing page is left as it is.
+ * evidence the feed has seen on it. An existing page is left as it is.
  */
 export async function createConditionPage(storage: VaultStorage, taxonomy: Taxonomy, code: string, opts: { now?: () => Date } = {}): Promise<{ id: string; created: boolean }> {
   const node = taxonomy.nodes.find((entry) => entry.id === code && entry.type === "condition")
@@ -23,7 +23,7 @@ export async function createConditionPage(storage: VaultStorage, taxonomy: Taxon
   const now = opts.now?.() ?? new Date()
   const today = now.toISOString().slice(0, 10)
   const P = CLINICAL_COPY.records.conditionPage
-  const body = `## ${P.overview}\n\n${P.overviewHint}\n\n## ${P.options}\n\n${evidenceBlock(node.id)}\n`
+  const body = `## ${P.evidence}\n\n${conditionBlock(node.id)}\n\n## ${P.notes}\n\n${P.notesHint}\n`
   const after = serializeDocument({
     type: "condition", title: node.name, created: today, updated: today, tags: [], related: [], sources: [],
     taxonomy: node.id, aliases: node.synonyms, ...(node.meshHeading ? { mesh: node.meshHeading } : {}),

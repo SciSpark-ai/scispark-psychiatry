@@ -11,3 +11,7 @@ export function parseEvidenceQuery(body: string): { condition: string } | null {
 }
 
 export const evidenceBlock = (conditionCode: string) => `\`\`\`${EVIDENCE_FENCE}\ncondition: ${conditionCode}\n\`\`\``
+
+/** The block of a condition page that is drawn as the evidence the feed has seen on the condition. */
+export const CONDITION_FENCE = "condition-evidence"
+export const conditionBlock = (conditionCode: string) => `\`\`\`${CONDITION_FENCE}\ncondition: ${conditionCode}\n\`\`\``

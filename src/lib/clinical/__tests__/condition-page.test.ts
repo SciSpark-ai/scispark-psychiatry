@@ -13,14 +13,15 @@ const TAXONOMY = TaxonomySchema.parse({ version: "t", nodes: [
 const NOW = () => new Date("2026-10-07T10:00:00.000Z")
 
 describe("creating a condition page", () => {
-  it("writes a page of type condition with the pack's id and an evidence-table block, through a changeset", async () => {
+  it("writes a page of type condition with the pack's id and a condition-evidence block, through a changeset", async () => {
     const storage = new MemoryVaultStorage()
     const made = await createConditionPage(storage, TAXONOMY, "depression", { now: NOW })
     expect(made).toEqual({ id: "wiki/conditions/major-depressive-disorder", created: true })
     const { frontmatter, body } = parseDocument((await storage.read("wiki/conditions/major-depressive-disorder.md")) as string)
     expect(frontmatter).toMatchObject({ type: "condition", title: "Major depressive disorder", taxonomy: "depression", aliases: ["MDD"], mesh: "Depressive Disorder, Major", created: "2026-10-07" })
-    const block = body.match(/```evidence-table\n([\s\S]*?)\n```/)
+    const block = body.match(/```condition-evidence\n([\s\S]*?)\n```/)
     expect(parseEvidenceQuery(block![1])).toEqual({ condition: "depression" })
+    expect(body).not.toContain("```evidence-table")
     expect((await storage.list(".scispark/changesets/")).length).toBe(1)
     // The page is one the wiki can load.
     expect((await loadBundle(storage)).pages.get("wiki/conditions/major-depressive-disorder")?.frontmatter.type).toBe("condition")
