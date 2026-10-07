@@ -79,7 +79,8 @@ export async function saveRecord(storage: VaultStorage, record: TrialRecord, opt
     await write(storage, TrialRecordSchema.parse(record), "trial-extraction", record.slug, now)
     if (!isNew) return
     const id = `extract-${record.slug}`
-    const values = shownFieldPaths(record).filter((path) => getField(record, path)?.value !== null).length
+    // The three choices have no sentence: they are not among the values "matched to a sentence".
+    const values = shownFieldPaths(record).filter((path) => choiceKind(path) === null && getField(record, path)?.value !== null).length
     await storage.write(`.scispark/review/${id}.json`, JSON.stringify({
       id, createdAt: now.toISOString(), kind: "extraction-review", paperSlug: record.slug, pages: [],
       title: CLINICAL_COPY.records.inboxTitle(record.title), description: CLINICAL_COPY.records.inboxDescription(values, record.droppedFields),

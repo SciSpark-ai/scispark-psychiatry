@@ -37,6 +37,8 @@ describe("the record store", () => {
     expect((await storage.list(".scispark/changesets/")).length).toBe(1)
     const reviews = await listReviews(storage)
     expect(reviews.map((item) => [item.kind, item.paperSlug])).toEqual([["extraction-review", RECORD.slug]])
+    // Counted: the values the panel shows that have a sentence (not a mean of a binary outcome, not the three choices).
+    expect(reviews[0].description).toMatch(/^21 values were read from the paper and matched to a sentence in it\./)
   })
 
   it("does not overwrite a file it cannot read", async () => {
