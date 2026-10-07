@@ -7,6 +7,7 @@ import { writeReaderHandoff } from "../../reader/handoff"
 import { DASHBOARD_CACHE_PATH, TRENDING_BOARD_VERSION } from "../../trending/cache"
 import { resolvePaperByKey, resolvePaperBySlug, extractAbstractFromBody } from "../resolve"
 import type { PaperRecord } from "../types"
+import { RECORD } from "../../clinical/__tests__/records-fixture"
 
 const PAPER: PaperRecord = {
   ids: { arxiv: "2409.08710" },
@@ -97,6 +98,36 @@ describe("resolvePaperBySlug", () => {
     )
 
     await expect(resolvePaperBySlug(s, "missing-required-fields")).resolves.toBeNull()
+  })
+})
+
+// Clinical edition: the treatment-options table and the review inbox link to /paper/<slug>. A paper
+// that has left the feed cache, was never ingested and has no handoff is still found by its trial record.
+describe("resolvePaperBySlug, from a stored trial record", () => {
+  const TRIAL: PaperRecord = { ids: { pmid: "111" }, title: "Esketamine versus quetiapine", authors: [{ name: "A. Author" }], abstract: "A trial.", year: 2026, fields: [], source: "pubmed" }
+  const record = (paper: unknown) => ({ ...RECORD, slug: paperSlug(TRIAL), paperKey: "pmid:111", title: TRIAL.title, paper })
+
+  it("resolves a slug that only a trial record knows, with the paper as it was when the record was read", async () => {
+    const s = new MemoryVaultStorage()
+    await s.write(`records/${paperSlug(TRIAL)}.json`, JSON.stringify(record(TRIAL)))
+    expect(await resolvePaperBySlug(s, paperSlug(TRIAL))).toEqual(TRIAL)
+  })
+  it("resolves nothing from a record stored before the paper was kept, an unreadable one, or one whose paper is another paper", async () => {
+    const s = new MemoryVaultStorage()
+    const slug = paperSlug(TRIAL)
+    await s.write(`records/${slug}.json`, JSON.stringify(record(undefined)))
+    expect(await resolvePaperBySlug(s, slug)).toBeNull()
+    await s.write(`records/${slug}.json`, "{ not json")
+    expect(await resolvePaperBySlug(s, slug)).toBeNull()
+    await s.write(`records/${slug}.json`, JSON.stringify(record({ ...TRIAL, title: "Another paper altogether" })))
+    expect(await resolvePaperBySlug(s, slug)).toBeNull()
+    expect(await resolvePaperBySlug(s, "../.scispark/settings")).toBeNull()
+  })
+  it("prefers the wiki page of the paper to the copy in the record", async () => {
+    const s = new MemoryVaultStorage()
+    await writePaperPage(s, TRIAL)
+    await s.write(`records/${paperSlug(TRIAL)}.json`, JSON.stringify(record({ ...TRIAL, venue: "From the record" })))
+    expect((await resolvePaperBySlug(s, paperSlug(TRIAL)))?.venue).toBeUndefined()
   })
 })
 

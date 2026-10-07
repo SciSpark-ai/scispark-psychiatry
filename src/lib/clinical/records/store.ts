@@ -2,10 +2,10 @@ import { commitChangeset } from "../../vault/mutations"
 import { makeChangesetId } from "../../vault/changesets"
 import { withVaultExclusive } from "../../vault/exclusive"
 import type { VaultStorage } from "../../vault/storage"
-import { slugifyTitle } from "../../wiki/authoring"
 import { CLINICAL_COPY } from "../copy"
 import type { Taxonomy } from "../pack/schema"
 import { findNode } from "../pack/taxonomy"
+import { RECORDS_DIR, isRecordSlug, parseRecord, readRecord, recordPath } from "./file"
 import { CHOICE_VALUES, PATHS, TrialRecordSchema, choiceKind, getCode, getField, isNumberPath, shownFieldPaths, withCode, withField, type FieldState, type RecordField, type TrialRecord } from "./schema"
 
 /**
@@ -17,10 +17,8 @@ import { CHOICE_VALUES, PATHS, TrialRecordSchema, choiceKind, getCode, getField,
  * person confirmed. Only `editField`, which starts from the stored record, changes one.
  */
 
-export const RECORDS_DIR = "records"
-const pathOf = (slug: string) => `${RECORDS_DIR}/${slug}.json`
-/** A slug as `paperSlug` makes them. Anything else (a path, an empty string) names no record. */
-export const isRecordSlug = (slug: string) => slug.length > 0 && slug === slugifyTitle(slug)
+export { RECORDS_DIR, isRecordSlug, readRecord }
+const pathOf = recordPath
 
 export class RecordConflictError extends Error {}
 export class RecordNotFoundError extends Error {}
@@ -30,23 +28,6 @@ export type FieldChange = { action: "confirm" } | { action: "edit"; value: strin
 /** The value, and for a field its state, as the reader saw it. What a record is filed under has no state. */
 export type Seen = { value: RecordField["value"]; state?: FieldState }
 
-const parse = (raw: string | null): TrialRecord | null => {
-  if (raw === null) return null
-  try {
-    const parsed = TrialRecordSchema.safeParse(JSON.parse(raw))
-    return parsed.success ? parsed.data : null
-  } catch {
-    return null
-  }
-}
-
-/** The record under a slug, and whether a file is stored there at all: `stored` with no record is a file that cannot be read. */
-export async function readRecord(storage: VaultStorage, slug: string): Promise<{ stored: boolean; record: TrialRecord | null }> {
-  if (!isRecordSlug(slug)) return { stored: false, record: null }
-  const raw = await storage.read(pathOf(slug))
-  return { stored: raw !== null, record: parse(raw) }
-}
-
 export async function loadRecord(storage: VaultStorage, slug: string): Promise<TrialRecord | null> {
   return (await readRecord(storage, slug)).record
 }
@@ -54,7 +35,7 @@ export async function loadRecord(storage: VaultStorage, slug: string): Promise<T
 /** Every readable record. A damaged file is skipped, not an error: one bad file must not empty every table. */
 export async function listRecords(storage: VaultStorage): Promise<TrialRecord[]> {
   const paths = (await storage.list(`${RECORDS_DIR}/`)).filter((path) => path.endsWith(".json"))
-  const records = await Promise.all(paths.map(async (path) => parse(await storage.read(path))))
+  const records = await Promise.all(paths.map(async (path) => parseRecord(await storage.read(path))))
   return records.filter((record): record is TrialRecord => record !== null)
 }
 

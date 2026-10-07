@@ -5,6 +5,7 @@ import { loadBundle } from "../vault/bundle"
 import { readReaderHandoff, readReaderHandoffBySlug } from "../reader/handoff"
 import { loadTrendingPaperRecords } from "../trending/cache"
 import { paperSlug } from "../wiki/authoring"
+import { readRecord } from "../clinical/records/file"
 import { paperKey, type PaperRecord } from "./types"
 
 /**
@@ -146,6 +147,11 @@ export async function resolvePaperByKey(storage: VaultStorage, key: string): Pro
  * `writeReaderHandoff`) before navigating to `/paper/<slug>`, since a fresh
  * search result exists in neither the feed cache nor the wiki yet. `null`
  * when nothing resolves.
+ *
+ * Clinical edition: last of all, the paper kept in a stored trial record
+ * (`records/<slug>.json`). The treatment-options table and the review inbox
+ * link to `/paper/<slug>`, and a trial that has left the feed cache without
+ * being ingested is in none of the sources above.
  */
 export async function resolvePaperBySlug(storage: VaultStorage, slug: string): Promise<PaperRecord | null> {
   const candidate = await findPaperCandidate(storage, (c) => paperSlug(c) === slug)
@@ -153,6 +159,12 @@ export async function resolvePaperBySlug(storage: VaultStorage, slug: string): P
   try {
     const handoff = await readReaderHandoffBySlug(storage, slug)
     if (handoff) return handoff
+  } catch {
+    // Best-effort, same as the candidate scan above.
+  }
+  try {
+    const paper = (await readRecord(storage, slug)).record?.paper
+    if (paper && paperSlug(paper) === slug) return paper
   } catch {
     // Best-effort, same as the candidate scan above.
   }
