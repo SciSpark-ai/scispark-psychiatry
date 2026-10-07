@@ -12,6 +12,7 @@ import { planQueries } from "../plan/skill"
 import { retrieve, type EnumerateFn } from "../retrieve/pool"
 import { scoreCandidate, type ScoredItem } from "../score/score"
 import { digestCards } from "../digest/card"
+import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
 import { selectFeed, SHORTLIST_GRADE } from "../select/select"
 import type { Candidate, ClinicalStage, DropRecord, GatedCandidate, StageAGrade, WatchEntry } from "../types"
 import { assembleContext } from "./context"
@@ -28,6 +29,8 @@ export interface ClinicalFeedDeps {
   onStage?: (stage: ClinicalStage) => void
   /** Write an AI headline and takeaway for each listed paper (one more `fast` call per 12 papers). Off unless asked. */
   summarise?: boolean
+  /** Reuse grades and summaries from earlier runs (feed/cache.ts). Off unless asked. */
+  useCache?: boolean
 }
 
 const ref = (candidate: Candidate): PoolRef => ({ key: candidate.key, pmid: candidate.paper.ids.pmid, doi: candidate.paper.ids.doi })
@@ -121,24 +124,50 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   deps.onStage?.("filter")
   const domain = domainFilter(deps.pack, retrieved.candidates)
   const gate = designGate(deps.pack, context.entries, domain.kept, context.settings.strictness)
-  const capped = capCandidates(gate.gated, MODES[mode].candidateCap, { entries: context.entries, pack: deps.pack })
+  // Papers graded on an earlier run keep their grade and take no place under the cap, so each run
+  // spends the cap on papers that have not been graded yet.
+  const cache = deps.useCache ? await loadFeedCache(storage, context.entries) : null
+  const reused = new Map<string, StageAGrade>()
+  if (cache) {
+    for (const candidate of gate.gated) {
+      const grade = cachedGrade(cache, candidate.key, candidate.paper)
+      if (grade) reused.set(candidate.key, grade)
+    }
+  }
+  const capped = capCandidates(gate.gated.filter((candidate) => !reused.has(candidate.key)), MODES[mode].candidateCap, { entries: context.entries, pack: deps.pack })
 
   deps.onStage?.("grade")
   const graded = await gradeStageA(capped.kept, context.entries, context.exemplars, runOpts)
   costUsd = addCosts(costUsd, graded.costUsd)
   if (graded.failedBatches > 0) warnings.push(CLINICAL_COPY.run.gradingBatchesFailed(graded.failedBatches))
+  const gradeOf = (key: string) => (reused.get(key) ?? graded.grades.get(key)) as StageAGrade
+  const assessed = gate.gated.filter((candidate) => reused.has(candidate.key) || graded.grades.has(candidate.key))
 
   deps.onStage?.("select")
-  const scored = capped.kept.map((candidate) =>
-    scoreCandidate({ candidate, grade: graded.grades.get(candidate.key) as StageAGrade, mode, now: now(), journals: deps.pack.journals }))
+  const scored = assessed.map((candidate) =>
+    scoreCandidate({ candidate, grade: gradeOf(candidate.key), mode, now: now(), journals: deps.pack.journals }))
   const selected = selectFeed(scored, context.entries)
 
-  const summaries = deps.summarise
-    ? await digestCards(selected.items.map((item) => ({ key: item.candidate.key, paper: item.candidate.paper, design: item.candidate.design })), runOpts)
-    : null
+  const toDigest = selected.items.map((item) => ({ key: item.candidate.key, paper: item.candidate.paper, design: item.candidate.design }))
+  const knownDigests = new Map(cache ? toDigest.flatMap((item) => { const digest = cachedDigest(cache, item.key, item.paper); return digest ? [[item.key, digest] as const] : [] }) : [])
+  const summaries = deps.summarise ? await digestCards(toDigest, { ...runOpts, known: knownDigests }) : null
   if (summaries) {
     costUsd = addCosts(costUsd, summaries.costUsd)
     if (summaries.failed) warnings.push(CLINICAL_COPY.run.summariesFailed)
+  }
+
+  if (cache) {
+    // Saved before anything below can stop the run: these answers are paid for.
+    const at = now().toISOString()
+    for (const candidate of capped.kept) {
+      const grade = graded.grades.get(candidate.key)
+      if (grade && keepsGrade(grade)) cache.grades[candidate.key] = { hash: textHash(candidate.paper), at, value: grade }
+    }
+    for (const item of toDigest) {
+      const digest = summaries?.digests.get(item.key)
+      if (digest && !knownDigests.has(item.key)) cache.digests[item.key] = { hash: textHash(item.paper), at, value: digest }
+    }
+    await saveFeedCache(storage, cache, now())
   }
   const withDigest = (item: ScoredItem): StoredFeedItem => {
     const digest = summaries?.digests.get(item.candidate.key)
@@ -151,7 +180,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     items: selected.items.map(withDigest),
     lowerConfidence: selected.lowerConfidence.map(toStoredItem),
     safetySignals: gate.safety.map(toSafetyRef),
-    stats: { retrieved: retrieved.candidates.length, domain: domain.kept.length, gated: gate.gated.length, graded: capped.kept.length, listed: selected.items.length },
+    stats: { retrieved: retrieved.candidates.length, domain: domain.kept.length, gated: gate.gated.length, graded: assessed.length, listed: selected.items.length },
     costUsd, warnings,
   }
 
@@ -163,7 +192,8 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
       shortlisted: scored.filter((s) => s.grade.entryId !== null && s.grade.grade >= SHORTLIST_GRADE).map((s) => ref(s.candidate)),
       listed: selected.items.map((item) => ref(item.candidate)),
     },
-    grades: [...graded.grades.values()],
+    grades: assessed.map((candidate) => gradeOf(candidate.key)),
+    ...(cache ? { reusedGrades: reused.size } : {}),
     ...(summaries ? { digestDrops: summaries.dropped } : {}),
   }
   await saveRunLog(storage, log)

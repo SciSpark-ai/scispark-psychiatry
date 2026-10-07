@@ -13,5 +13,6 @@ export const POST = ndjsonSkillRoute<Record<string, never>>(async (_input, vault
     enumerate: (query) => enumeratePubmed(query, { apiKey: process.env.NCBI_API_KEY }),
     providerOverride: getSkillTestOverrides().providerOverride,
     summarise: true,
+    useCache: true,
   }),
 )

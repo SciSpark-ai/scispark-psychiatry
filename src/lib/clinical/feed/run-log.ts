@@ -22,6 +22,8 @@ export interface RunLog {
   grades: StageAGrade[]
   /** Listed papers whose AI summary was not shown, and the check it failed. */
   digestDrops?: Array<{ key: string; reason: string }>
+  /** How many of `grades` came from the local cache instead of a model call in this run. */
+  reusedGrades?: number
 }
 
 export async function saveRunLog(storage: VaultStorage, log: RunLog): Promise<void> {
