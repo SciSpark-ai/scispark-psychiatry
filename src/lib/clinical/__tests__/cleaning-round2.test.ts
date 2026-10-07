@@ -55,3 +55,17 @@ describe("displayVenue", () => {
   })
 })
 
+
+// Found 2026-10-07 on a Schizophrenia Bulletin abstract: labels of two words in capitals were broken in two.
+describe("section labels of more than one word", () => {
+  it("keeps a two-word label in capitals together", async () => {
+    const { cleanAbstract } = await import("../text/clean")
+    const cleaned = cleanAbstract("BACKGROUND AND HYPOTHESIS: Symptoms vary. STUDY DESIGN: We reviewed 52 studies. STUDY RESULTS: Five themes emerged. CONCLUSIONS: Experience is broad.")
+    expect(cleaned).toBe("BACKGROUND AND HYPOTHESIS: Symptoms vary.\nSTUDY DESIGN: We reviewed 52 studies.\nSTUDY RESULTS: Five themes emerged.\nCONCLUSIONS: Experience is broad.")
+    expect(abstractSections(cleaned).map((section) => section.label)).toEqual(["Background and hypothesis", "Study design", "Study results", "Conclusions"])
+  })
+  it("leaves a sentence that ends in a word in capitals alone", async () => {
+    const { cleanAbstract } = await import("../text/clean")
+    expect(cleanAbstract("We used the PANSS. Results: Scores fell.")).toBe("We used the PANSS.\nResults: Scores fell.")
+  })
+})

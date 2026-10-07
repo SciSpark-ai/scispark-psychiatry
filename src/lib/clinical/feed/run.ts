@@ -234,8 +234,9 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   const overviewDrops: Array<{ entryId: string; reason: string }> = []
   if (deps.summarise) {
     const pending = []
-    for (const topic of overviewTopics(listedItems)) {
-      const hash = `v8|${topic.papers.map((paper) => paper.part[0]).join("")}|${topic.papers.map((paper) => paper.key).join("|")}`
+    // The abstract goes with each paper: the model sorts a paper by what its abstract reports, not by the summary alone.
+    for (const topic of overviewTopics(listedItems.map((item) => ({ ...item, abstract: item.paper.abstract })))) {
+      const hash = `v9|${topic.papers.map((paper) => paper.part[0]).join("")}|${topic.papers.map((paper) => paper.key).join("|")}`
       const kept = cache?.overviews?.[topic.entryId]
       if (kept && kept.hash === hash) topicOverviews[topic.entryId] = kept.value
       else pending.push({ ...topic, label: entryLabel(topic.entryId), hash })

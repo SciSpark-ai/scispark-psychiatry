@@ -176,7 +176,8 @@ describe("the AI overview of a topic", () => {
     expect(feed.topicOverviews?.w1).toEqual([{ text: "Both trials reported benefit, with remission of 27% against 18% in one.", sources: ["pmid:111", "pmid:112"], group: "focus" }])
     const sent = JSON.parse(strong.calls[1].req.messages.at(-1)!.content as string)
     expect(sent.papers.map((entry: { n: number }) => entry.n)).toEqual([1, 2])
-    expect(JSON.stringify(sent)).not.toContain("METHODS")
+    // Since 2026-10-07 the abstract goes too: the model sorts a paper by what its abstract reports.
+    expect(sent.papers[0].abstract).toContain("METHODS")
   })
 
   it("asks once more when the first overview loses sentences to the checks, saying why, and keeps the better answer", async () => {
@@ -309,5 +310,28 @@ describe("the overview from per-paper answers", () => {
     ], papers)
     expect(kept.map((entry) => entry.kind)).toEqual(["other", "other", "no-benefit"])
     expect(problems).toEqual(["kind-not-stated:no-benefit", "kind-not-stated:mixed"])
+  })
+  // Owner decision 2026-10-07: a comparison of two drugs is sorted by what happened to the illness, read from the abstract.
+  it("gives the model each paper's abstract to sort by, and accepts a number or a treatment the abstract prints", async () => {
+    const withAbstract = [
+      { ...papers[0], abstract: "RESULTS: Depression scores fell by 9.4 points with esketamine nasal spray." },
+      { ...papers[1], abstract: "CONCLUSIONS: Both doses improved psychotic symptoms." },
+    ]
+    const strong = new MockProvider([llmResult({ sentences: [
+      { text: "lowered depression scores by 9.4 points", sources: [1], kind: "benefit", treatment: "esketamine nasal spray" },
+      { text: "improved psychotic symptoms as much as standard doses", sources: [2], kind: "benefit", treatment: "low-dose antipsychotics" },
+    ] }, "claude-opus-4-8")])
+    const written = await writeTopicOverviews([{ entryId: "w1", label: "Depression", papers: withAbstract }], { storage: new MemoryVaultStorage(), settings: SETTINGS, providerOverride: { strong } })
+    const sent = JSON.parse(strong.calls[0].req.messages.at(-1)!.content as string)
+    expect(sent.papers[1].abstract).toBe("CONCLUSIONS: Both doses improved psychotic symptoms.")
+    expect(written.overviews.w1.map((entry) => [entry.treatment, entry.kind])).toEqual([["esketamine nasal spray", "benefit"], ["low-dose antipsychotics", "benefit"]])
+    expect(written.dropped).toEqual([])
+  })
+  it("passes the abstract of each listed paper on to the overview", () => {
+    const [topic] = overviewTopics([
+      { key: "a", entryId: "w1", digest: { headline: "H1", takeaway: "T1", quote: "" }, abstract: "A1" },
+      { key: "b", entryId: "w1", digest: { headline: "H2", takeaway: "T2", quote: "" } },
+    ])
+    expect(topic.papers.map((paper) => paper.abstract)).toEqual(["A1", undefined])
   })
 })

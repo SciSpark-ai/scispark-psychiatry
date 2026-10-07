@@ -19,7 +19,7 @@ const digest = (over: Partial<StoredPaperDigest> = {}): StoredPaperDigest => ({
   version: 1, unverified: [],
   items: {
     question: "Does drug A improve response?", design: "Randomised double-blind trial over 8 weeks", population: "200 adults with depression",
-    intervention: "Drug A 20 mg versus placebo", primaryOutcome: "Response on the MADRS at week 8", mainResult: "Response was 48% with drug A and 31% with placebo.",
+    intervention: "Drug A 20 mg versus placebo", mainResult: "Response was 48% with drug A and 31% with placebo.",
     secondaryOutcomes: null, safety: null, limitations: "Short follow-up.", conclusion: "Drug A improved response.", funding: null,
   },
   source: { access: "full-text", locator: "PMC", checkedAt: "2026-10-07T10:00:00.000Z", truncated: false, notes: [] },
@@ -52,7 +52,7 @@ describe("the digest on the paper page", () => {
     client.loadPaperDigestRemote.mockResolvedValue(digest())
     await render(<Page />)
     expect([...container.querySelectorAll("[data-digest-group]")].map((group) => [group.querySelector("h3")!.textContent, [...group.querySelectorAll("[data-digest-item] dt")].map((label) => label.textContent)])).toEqual([
-      ["The study", ["Research question", "Study design", "Population", "Intervention and comparator", "Primary outcome"]],
+      ["The study", ["Research question", "Study design", "Population", "Intervention and comparator"]],
       ["Results", ["Main result"]],
       ["Appraisal", ["Limitations", "Authors' conclusion"]],
     ])
@@ -73,7 +73,7 @@ describe("the digest on the paper page", () => {
     expect(client.writePaperDigestRemote).not.toHaveBeenCalled()
     await act(async () => { button("Write digest")!.click() })
     expect(client.writePaperDigestRemote).toHaveBeenCalledTimes(1)
-    expect(container.querySelectorAll("[data-digest-item]")).toHaveLength(8)
+    expect(container.querySelectorAll("[data-digest-item]")).toHaveLength(7)
     expect(container.textContent).toContain("Written by AI from the abstract only")
     // From the abstract, the two items only a full text gives are not counted as missing.
     expect(container.querySelector("[data-testid=digest-not-stated]")!.textContent).toBe("Not stated in the abstract: safety, funding and conflicts of interest.")

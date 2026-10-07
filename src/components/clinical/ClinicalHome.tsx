@@ -33,6 +33,8 @@ const OVERVIEW_KIND_ORDER = ["benefit", "no-benefit", "mixed", "safety", "other"
 const KIND_COLOUR: Partial<Record<(typeof OVERVIEW_KIND_ORDER)[number], string>> = { benefit: "var(--clinical-benefit)", "no-benefit": "var(--clinical-no-benefit)" }
 const SPACE = " "
 const JOIN = "; "
+/** How many of the other findings are shown before the rest is folded away. */
+const OTHER_SHOWN = 2
 const STOP = ". "
 const tint = (colour: string) => `color-mix(in srgb, ${colour} 16%, transparent)`
 
@@ -48,6 +50,8 @@ export function ClinicalHome() {
   const [jumped, setJumped] = useState<number | null>(null)
   /** What "Show seen papers again" answered, until the next refresh. */
   const [seenNote, setSeenNote] = useState<string | null>(null)
+  /** The lines of other findings opened in full, by tab and part. */
+  const [openOther, setOpenOther] = useState<ReadonlySet<string>>(new Set())
   const [stage, setStage] = useState<ClinicalStage | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -203,21 +207,15 @@ export function ClinicalHome() {
     if (cursor < text.length) parts.push(<span key={cursor}>{text.slice(cursor)}</span>)
     return parts
   }
-  // The count line of the tab: how many papers, how many match a condition and a treatment together,
-  // how many are in leading journals, and the most common designs that someone has named.
+  // The count line of the tab: how many papers, and how many of each kind of study that someone has named.
   const designCounts = DESIGNS
     .filter((design) => design !== "other" && design !== "unknown")
     .map((design) => ({ design, count: inTab.filter((item) => item.design === design && item.designSource !== "none").length }))
     .filter((entry) => entry.count > 0)
     .sort((a, b) => b.count - a.count)
-    .slice(0, 4)
   const stats = [
     { key: "papers", text: CLINICAL_COPY.feed.overview.papers(inTab.length) },
-    ...[
-      { key: "full", label: CLINICAL_COPY.feed.overview.full, count: inTab.filter((item) => item.matched === "full" && listTopics.some((entry) => entry.id === item.entryId && entry.condition && entry.treatment)).length },
-      { key: "leading", label: CLINICAL_COPY.feed.overview.leading, count: inTab.filter((item) => item.journalBand === 1).length },
-      ...designCounts.map((entry) => ({ key: entry.design, label: CLINICAL_COPY.designLabels[entry.design], count: entry.count })),
-    ].filter((entry) => entry.count > 0).map((entry) => ({ key: entry.key, text: `${entry.label} ${entry.count}` })),
+    ...designCounts.map((entry) => ({ key: entry.design, text: `${CLINICAL_COPY.designLabels[entry.design]} ${entry.count}` })),
   ]
   // Jump to a card by its place in the tab, opening as much of the list as it takes to reach it.
   // The card is marked for a moment so the eye finds it. The scroll waits for the list to be drawn
@@ -313,15 +311,16 @@ export function ClinicalHome() {
                   {overviewRows(group.points).map((row) => (
                     <p key={row.kind} data-kind={row.kind} className="mt-1 text-[15px] leading-[1.7] text-espresso first:mt-0">
                       <span data-kind-label="true" className="mr-2 inline-block min-w-[88px] text-[13px] font-bold uppercase tracking-wide" style={KIND_COLOUR[row.kind] ? { color: KIND_COLOUR[row.kind] } : undefined}>{CLINICAL_COPY.feed.overviewKinds[row.kind]}</span>
-                      {row.clusters.map((cluster, at) => (
+                      {(row.kind === "other" && !openOther.has(`${topic}|${group.id}`) && row.clusters.length > OTHER_SHOWN + 1 ? row.clusters.slice(0, OTHER_SHOWN) : row.clusters).map((cluster, at) => (
                         <span key={at}>
-                          {cluster.treatment && <>{marked(capital(cluster.treatment), capital(cluster.treatment), row.kind)}<span>{SPACE}</span></>}
+                          {/* Nothing is marked among the other findings: they are not about what a treatment did. */}
+                          {cluster.treatment && (row.kind === "other" ? <span>{capital(cluster.treatment)}{SPACE}</span> : <>{marked(capital(cluster.treatment), capital(cluster.treatment), row.kind)}<span>{SPACE}</span></>)}
                           {cluster.points.map((point, index) => {
                             const phrase = tidyOverviewSentence(point.text).replace(/\.$/, "")
                             return (
                               <span key={point.text}>
                                 {index > 0 && <span>{JOIN}</span>}
-                                {marked(cluster.treatment ? phrase : capital(phrase), cluster.treatment ? undefined : point.emphasis?.[0], row.kind)}
+                                {row.kind === "other" ? <span>{cluster.treatment ? phrase : capital(phrase)}</span> : marked(cluster.treatment ? phrase : capital(phrase), cluster.treatment ? undefined : point.emphasis?.[0], row.kind)}
                                 {sourcesOf(point)}
                               </span>
                             )
@@ -329,6 +328,11 @@ export function ClinicalHome() {
                           <span>{STOP}</span>
                         </span>
                       ))}
+                      {row.kind === "other" && !openOther.has(`${topic}|${group.id}`) && row.clusters.length > OTHER_SHOWN + 1 && (
+                        <button type="button" onClick={() => setOpenOther((current) => new Set(current).add(`${topic}|${group.id}`))} className="text-[13px] text-accent-ink underline decoration-dotted hover:text-accent-ink-hover">
+                          {CLINICAL_COPY.feed.moreFindings(row.clusters.length - OTHER_SHOWN)}
+                        </button>
+                      )}
                     </p>
                   ))}
                 </div>

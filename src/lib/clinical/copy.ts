@@ -27,7 +27,7 @@ export const CLINICAL_COPY = {
     readLaterRemove: "Remove from Read later",
     readLaterFailed: "The Read later list could not be saved.",
     /** The one line under the heading. */
-    status: (listed: number, found: number, lookBack: string, when: string) => `${listed} ${listed === 1 ? "paper" : "papers"} from ${found} found · ${lookBack} · updated ${when}`,
+    status: (listed: number, found: number, lookBack: string, when: string) => `${listed} ${listed === 1 ? "paper" : "papers"} from ${found} found in PubMed · ${lookBack} · updated ${when}`,
     /** The two dates of a card, when they differ. The list is searched by the second. */
     publishedOn: (date: string) => `published ${date}`,
     inPubmed: (date: string) => `in PubMed ${date}`,
@@ -45,6 +45,8 @@ export const CLINICAL_COPY = {
     /** The first line of the overview: how many papers, and how many of each kind among those it cites. */
     overviewCounts: (papers: number, kinds: Array<{ label: string; count: number }>) =>
       `${papers} ${papers === 1 ? "paper" : "papers"}${kinds.length > 0 ? `: ${kinds.map((kind) => `${kind.count} ${kind.label.toLowerCase()}`).join(", ")}` : ""}`,
+    /** Opens the rest of a long line of other findings. */
+    moreFindings: (count: number) => `${count} more`,
     showSeenAgain: "Show seen papers again",
     showSeenAgainNote: "Papers you have already been shown are left out of a new list. This forgets them for the chosen time range, so the next refresh can list them again.",
     seenForgotten: (count: number) => (count > 0 ? `${count} seen ${count === 1 ? "paper" : "papers"} can be listed again. Press Refresh to list them.` : "No seen papers were being held back for this time range."),
@@ -53,8 +55,6 @@ export const CLINICAL_COPY = {
     /** The count line of a tab. */
     overview: {
       papers: (count: number) => `${count} ${count === 1 ? "paper" : "papers"}`,
-      full: "Condition and treatment",
-      leading: "Leading journals",
     },
     saveFailed: "This paper could not be saved.",
     /** How well a paper fits the watch entry it was matched to (the stage-A grade, 1 to 4), in words. */
@@ -92,7 +92,7 @@ export const CLINICAL_COPY = {
     digest: {
       heading: "Digest",
       labels: {
-        question: "Research question", design: "Study design", population: "Population", intervention: "Intervention and comparator", primaryOutcome: "Primary outcome",
+        question: "Research question", design: "Study design", population: "Population", intervention: "Intervention and comparator",
         mainResult: "Main result", secondaryOutcomes: "Secondary outcomes", safety: "Safety",
         limitations: "Limitations", conclusion: "Authors' conclusion", funding: "Funding and conflicts of interest",
       },

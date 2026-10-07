@@ -4,7 +4,7 @@ import type { PaperDigestItem } from "./paper"
 
 /** The items in three groups, in reading order. */
 export const DIGEST_GROUPS: ReadonlyArray<{ id: "study" | "results" | "appraisal"; items: readonly PaperDigestItem[] }> = [
-  { id: "study", items: ["question", "design", "population", "intervention", "primaryOutcome"] },
+  { id: "study", items: ["question", "design", "population", "intervention"] },
   { id: "results", items: ["mainResult", "secondaryOutcomes", "safety"] },
   { id: "appraisal", items: ["limitations", "conclusion", "funding"] },
 ]
@@ -13,4 +13,4 @@ export const DIGEST_GROUPS: ReadonlyArray<{ id: "study" | "results" | "appraisal
 export const MAIN_ITEM: PaperDigestItem = "mainResult"
 
 /** Items an abstract rarely gives; a digest written from the abstract does not report them as missing. */
-export const FULL_TEXT_ITEMS: readonly PaperDigestItem[] = ["primaryOutcome", "secondaryOutcomes"]
+export const FULL_TEXT_ITEMS: readonly PaperDigestItem[] = ["secondaryOutcomes"]

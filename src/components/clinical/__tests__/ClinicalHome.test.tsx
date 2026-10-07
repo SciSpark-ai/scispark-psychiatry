@@ -138,7 +138,7 @@ describe("ClinicalHome", () => {
     await mount()
     expect(container.querySelector("h1")!.className).toContain("font-semibold")
     const status = container.querySelector("[data-testid=clinical-feed-status]")!
-    expect(status.textContent).toContain("1 paper from 99 found")
+    expect(status.textContent).toContain("1 paper from 99 found in PubMed")
     expect(status.textContent).toContain("last 30 days")
     const note = container.querySelector("[data-testid=clinical-feed-note]")!
     expect(note.textContent).toContain("For literature awareness only")
@@ -220,7 +220,8 @@ describe("ClinicalHome", () => {
     await mount()
     const overview = container.querySelector("[data-testid=clinical-feed-overview]")!
     const parts = [...overview.querySelectorAll("[data-stat]")].map((part) => part.textContent)
-    expect(parts).toEqual(["3 papers", "Condition and treatment 1", "Leading journals 2", "Meta-analysis 1", "Randomized trial 1"])
+    // Only how many papers there are of each kind of study.
+    expect(parts).toEqual(["3 papers", "Meta-analysis 1", "Randomized trial 1"])
   })
 
   it("marks as seen only the papers of the tab that is on screen", async () => {
@@ -348,9 +349,28 @@ describe("ClinicalHome", () => {
     expect(rows[0].querySelectorAll("mark[data-treatment]")).toHaveLength(1)
     expect(rows[0].textContent).toBe("BenefitKetamine reduced sadness and suicidal thoughts1; gave a 58% response against 29% with placebo2. ")
     expect(rows[3].textContent).toBe("OtherOlder age was linked to slower improvement5. ")
+    // Nothing is marked in the line of other findings.
+    expect(rows[3].querySelectorAll("mark")).toHaveLength(0)
     expect(overview.querySelectorAll("strong")).toHaveLength(0)
     expect([...groups[0].querySelectorAll("mark[data-negation]")].map((mark) => mark.textContent)).toEqual(["not", "not"])
     expect(rows[0].querySelector("mark[data-negation]")).toBeNull()
+  })
+
+  it("folds a long line of other findings, and opens it on request", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "Depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf(Array.from({ length: 6 }, (_, n) => item(n + 1)), { topicOverviews: { w1: [
+      { text: "reduced symptoms", sources: ["pmid:1"], kind: "benefit", treatment: "Ketamine" },
+      ...Array.from({ length: 5 }, (_, n) => ({ text: `risk factor ${n + 1} was linked to relapse`, sources: [`pmid:${n + 2}`], kind: "other" as const, treatment: n === 0 ? "Lithium" : undefined })),
+    ] } }))
+    await mount()
+    await act(async () => { ([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[])[1].click() })
+    const other = () => container.querySelector('[data-testid=clinical-topic-overview] [data-kind="other"]')!
+    expect(other().querySelectorAll("[data-source]")).toHaveLength(2)
+    expect(other().querySelectorAll("mark")).toHaveLength(0)
+    await act(async () => { byText("3 more").click() })
+    expect(other().querySelectorAll("[data-source]")).toHaveLength(5)
+    expect(container.querySelector('[data-kind="benefit"] mark')!.textContent).toBe("Ketamine")
   })
 
   it("still shows an overview stored as whole sentences", async () => {

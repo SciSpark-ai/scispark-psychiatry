@@ -12,7 +12,8 @@ export { tidyOverviewSentence }
  * A short AI overview of the papers listed under one topic (owner request 2026-10-07). A statement
  * about several papers is easier to get wrong than a summary of one, so:
  *
- * - The model sees only the headline and takeaway already checked for each paper, never the abstracts.
+ * - The model sees the headline and takeaway already checked for each paper and, since 2026-10-07, its
+ *   abstract, which it needs to tell whether the illness improved in the end.
  * - Every sentence must name the papers it rests on, by number; a sentence without a valid source is dropped.
  * - A sentence may use only numbers that appear in the headline or takeaway of the papers it names.
  * - A sentence must be short.
@@ -53,7 +54,14 @@ export interface OverviewSentence {
   /** Words of the sentence to mark, so the eye finds the point. Each is in `text` as written. */
   emphasis?: string[]
 }
-export interface OverviewPaper { key: string; headline: string; takeaway: string; part: "focus" | "related" }
+export interface OverviewPaper {
+  key: string; headline: string; takeaway: string; part: "focus" | "related"
+  /** The abstract, which the model reads to sort the paper. Absent in older callers. */
+  abstract?: string
+}
+
+/** How much of an abstract the model is given to sort a paper by (characters). */
+const ABSTRACT_MAX_CHARS = 2000
 
 const OverviewSchema = z.object({
   sentences: z.array(z.object({
@@ -64,50 +72,50 @@ const OverviewSchema = z.object({
 
 interface OverviewInput {
   topic: string
-  papers: Array<{ n: number; part: "focus" | "related"; headline: string; takeaway: string }>
+  papers: Array<{ n: number; part: "focus" | "related"; headline: string; takeaway: string; abstract?: string }>
   /** Why sentences of the previous answer were rejected, when this is the second try. */
   problems?: string[]
 }
 
-const SYSTEM_PROMPT = `You sort the new papers on one topic for a psychiatrist, one answer per paper. Code will then join your answers into an overview, so do not join papers yourself. You are given the topic and, for each paper, a number, a headline, a one-sentence takeaway, and "part" (ignore it).
+const SYSTEM_PROMPT = `You sort the new papers on one topic for a psychiatrist, one answer per paper. Code will then join your answers into an overview, so do not join papers yourself. You are given the topic and, for each paper, a number, a headline, a one-sentence takeaway, its abstract when there is one, and "part" (ignore it). Read the abstract, above all its results and conclusion, before you choose the kind.
 
 Return "sentences": exactly one entry for every paper. Each entry:
 - "sources": a list with the one number of the paper.
-- "treatment": the treatment, intervention or exposure the paper is about, as its shortest usual name copied from the headline or takeaway ("ketamine", not "repeated ketamine infusions"; "rTMS"; "exercise"; "nature exposure", never half a name). When the paper compares two treatments, name both ("methylphenidate and risperidone"). null when the paper is not about a treatment or exposure (genetics, prediction models, prevalence, scales).
+- "treatment": the treatment, intervention or exposure the paper is about, as its shortest usual name copied from the paper ("ketamine", not "repeated ketamine infusions"; "rTMS"; "exercise"; "nature exposure", never half a name). When the paper compares two treatments or doses, name both ("methylphenidate and risperidone", "low-dose antipsychotics"). null when the paper is not about a treatment or exposure (genetics, prediction models, prevalence, scales).
 - "text": what the paper found, at most 14 words, lower case, no full stop.
   - With a treatment: start with a verb and do NOT repeat the treatment name, so that "<treatment> <text>" reads as a sentence: "reduced suicidal thoughts in treatment-resistant depression", "did not reduce symptoms compared with placebo".
   - Without a treatment: a complete short statement: "older age was linked to slower improvement".
-- "kind": read the takeaway carefully and choose strictly:
-  - "benefit": the treatment improved an outcome or did better than its comparator. An improvement in one outcome, with nothing said to have failed, is a benefit.
-  - "no-benefit": ONLY when the paper says in so many words that the treatment did not work: no effect, did not improve, not better than placebo or control, the trial failed. Your text must then contain "not" or "no".
-  - "mixed": ONLY when the same treatment improved one outcome AND the paper says it did not improve another. Your text must name both and contain "not" or "no".
-  - "safety": the finding is a harm, adverse effect or risk of a treatment.
-  - "other": everything else. This includes: two active treatments or doses with similar results (that is not "no benefit"); associations, risk factors and mechanisms ("was linked to"); prediction, prevalence, measurement; reviews that say the evidence is uncertain or varies.
-  When in doubt between "no-benefit" or "mixed" and "other", choose "other".
+- "kind": decide by what happened to the illness or the clinical outcome in the end, as the abstract reports it:
+  - "benefit": the treatment improved the illness or a clinical outcome, or did better than its comparator. This includes a comparison of two active treatments or two doses in which patients improved: say so ("improved symptoms as much as standard doses", "both reduced ADHD symptoms"). An improvement in one outcome, with nothing said to have failed, is a benefit.
+  - "no-benefit": ONLY when the paper says in so many words that the illness or outcome did not improve: no effect, did not improve, not better than placebo or control, the trial failed. In a comparison of two active treatments, only if neither improved the outcome. Your text must contain "not" or "no".
+  - "mixed": ONLY when the same treatment improved one clinical outcome AND the paper says it did not improve another. Your text must name both and contain "not" or "no".
+  - "safety": the main finding is a harm, adverse effect or risk of a treatment (for example a drug lengthening the QTc interval, weight gain, misuse potential). Name the drug as the treatment.
+  - "other": everything that is not about whether a treatment works or harms: associations, risk factors and mechanisms ("was linked to"), biomarkers, prediction, prevalence, measurement, and reviews that only say the evidence is uncertain.
+  When the abstract does not let you tell whether the outcome improved, choose "other", never "no-benefit".
 - "group": null. "emphasis": an empty list.
 
 Rules:
-- Use only the headline and takeaway of that paper. Add nothing from outside knowledge.
+- Use only that paper's headline, takeaway and abstract. Add nothing from outside knowledge.
 - Keep the paper's own level of certainty: an association is "was linked to", not "caused"; "may" stays "may".
-- Use a number only if it appears in the headline or takeaway of that paper. Copy it exactly; never calculate or round. Prefer no number.
+- Use a number only if it is printed for that paper. Copy it exactly; never calculate or round. Prefer no number.
 - Do not write paper numbers inside the text, do not rank the papers, and do not tell the reader what to do with a patient.
 - If the input has "problems", your previous answer had them: write it again without them.`
 
 export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof OverviewSchema>>({
   name: "clinical-topic-overview",
-  version: "8",
+  version: "9",
   run: (ctx, input) =>
     ctx.llmStructured(
       // The stronger model: weighing several papers against each other is where the small one writes filler.
       "strong",
-      { maxTokens: 4096, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] },
+      { maxTokens: 6144, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] },
       OverviewSchema,
     ),
 })
 
 /** The topics worth an overview: those with at least two listed papers that have a checked summary. */
 export function overviewTopics(
-  items: Array<{ key: string; entryId: string | null; digest?: CardDigest; matched?: "full" | "condition" | "treatment" }>,
+  items: Array<{ key: string; entryId: string | null; digest?: CardDigest; matched?: "full" | "condition" | "treatment"; abstract?: string }>,
 ): Array<{ entryId: string; papers: OverviewPaper[] }> {
   const byTopic = new Map<string, OverviewPaper[]>()
   for (const item of items) {
@@ -115,7 +123,7 @@ export function overviewTopics(
     const papers = byTopic.get(item.entryId) ?? []
     // A paper that matches only part of the topic is summarised apart from those that match all of it.
     const part = item.matched === "condition" || item.matched === "treatment" ? "related" : "focus"
-    papers.push({ key: item.key, headline: item.digest.headline, takeaway: item.digest.takeaway, part })
+    papers.push({ key: item.key, headline: item.digest.headline, takeaway: item.digest.takeaway, part, ...(item.abstract ? { abstract: item.abstract } : {}) })
     byTopic.set(item.entryId, papers)
   }
   return [...byTopic]
@@ -135,7 +143,7 @@ export function judgeOverview(
     if (!text) { problems.push("empty"); continue }
     if (cited.length === 0) { problems.push("no-source"); continue }
     if (text.split(/\s+/).length > SENTENCE_MAX_WORDS) { problems.push("too-long"); continue }
-    const printed = new Set(cited.flatMap((paper) => numbers(`${paper.headline} ${paper.takeaway}`)))
+    const printed = new Set(cited.flatMap((paper) => numbers(`${paper.headline} ${paper.takeaway} ${paper.abstract ?? ""}`)))
     const invented = numbers(text).find((value) => !printed.has(value))
     if (invented) { problems.push(`number-not-in-sources:${invented}`); continue }
     // Only words that are in the sentence as written can be marked in it.
@@ -146,7 +154,7 @@ export function judgeOverview(
     let kind = sentence.kind ?? undefined
     if ((kind === "no-benefit" || kind === "mixed") && !negationWords().test(text)) { problems.push(`kind-not-stated:${kind}`); kind = "other" }
     // The treatment must be named in the summaries of the papers the finding rests on.
-    const sourceWords = new Set(cited.flatMap((paper) => `${paper.headline} ${paper.takeaway}`.toLowerCase().match(/[a-z0-9]+/g) ?? []))
+    const sourceWords = new Set(cited.flatMap((paper) => `${paper.headline} ${paper.takeaway} ${paper.abstract ?? ""}`.toLowerCase().match(/[a-z0-9]+/g) ?? []))
     let treatment = sentence.treatment?.replace(/\s+/g, " ").trim() || undefined
     if (treatment && !(treatment.toLowerCase().match(/[a-z0-9]+/g) ?? []).every((word) => sourceWords.has(word))) { problems.push(`treatment-not-in-source:${treatment}`); treatment = undefined }
     kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
@@ -182,7 +190,7 @@ export async function writeTopicOverviews(
   const dropped: Array<{ entryId: string; reason: string }> = []
   let costUsd: number | null = 0
   await Promise.all(topics.map(async (topic) => {
-    const papers = topic.papers.map((paper, index) => ({ n: index + 1, part: paper.part, headline: paper.headline, takeaway: paper.takeaway }))
+    const papers = topic.papers.map((paper, index) => ({ n: index + 1, part: paper.part, headline: paper.headline, takeaway: paper.takeaway, ...(paper.abstract ? { abstract: paper.abstract.slice(0, ABSTRACT_MAX_CHARS) } : {}) }))
     const ask = async (problems?: string[]) => {
       const run = await runSkill({ skill: topicOverviewSkill, input: { topic: topic.label, papers, ...(problems ? { problems } : {}) }, ...opts })
       costUsd = addCosts(costUsd, run.costUsd)

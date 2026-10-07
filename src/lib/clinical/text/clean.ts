@@ -39,11 +39,19 @@ const LABEL_NO_SEPARATOR = new RegExp(`\\b(${LABEL})(?=[A-Z])`, "g")
 const LABEL_SPACE_NO_COLON = new RegExp(`(?:^|(?<=\\. )|(?<=\\n))(${LABEL}) (?=[A-Z])`, "gmi")
 const LABEL_MID_PARAGRAPH = new RegExp(`([^\\n]) (${LABEL})(?=:[ \\t])`, "gi")
 
+/** A label of two or more words in capitals ("STUDY DESIGN:", "BACKGROUND AND HYPOTHESIS:"), at the start or after a sentence. */
+const CAPITALS_LABEL = /(^|[.!?][ \t]+|\n)([A-Z]{2,}(?:[ \t]+(?:[A-Z]{2,}|&))+)(?=:[ \t])/g
+const HELD = "\u0001"
+
 function fixSectionLabels(text: string): string {
-  return text
+  // The rules below know single words; a label of several words in capitals is held together while they run,
+  // or they would break it in two ("STUDY" / "DESIGN:").
+  const held = text.replace(CAPITALS_LABEL, (_match, before: string, label: string) => `${before === "" || before === "\n" ? before : `${before.trimEnd()}\n`}${label.replace(/[ \t]+/g, HELD)}`)
+  return held
     .replace(LABEL_NO_SEPARATOR, "$1: ")
     .replace(LABEL_SPACE_NO_COLON, "$1: ")
     .replace(LABEL_MID_PARAGRAPH, "$1\n$2")
+    .replaceAll(HELD, " ")
 }
 
 function normaliseWhitespace(text: string): string {

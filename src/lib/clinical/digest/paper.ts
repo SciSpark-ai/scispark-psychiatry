@@ -12,7 +12,8 @@ import { numbers } from "./card"
 
 /**
  * The digest on the paper page (owner decision 2026-10-07): short items in a fixed order (nine, and
- * two more that mostly only a full text gives: the primary outcome and the secondary outcomes), in
+ * one more that mostly only a full text gives, the secondary outcomes; the primary outcome is named
+ * inside the main result, not as an item of its own), in
  * place of upstream's long prose digest. Written from the full text when it can be read, from the
  * abstract otherwise; which of the two is recorded by code and shown with the digest.
  *
@@ -22,12 +23,12 @@ import { numbers } from "./card"
  *   asked once more; an item that still fails is kept but listed in `unverified`, so the page can say so.
  */
 
-export const PAPER_DIGEST_ITEMS = ["question", "design", "population", "intervention", "primaryOutcome", "mainResult", "secondaryOutcomes", "safety", "limitations", "conclusion", "funding"] as const
+export const PAPER_DIGEST_ITEMS = ["question", "design", "population", "intervention", "mainResult", "secondaryOutcomes", "safety", "limitations", "conclusion", "funding"] as const
 export type PaperDigestItem = (typeof PAPER_DIGEST_ITEMS)[number]
 
 const item = z.string().nullable().default(null)
 const PaperDigestOutputSchema = z.object({
-  question: item, design: item, population: item, intervention: item, primaryOutcome: item, mainResult: item, secondaryOutcomes: item, safety: item, limitations: item, conclusion: item, funding: item,
+  question: item, design: item, population: item, intervention: item, mainResult: item, secondaryOutcomes: item, safety: item, limitations: item, conclusion: item, funding: item,
 })
 type PaperDigestOutput = z.infer<typeof PaperDigestOutputSchema>
 
@@ -47,13 +48,12 @@ interface PaperDigestInput { title: string; journal?: string; abstract?: string;
 
 const SYSTEM_PROMPT = `You write a short structured digest of one clinical research paper for a psychiatrist. You are given the title, the abstract and, when it could be read, the full text.
 
-Return these eleven items. Each is one or two plain sentences, at most 45 words (at most 70 for "mainResult" and "secondaryOutcomes" when you have the full text), or null when the text does not state it. Never write "not reported" or a guess: use null.
+Return these ten items. Each is one or two plain sentences, at most 45 words (at most 70 for "mainResult" and "secondaryOutcomes" when you have the full text), or null when the text does not state it. Never write "not reported" or a guess: use null.
 - "question": the research question, as a question.
 - "design": how the study was done: the design (for example randomised double-blind trial, cohort, meta-analysis of N trials), setting, duration or follow-up.
 - "population": who was studied: number of participants, diagnosis, age group, key inclusion criteria.
 - "intervention": what was compared: the intervention or exposure with its dose, and the comparator.
-- "primaryOutcome": the primary outcome: what was measured, with which scale or definition, and at what time point.
-- "mainResult": the result on the primary outcome in each group, with the effect size, confidence interval and p value exactly as printed when the text gives them.
+- "mainResult": the result on the primary outcome: name the outcome (the scale or definition and the time point) and give the result in each group, with the effect size, confidence interval and p value exactly as printed when the text gives them.
 - "secondaryOutcomes": the key secondary outcomes with their results.
 - "safety": adverse events, harms, dropouts due to adverse events.
 - "limitations": the main limitations the authors state.
@@ -68,7 +68,7 @@ Rules:
 
 export const paperDigestSkill = defineSkill<PaperDigestInput, PaperDigestOutput>({
   name: "clinical-paper-digest",
-  version: "2",
+  version: "3",
   run: (ctx, input) =>
     ctx.llmStructured("strong", { maxTokens: 3072, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] }, PaperDigestOutputSchema),
 })

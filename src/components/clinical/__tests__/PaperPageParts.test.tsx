@@ -100,3 +100,10 @@ describe("a card", () => {
     expect(jumped.className).not.toContain("ring-")
   })
 })
+
+describe("the AI summary on the paper page", () => {
+  it("is as wide as the title above it", async () => {
+    await render(<ClinicalPaperSummary digest={{ headline: "H", takeaway: "T", quote: "Q" }} />)
+    expect(container.querySelector("section")!.className).not.toMatch(/max-w-/)
+  })
+})
