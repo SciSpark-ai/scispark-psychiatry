@@ -25,17 +25,17 @@ async function render() {
 beforeEach(() => { document.body.innerHTML = ""; push.mockReset(); evidence.listFollowedConditionsRemote.mockReset(); records.createConditionPageRemote.mockReset() })
 
 describe("wiki home", () => {
-  it("shows a card for each condition the reader follows, with its papers, what is new and its main treatments", async () => {
+  it("shows a card for each condition the reader follows, with its papers, what is new and its main classes", async () => {
     evidence.listFollowedConditionsRemote.mockResolvedValue([
-      { code: "depression", name: "Major depressive disorder", total: 22, recent: 5, treatments: ["Ketamine", "Lithium"], pageId: "wiki/conditions/major-depressive-disorder" },
+      { code: "depression", name: "Major depressive disorder", total: 22, recent: 5, treatments: ["medicine", "Neuromodulation"], pageId: "wiki/conditions/major-depressive-disorder" },
       { code: "adhd", name: "ADHD", total: 0, recent: 0, treatments: [], pageId: null },
     ])
     await render()
     const cards = [...container.querySelectorAll("[data-condition]")]
     expect(cards.map((card) => card.getAttribute("data-condition"))).toEqual(["depression", "adhd"])
     expect(cards[0].textContent).toContain("Major depressive disorder")
-    expect(cards[0].querySelector("[data-count]")!.textContent).toBe("22 papers · 5 first listed in the last two weeks")
-    expect(cards[0].querySelector("[data-treatments]")!.textContent).toBe("Ketamine, Lithium")
+    expect(cards[0].querySelector("[data-count]")!.textContent).toBe("22 papers · 5 new")
+    expect(cards[0].querySelector("[data-treatments]")!.textContent).toBe("Medicines, Neuromodulation")
     expect(cards[1].querySelector("[data-count]")!.textContent).toBe("No papers yet")
     expect(cards[1].querySelector("[data-treatments]")).toBeNull()
   })

@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
-import type { Evidence } from "../ConditionEvidence"
+import type { ClassEvidence, ConditionEvidence as Evidence, Counts, Study, TreatmentEvidence } from "@/lib/clinical/evidence/build"
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -12,20 +12,35 @@ vi.mock("@/lib/clinical/evidence/client", () => client)
 import { ConditionEvidence } from "../ConditionEvidence"
 import { clinicalFence } from "../clinical-fence"
 
-const item = (n: number, over: Partial<Evidence["items"][number]> = {}): Evidence["items"][number] => ({
-  key: `pmid:${n}`, slug: `paper-${n}`, headline: `Headline ${n}`, takeaway: `Takeaway ${n}.`, kind: "benefit", treatment: "ketamine", rowKey: "ketamine",
-  population: "adults with depression", comparator: "placebo", outcome: "depressive symptoms", design: "randomized-trial", designNamed: true,
-  venue: "A Journal", date: "2026-09-20", listedAt: "2026-10-06T10:00:00.000Z", saved: false, ...over,
+const counts = (over: Partial<Counts> = {}): Counts => ({ benefit: 0, "no-benefit": 0, mixed: 0, safety: 0, other: 0, unsorted: 0, ...over })
+const study = (n: number, over: Partial<Study> = {}): Study => ({
+  key: `pmid:${n}`, slug: `paper-${n}`, headline: `Headline ${n}`, takeaway: `Takeaway ${n}.`, label: `Smith 2026`, venue: "A Journal", date: "2026-09-20",
+  design: "randomized-trial", designNamed: true, population: "adults with depression", sampleSize: 120, comparator: "placebo", outcome: "depressive symptoms",
+  kind: "benefit", text: `Text ${n}`, treatment: "Ketamine", isNew: false, saved: false, ...over,
 })
+const treatment = (key: string, name: string, studies: Study[], over: Partial<TreatmentEvidence> = {}): TreatmentEvidence => ({
+  key, name, papers: studies.length, counts: counts({ benefit: studies.length }), newPapers: 0, did: [], watch: [], studies, ...over,
+})
+const klass = (key: string, label: string | null, treatments: TreatmentEvidence[], over: Partial<ClassEvidence> = {}): ClassEvidence => ({
+  key, label, papers: treatments.reduce((sum, entry) => sum + entry.papers, 0), counts: counts({ benefit: 1 }), newPapers: 0, treatments, ...over,
+})
+const ketamine = treatment("ketamine", "Ketamine", [study(1), study(2, { kind: "no-benefit", text: "No better than placebo", sampleSize: null })], {
+  counts: counts({ benefit: 1, "no-benefit": 1 }), did: [{ text: "Eased symptoms within a day", key: "pmid:1" }], watch: [{ text: "No better than placebo", key: "pmid:2", kind: "no-benefit" }],
+})
+const lithium = treatment("lithium", "Lithium", [study(3, { treatment: "Lithium", text: "Cut relapse" })], { did: [{ text: "Cut relapse", key: "pmid:3" }] })
+const sertraline = treatment("sertraline", "Sertraline", [study(7, { treatment: "Sertraline", kind: "safety", text: "Raised bleeding risk" })], {
+  counts: counts({ safety: 1 }), watch: [{ text: "Raised bleeding risk", key: "pmid:7", kind: "safety" }],
+})
+const med = klass("medicine", null, [ketamine, lithium], { papers: 4, newPapers: 2, counts: counts({ benefit: 3, "no-benefit": 1 }) })
+const ect = klass("neuromodulation", "Neuromodulation", [treatment("ect", "ECT", [study(4, { treatment: "ECT" })])], { papers: 1, counts: counts({ benefit: 1 }) })
 const EVIDENCE: Evidence = {
-  condition: { code: "depression", name: "Major depressive disorder" }, total: 4,
-  rows: [
-    { key: "ketamine", treatment: "Ketamine", modality: "drug", studies: 3, kinds: { benefit: 2, "no-benefit": 1, mixed: 0, safety: 0, other: 0, unsorted: 0 }, designs: [{ design: "randomized-trial", count: 2 }, { design: "meta-analysis", count: 1 }], latest: "2026-09-20", papers: ["pmid:1", "pmid:2", "pmid:3"] },
-    { key: "none", treatment: null, modality: null, studies: 1, kinds: { benefit: 0, "no-benefit": 0, mixed: 0, safety: 0, other: 1, unsorted: 0 }, designs: [], latest: "2026-08-02", papers: ["pmid:4"] },
+  condition: { code: "depression", name: "Major depressive disorder" }, period: "all", total: 5, collected: 5, since: "2026-03-02",
+  classes: [med, ect], safety: [study(7, { kind: "safety", treatment: "Sertraline" })],
+  research: [
+    { type: "mechanism", papers: 1, newPapers: 0, studies: [study(5, { treatment: null, kind: null, takeaway: "Inflammation tracks severity." })] },
+    { type: "risk-factor", papers: 1, newPapers: 0, studies: [study(6, { treatment: null, kind: null })] },
   ],
-  timeline: { months: ["2026-08", "2026-09", "2026-10"], series: [{ key: "ketamine", label: "Ketamine", counts: [0, 3, 0] }, { key: "other", label: null, counts: [1, 0, 0] }] },
-  recent: [item(1)], recentTotal: 1,
-  items: [item(1), item(2, { kind: "no-benefit", saved: true }), item(3, { comparator: null, outcome: null, designNamed: false }), item(4, { rowKey: "none", treatment: null, kind: "other", population: null, comparator: null, outcome: null })],
+  timeline: { months: ["2026-08", "2026-09", "2026-10"], series: [{ key: "medicine", label: null, counts: [0, 3, 0] }, { key: "other", label: null, counts: [1, 0, 0] }] },
 }
 
 let container: HTMLDivElement
@@ -35,197 +50,223 @@ async function render(node: React.ReactNode) {
   await act(async () => { createRoot(container).render(node) })
   await act(async () => {})
 }
+const show = async (evidence: Evidence = EVIDENCE) => { client.loadConditionEvidenceRemote.mockResolvedValue(evidence); await render(<ConditionEvidence body="condition: depression" />) }
+const q = (selector: string) => container.querySelector(selector) as HTMLElement
+const qa = (selector: string) => [...container.querySelectorAll(selector)] as HTMLElement[]
+const click = async (element: Element | null) => { await act(async () => { (element as HTMLElement).click() }) }
+const classRow = (key: string) => q(`[data-class="${key}"]`)
+const openClass = (key: string) => click(classRow(key).querySelector("button"))
 beforeEach(() => { document.body.innerHTML = ""; client.loadConditionEvidenceRemote.mockReset() })
 
 describe("the evidence block of a condition page", () => {
-  it("says what it is built from, and that it is not all the evidence", async () => {
-    client.loadConditionEvidenceRemote.mockResolvedValue(EVIDENCE)
-    await render(<ConditionEvidence body="condition: depression" />)
-    expect(client.loadConditionEvidenceRemote).toHaveBeenCalledWith("depression")
-    expect(container.querySelector("[data-testid=evidence-basis]")!.textContent).toBe("From the 4 papers your feed has listed on Major depressive disorder. Not all the evidence on it; studies are counted, not pooled.")
+  it("says what it is built from, with and without a period", async () => {
+    await show()
+    expect(client.loadConditionEvidenceRemote).toHaveBeenCalledWith("depression", "all")
+    expect(q("[data-testid=evidence-basis]").textContent).toBe("From the 5 papers your feed has listed on Major depressive disorder since 2026-03-02. Not all the evidence on it; papers are counted, nothing is pooled.")
+    document.body.innerHTML = ""
+    await show({ ...EVIDENCE, period: "6m", total: 3, collected: 5 })
+    expect(q("[data-testid=evidence-basis]").textContent).toContain("3 of 5 papers")
+    expect(q("[data-testid=evidence-basis]").textContent).toContain("published in the last 6 months")
+    expect(q("[data-testid=evidence-basis]").textContent).toContain("nothing is pooled")
   })
 
-  it("shows what is new, then one row per treatment with its studies by direction and design", async () => {
-    client.loadConditionEvidenceRemote.mockResolvedValue(EVIDENCE)
-    await render(<ConditionEvidence body="condition: depression" />)
-    expect([...container.querySelectorAll("[data-testid=evidence-new] a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["Headline 1", "/paper/paper-1"]])
-    const rows = [...container.querySelectorAll("[data-evidence-row]")]
-    expect(rows.map((row) => row.getAttribute("data-evidence-row"))).toEqual(["ketamine", "none"])
-    expect(rows[0].querySelector("[data-row-name]")!.textContent).toBe("Ketamine")
-    expect(rows[0].querySelector("[data-row-studies]")!.textContent).toBe("3 papers")
-    expect(rows[0].querySelector("[data-row-directions]")!.textContent).toBe("2 benefit, 1 no benefit")
-    expect(rows[0].querySelector("[data-row-designs]")!.textContent).toBe("2 randomized trials, 1 meta-analysis")
-    // The bar is divided in proportion to the studies.
-    const segments = [...rows[0].querySelectorAll("[data-bar] [data-kind]")].map((segment) => [segment.getAttribute("data-kind"), (segment as HTMLElement).style.width])
-    expect(segments).toEqual([["benefit", "66.6667%"], ["no-benefit", "33.3333%"]])
-    expect(rows[1].querySelector("[data-row-name]")!.textContent).toBe("No treatment named")
-    expect(rows[1].querySelector("[data-row-studies]")!.textContent).toBe("1 paper")
+  it("asks again with the chosen period, and keeps the old content, dimmed, until the answer comes", async () => {
+    await show()
+    let answer: (value: Evidence) => void = () => {}
+    client.loadConditionEvidenceRemote.mockReturnValue(new Promise<Evidence>((resolve) => { answer = resolve }))
+    const select = q("select") as HTMLSelectElement
+    expect([...select.options].map((option) => option.textContent)).toEqual(["All time", "Last 12 months", "Last 6 months", "Last 3 months"])
+    await act(async () => {
+      select.value = "6m"
+      select.dispatchEvent(new Event("change", { bubbles: true }))
+    })
+    expect(client.loadConditionEvidenceRemote).toHaveBeenLastCalledWith("depression", "6m")
+    expect(q("[data-class=medicine]")).not.toBeNull()
+    expect(q("[data-testid=condition-evidence]").getAttribute("aria-busy")).toBe("true")
+    await act(async () => { answer({ ...EVIDENCE, period: "6m", total: 1, collected: 5, classes: [ect] }) })
+    expect(q("[data-class=medicine]")).toBeNull()
+    expect(q("[data-testid=condition-evidence]").getAttribute("aria-busy")).toBeNull()
+    expect((q("select") as HTMLSelectElement).value).toBe("6m")
   })
 
-  it("draws a bar per month and a legend for the timeline", async () => {
-    client.loadConditionEvidenceRemote.mockResolvedValue(EVIDENCE)
-    await render(<ConditionEvidence body="condition: depression" />)
-    const chart = container.querySelector("[data-testid=evidence-timeline] svg")!
-    expect(chart.querySelectorAll("rect[data-month]")).toHaveLength(2)
-    expect(chart.querySelector('rect[data-month="2026-09"]')!.getAttribute("data-count")).toBe("3")
-    expect([...container.querySelectorAll("[data-testid=evidence-timeline] [data-legend]")].map((entry) => entry.textContent)).toEqual(["Ketamine", "Other"])
+  it("has three tabs with their counts, Treatments first and selected", async () => {
+    await show()
+    expect(q('[role="tablist"]')).not.toBeNull()
+    const tabs = qa('[role="tab"]')
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Treatments5", "Safety1", "Other research2"])
+    expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual(["true", "false", "false"])
+    expect(qa('[role="tabpanel"]')).toHaveLength(1)
+    expect(q("[data-class=medicine]")).not.toBeNull()
   })
 
-  it("lists the findings by treatment, each with the PICO parts its paper states", async () => {
-    client.loadConditionEvidenceRemote.mockResolvedValue(EVIDENCE)
-    await render(<ConditionEvidence body="condition: depression" />)
-    const groups = [...container.querySelectorAll("[data-finding-group]")]
-    expect(groups.map((group) => [group.querySelector("h4")!.textContent, group.querySelectorAll("[data-finding]").length])).toEqual([["Ketamine", 3], ["No treatment named", 1]])
-    const first = groups[0].querySelector('[data-finding="pmid:1"]')!
-    expect(first.querySelector("a")!.getAttribute("href")).toBe("/paper/paper-1")
-    expect(first.querySelector("[data-pico]")!.textContent).toBe("Population: adults with depression · Compared with: placebo · Outcome: depressive symptoms")
-    expect(groups[0].querySelector('[data-finding="pmid:3"] [data-pico]')!.textContent).toBe("Population: adults with depression")
-    expect(groups[1].querySelector("[data-pico]")).toBeNull()
-    expect(groups[0].querySelector('[data-finding="pmid:2"]')!.textContent).toContain("Saved")
-    expect(first.textContent).not.toContain("Saved")
+  it("shows a class with its name, count and what is new, naming the classes the pack does not", async () => {
+    await show()
+    expect(qa("[data-class]").map((row) => row.getAttribute("data-class"))).toEqual(["medicine", "neuromodulation"])
+    const row = classRow("medicine")
+    expect(row.querySelector("[data-name]")!.textContent).toBe("Medicines")
+    expect(row.querySelector("[data-papers]")!.textContent).toBe("4 papers")
+    expect(row.querySelector("[data-new]")!.textContent).toBe("+2 new")
+    expect(classRow("neuromodulation").querySelector("[data-name]")!.textContent).toBe("Neuromodulation")
+    expect(classRow("neuromodulation").querySelector("[data-new]")).toBeNull()
   })
 
-  it("says so when there is nothing yet, when the block names no condition, and when the evidence cannot be had", async () => {
-    client.loadConditionEvidenceRemote.mockResolvedValue({ ...EVIDENCE, total: 0, rows: [], recent: [], items: [], timeline: { months: [], series: [] } })
-    await render(<ConditionEvidence body="condition: depression" />)
+  it("fills the bar in proportion to the largest class, never under 6%", async () => {
+    await show()
+    const fill = (key: string) => (classRow(key).querySelector("[data-bar-fill]") as HTMLElement).style.width
+    expect(fill("medicine")).toBe("100%")
+    expect(fill("neuromodulation")).toBe("25%")
+    document.body.innerHTML = ""
+    await show({ ...EVIDENCE, classes: [{ ...med, papers: 40 }, { ...ect, papers: 1 }] })
+    expect(fill("neuromodulation")).toBe("6%")
+  })
+
+  it("divides the fill by direction, in order, in proportion to the papers", async () => {
+    await show()
+    const bar = classRow("medicine").querySelector("[data-bar]") as HTMLElement
+    expect(bar.getAttribute("title")).toBe("3 benefit, 1 no benefit")
+    expect([...bar.querySelectorAll("[data-kind]")].map((segment) => [segment.getAttribute("data-kind"), (segment as HTMLElement).style.width])).toEqual([["benefit", "75%"], ["no-benefit", "25%"]])
+    expect((bar.querySelector("[data-kind=benefit]") as HTMLElement).style.backgroundColor).toBe("var(--clinical-benefit)")
+    expect((bar.querySelector("[data-kind=no-benefit]") as HTMLElement).style.backgroundColor).toBe("var(--clinical-no-benefit)")
+  })
+
+  it("keeps a class closed at first, with no study row, and opens it to its treatments with Did and Watch", async () => {
+    await show()
+    const button = classRow("medicine").querySelector("button") as HTMLElement
+    expect(button.getAttribute("aria-expanded")).toBe("false")
+    expect(qa("[data-treatment]")).toHaveLength(0)
+    expect(qa("[data-study]")).toHaveLength(0)
+    await click(button)
+    expect(button.getAttribute("aria-expanded")).toBe("true")
+    expect(qa("[data-treatment]").map((row) => row.getAttribute("data-treatment"))).toEqual(["ketamine", "lithium"])
+    const first = q("[data-treatment=ketamine]")
+    expect(first.querySelector("[data-name]")!.textContent).toBe("Ketamine")
+    expect(first.querySelector("[data-did]")!.textContent).toBe("Did: Eased symptoms within a day")
+    expect(first.querySelector("[data-watch]")!.textContent).toBe("Watch: No better than placebo")
+    // Bars inside the class are scaled against its largest treatment (2 papers): lithium has 1.
+    expect((q("[data-treatment=lithium] [data-bar-fill]")).style.width).toBe("50%")
+    expect(qa("[data-study]")).toHaveLength(0)
+    await click(button)
+    expect(qa("[data-treatment]")).toHaveLength(0)
+  })
+
+  it("joins several texts with a semicolon, and shows a single benefit text plain but a single caution labelled", async () => {
+    const many = treatment("ketamine", "Ketamine", [study(1), study(2), study(8, { kind: "safety" })], {
+      did: [{ text: "Eased symptoms", key: "a" }, { text: "Worked fast", key: "b" }], watch: [{ text: "Dissociation", key: "c", kind: "safety" }, { text: "Faded by week 6", key: "d", kind: "mixed" }],
+    })
+    await show({ ...EVIDENCE, classes: [klass("medicine", null, [many, lithium, sertraline])] })
+    await openClass("medicine")
+    expect(q("[data-treatment=ketamine] [data-did]").textContent).toBe("Did: Eased symptoms; Worked fast")
+    expect(q("[data-treatment=ketamine] [data-watch]").textContent).toBe("Watch: Dissociation; Faded by week 6")
+    expect(q("[data-treatment=lithium] [data-did]").textContent).toBe("Cut relapse")
+    expect(q("[data-treatment=lithium] [data-watch]")).toBeNull()
+    expect(q("[data-treatment=sertraline] [data-watch]").textContent).toBe("Watch: Raised bleeding risk")
+    expect(q("[data-treatment=sertraline] [data-did]")).toBeNull()
+  })
+
+  it("opens a treatment to the table of its studies", async () => {
+    await show()
+    await openClass("medicine")
+    const button = q("[data-treatment=ketamine] button")
+    expect(button.getAttribute("aria-expanded")).toBe("false")
+    await click(button)
+    expect(button.getAttribute("aria-expanded")).toBe("true")
+    expect(qa("table th").map((head) => head.textContent)).toEqual(["Study", "Design", "Population", "n", "Compared with", "Outcome", "Result"])
+    const rows = qa("[data-study]")
+    expect(rows.map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
+    const link = rows[0].querySelector("a") as HTMLAnchorElement
+    expect([link.textContent, link.getAttribute("href")]).toEqual(["Smith 2026", "/paper/paper-1"])
+    expect(rows[0].textContent).toContain("A Journal")
+    expect(rows[0].querySelector("[data-cell=design]")!.textContent).toBe("Randomized trial")
+    expect(rows[0].querySelector("[data-cell=size]")!.textContent).toBe("120")
+    expect(rows[1].querySelector("[data-cell=size]")!.textContent).toBe("–")
+    expect(rows[0].querySelector("[data-cell=comparator]")!.textContent).toBe("placebo")
+    const result = rows[1].querySelector("[data-cell=result]") as HTMLElement
+    expect(result.textContent).toContain("No better than placebo")
+    expect((result.querySelector("[data-kind-label]") as HTMLElement).textContent).toBe("No benefit")
+    expect((result.querySelector("[data-kind-label]") as HTMLElement).style.color).toBe("var(--clinical-no-benefit)")
+    expect(q("[data-table-scroll]").className).toContain("overflow-x-auto")
+  })
+
+  it("marks a new or saved study, falls back to the headline and the takeaway, and names a design only when named", async () => {
+    const plain = study(9, { label: null, text: null, kind: null, designNamed: false, isNew: true, saved: true })
+    await show({ ...EVIDENCE, classes: [klass("medicine", null, [treatment("ketamine", "Ketamine", [plain, study(10)])])] })
+    await openClass("medicine")
+    const row = q('[data-study="pmid:9"]')
+    expect(row.querySelector("a")!.textContent).toBe("Headline 9")
+    expect(row.querySelector("[data-cell=design]")!.textContent).toBe("")
+    expect(row.querySelector("[data-cell=result]")!.textContent).toBe("Takeaway 9.")
+    expect(row.querySelector("[data-cell=result] [data-kind-label]")).toBeNull()
+    expect(row.textContent).toContain("new")
+    expect(row.textContent).toContain("saved")
+    expect(q('[data-study="pmid:10"]').textContent).not.toContain("saved")
+  })
+
+  it("opens a class with one treatment straight to its line and table", async () => {
+    await show({ ...EVIDENCE, classes: [klass("neuromodulation", "Neuromodulation", [ketamine])] })
+    await openClass("neuromodulation")
+    expect(qa("[data-treatment] button")).toHaveLength(0)
+    expect(q("[data-treatment]").querySelector("[data-did]")!.textContent).toBe("Did: Eased symptoms within a day")
+    expect(qa("[data-study]")).toHaveLength(2)
+  })
+
+  it("lists the safety studies with their treatment, and says so when there are none", async () => {
+    await show()
+    await click(qa('[role="tab"]')[1])
+    expect(qa('[role="tab"]').map((tab) => tab.getAttribute("aria-selected"))).toEqual(["false", "true", "false"])
+    expect(qa("table th").map((head) => head.textContent)).toEqual(["Treatment", "Study", "Design", "Population", "n", "Compared with", "Outcome", "Result"])
+    expect(qa("[data-study]")).toHaveLength(1)
+    expect(q("[data-study] [data-cell=treatment]").textContent).toBe("Sertraline")
+    document.body.innerHTML = ""
+    await show({ ...EVIDENCE, safety: [] })
+    await click(qa('[role="tab"]')[1])
+    expect(q('[role="tabpanel"]').textContent).toBe("No safety findings among these papers.")
+  })
+
+  it("groups the other research by type, closed at first, and opens one to its table", async () => {
+    await show()
+    await click(qa('[role="tab"]')[2])
+    const groups = qa("[data-research]")
+    expect(groups.map((group) => [group.getAttribute("data-research"), group.querySelector("button")!.textContent])).toEqual([["mechanism", "Mechanisms1"], ["risk-factor", "Risk factors1"]])
+    expect(qa("[data-study]")).toHaveLength(0)
+    await click(groups[0].querySelector("button"))
+    expect(qa("table th").map((head) => head.textContent)).toEqual(["Study", "Design", "Population", "n", "Finding"])
+    expect(q("[data-study] [data-cell=finding]").textContent).toBe("Inflammation tracks severity.")
+  })
+
+  it("draws the timeline last, folded", async () => {
+    await show()
+    const details = q("details")
+    expect(details.hasAttribute("open")).toBe(false)
+    expect(details.querySelector("summary")!.textContent).toBe("When they were published")
+    expect(details.querySelectorAll("rect[data-month]")).toHaveLength(2)
+    expect(qa("[data-legend]").map((entry) => entry.textContent)).toEqual(["Medicines", "Other"])
+    expect(q("[data-testid=condition-evidence]").lastElementChild!.tagName).toBe("DETAILS")
+  })
+
+  it("says so when nothing was published in the period, and keeps the period control", async () => {
+    await show()
+    client.loadConditionEvidenceRemote.mockResolvedValue({ ...EVIDENCE, period: "3m", total: 0, collected: 5, classes: [], safety: [], research: [] })
+    const select = q("select") as HTMLSelectElement
+    await act(async () => { select.value = "3m"; select.dispatchEvent(new Event("change", { bubbles: true })) })
+    expect(container.textContent).toContain("No paper on Major depressive disorder was published in the last 3 months. 5 are collected in all.")
+    expect((q("select") as HTMLSelectElement).value).toBe("3m")
+    expect(q('[role="tablist"]')).toBeNull()
+  })
+
+  it("says so when nothing is collected, when no condition is named, while loading, and on an error", async () => {
+    await show({ ...EVIDENCE, total: 0, collected: 0, classes: [], safety: [], research: [], timeline: { months: [], series: [] } })
     expect(container.textContent).toContain("Your feed has not listed a paper on Major depressive disorder yet")
-    expect(container.querySelector("svg")).toBeNull()
     document.body.innerHTML = ""
     await render(<ConditionEvidence body="nothing" />)
     expect(container.textContent).toContain("This block does not name a condition")
     document.body.innerHTML = ""
+    client.loadConditionEvidenceRemote.mockReturnValue(new Promise(() => {}))
+    await render(<ConditionEvidence body="condition: depression" />)
+    expect(container.textContent).toContain("Counting…")
+    document.body.innerHTML = ""
     client.loadConditionEvidenceRemote.mockRejectedValue(new Error("That condition is not in the pack."))
     await render(<ConditionEvidence body="condition: zzz" />)
-    expect(container.querySelector('[role="alert"]')!.textContent).toContain("not in the pack")
-  })
-
-  it("orders its sections: basis, new, treatments, safety, findings, then the folded timeline", async () => {
-    const safe = { ...EVIDENCE, items: [...EVIDENCE.items, item(5, { kind: "safety" })] }
-    client.loadConditionEvidenceRemote.mockResolvedValue(safe)
-    await render(<ConditionEvidence body="condition: depression" />)
-    expect(container.querySelector("[data-testid=evidence-basis]")).not.toBeNull()
-    expect([...container.querySelectorAll("h3, summary")].map((heading) => heading.textContent)).toEqual(["First listed in the last two weeks", "Treatments", "Safety", "Findings", "When they were published"])
-    const details = container.querySelector("details")!
-    expect(details.hasAttribute("open")).toBe(false)
-    expect(details.querySelector("summary")!.textContent).toBe("When they were published")
-    expect(details.querySelector("[data-testid=evidence-timeline]")).not.toBeNull()
-  })
-
-  it("filters the findings by the pressed treatment row, and shows all again", async () => {
-    client.loadConditionEvidenceRemote.mockResolvedValue(EVIDENCE)
-    await render(<ConditionEvidence body="condition: depression" />)
-    const groups = () => [...container.querySelectorAll("[data-finding-group]")].map((group) => group.getAttribute("data-finding-group"))
-    const row = () => container.querySelector('button[data-evidence-row="ketamine"]') as HTMLButtonElement
-    expect(row().getAttribute("aria-pressed")).toBe("false")
-    expect(container.querySelector("[data-show-all]")).toBeNull()
-    expect(groups()).toEqual(["ketamine", "none"])
-    await act(async () => { row().click() })
-    expect(groups()).toEqual(["ketamine"])
-    expect(row().getAttribute("aria-pressed")).toBe("true")
-    expect(row().getAttribute("data-selected")).toBe("true")
-    await act(async () => { row().click() })
-    expect(groups()).toEqual(["ketamine", "none"])
-    expect(row().getAttribute("data-selected")).toBeNull()
-    await act(async () => { row().click() })
-    const all = container.querySelector("[data-show-all]") as HTMLButtonElement
-    expect(all.textContent).toBe("Show all")
-    await act(async () => { all.click() })
-    expect(groups()).toEqual(["ketamine", "none"])
-  })
-
-  it("lists every safety finding with its treatment, and leaves the section out when there is none", async () => {
-    client.loadConditionEvidenceRemote.mockResolvedValue({ ...EVIDENCE, items: [...EVIDENCE.items, item(5, { kind: "safety", treatment: "ketamine" })] })
-    await render(<ConditionEvidence body="condition: depression" />)
-    const section = container.querySelector("[data-testid=evidence-safety]")!
-    expect([...section.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["Headline 5", "/paper/paper-5"]])
-    expect(section.textContent).toContain("Ketamine")
-    expect(container.querySelector('[data-finding="pmid:5"]')).not.toBeNull()
-    document.body.innerHTML = ""
-    client.loadConditionEvidenceRemote.mockResolvedValue(EVIDENCE)
-    await render(<ConditionEvidence body="condition: depression" />)
-    expect(container.querySelector("[data-testid=evidence-safety]")).toBeNull()
-  })
-
-  it("shows the row without a treatment with its papers and designs, but no bar and no directions", async () => {
-    const rows = [EVIDENCE.rows[0], { ...EVIDENCE.rows[1], studies: 2, kinds: { benefit: 1, "no-benefit": 0, mixed: 0, safety: 0, other: 1, unsorted: 0 }, designs: [{ design: "cohort" as const, count: 2 }] }]
-    client.loadConditionEvidenceRemote.mockResolvedValue({ ...EVIDENCE, rows })
-    await render(<ConditionEvidence body="condition: depression" />)
-    const none = container.querySelector('[data-evidence-row="none"]')!
-    expect(none.querySelector("[data-row-name]")!.textContent).toBe("No treatment named")
-    expect(none.querySelector("[data-row-studies]")!.textContent).toBe("2 papers")
-    expect(none.querySelector("[data-row-designs]")!.textContent).toBe("2 observational studies")
-    expect(none.querySelector("[data-bar]")).toBeNull()
-    expect(none.querySelector("[data-row-directions]")).toBeNull()
-    expect(none.textContent).not.toContain("benefit")
-    // A finding in it keeps its own direction label in the list.
-    expect(container.querySelector('[data-testid=condition-evidence] [data-finding="pmid:1"]')!.textContent).toContain("Benefit")
-  })
-
-  it("shows the folded row as a count of papers with a bar, says it is not a pooled effect, and filters the findings to its papers", async () => {
-    const folded: Evidence = {
-      ...EVIDENCE, total: 6,
-      rows: [EVIDENCE.rows[0], { key: "folded", treatment: null, modality: null, studies: 2, kinds: { benefit: 1, "no-benefit": 1, mixed: 0, safety: 0, other: 0, unsorted: 0 }, designs: [{ design: "randomized-trial", count: 2 }], latest: "2026-08", papers: ["pmid:6", "pmid:7"] }, EVIDENCE.rows[1]],
-      items: [...EVIDENCE.items.slice(0, 3), item(6, { rowKey: "folded", treatment: "Yoga" }), item(7, { rowKey: "folded", treatment: "Saffron", kind: "no-benefit" }), EVIDENCE.items[3]],
-    }
-    client.loadConditionEvidenceRemote.mockResolvedValue(folded)
-    await render(<ConditionEvidence body="condition: depression" />)
-    const row = () => container.querySelector('button[data-evidence-row="folded"]') as HTMLButtonElement
-    expect([...container.querySelectorAll("[data-evidence-row]")].map((entry) => entry.getAttribute("data-evidence-row"))).toEqual(["ketamine", "folded", "none"])
-    expect(row().querySelector("[data-row-name]")!.textContent).toBe("Other treatments, one paper each (2)")
-    expect(row().getAttribute("title")).toBe("A count of papers, each on a different treatment. Not a pooled effect.")
-    expect(row().querySelector("[data-row-studies]")!.textContent).toBe("2 papers")
-    expect([...row().querySelectorAll("[data-bar] [data-kind]")].map((segment) => [segment.getAttribute("data-kind"), (segment as HTMLElement).style.width])).toEqual([["benefit", "50%"], ["no-benefit", "50%"]])
-    expect(row().textContent).toContain("latest 2026-08")
-    expect(container.querySelector('button[data-evidence-row="ketamine"]')!.getAttribute("title")).toBeNull()
-    await act(async () => { row().click() })
-    const groups = [...container.querySelectorAll("[data-finding-group]")]
-    expect(groups.map((group) => [group.getAttribute("data-finding-group"), group.querySelector("h4")!.textContent])).toEqual([["folded", "Other treatments, one paper each (2)"]])
-    expect([...groups[0].querySelectorAll("[data-finding]")].map((entry) => [entry.getAttribute("data-finding"), entry.querySelector("[data-finding-treatment]")!.textContent])).toEqual([["pmid:6", "Yoga"], ["pmid:7", "Saffron"]])
-  })
-
-  it("heads the newest findings by when they were first listed, with the treatment of each and how many there are when not all are shown", async () => {
-    const recent = [item(1), item(6, { rowKey: "folded", treatment: "Yoga" }), item(4, { rowKey: "none", treatment: null, kind: "other" })]
-    client.loadConditionEvidenceRemote.mockResolvedValue({ ...EVIDENCE, recent, recentTotal: 43 })
-    await render(<ConditionEvidence body="condition: depression" />)
-    const section = container.querySelector("[data-testid=evidence-new]")!
-    expect(section.querySelector("h3")!.textContent).toBe("First listed in the last two weeks")
-    expect(section.querySelector("[data-recent-count]")!.textContent).toBe("3 of 43")
-    // The treatment follows the headline: the pack's name of it, or what the paper named; nothing when none is named.
-    expect([...section.querySelectorAll("li")].map((line) => [line.querySelector("a")!.textContent, line.querySelector("[data-recent-treatment]")?.textContent ?? null])).toEqual([["Headline 1", "Ketamine"], ["Headline 6", "Yoga"], ["Headline 4", null]])
-    document.body.innerHTML = ""
-    client.loadConditionEvidenceRemote.mockResolvedValue(EVIDENCE)
-    await render(<ConditionEvidence body="condition: depression" />)
-    expect(container.querySelector("[data-recent-count]")).toBeNull()
-  })
-
-  it("keeps the track of a bar apart from the ground of a chosen or hovered row", async () => {
-    client.loadConditionEvidenceRemote.mockResolvedValue(EVIDENCE)
-    await render(<ConditionEvidence body="condition: depression" />)
-    const row = container.querySelector('button[data-evidence-row="ketamine"]') as HTMLButtonElement
-    await act(async () => { row.click() })
-    const chosen = container.querySelector('button[data-evidence-row="ketamine"]') as HTMLButtonElement
-    const track = chosen.querySelector("[data-bar]") as HTMLElement
-    const grounds = chosen.className.split(/\s+/).filter((name) => /^(hover:)?bg-/.test(name)).map((name) => name.replace(/^hover:/, ""))
-    expect(grounds.length).toBeGreaterThan(0)
-    for (const ground of grounds) expect(track.className.split(/\s+/)).not.toContain(ground)
-    expect(track.className.split(/\s+/)).toContain("border")
-  })
-
-  it("forgets the chosen row when the block names another condition", async () => {
-    client.loadConditionEvidenceRemote.mockImplementation(async (code: string) => ({ ...EVIDENCE, condition: { code, name: code } }))
-    container = document.createElement("div")
-    document.body.appendChild(container)
-    const root = createRoot(container)
-    await act(async () => { root.render(<ConditionEvidence body="condition: depression" />) })
-    await act(async () => {})
-    await act(async () => { (container.querySelector('button[data-evidence-row="ketamine"]') as HTMLButtonElement).click() })
-    expect(container.querySelectorAll("[data-selected]")).toHaveLength(1)
-    await act(async () => { root.render(<ConditionEvidence body="condition: schizophrenia" />) })
-    await act(async () => {})
-    expect(container.querySelector("[data-testid=evidence-basis]")!.textContent).toContain("schizophrenia")
-    expect(container.querySelectorAll("[data-selected]")).toHaveLength(0)
-    expect(container.querySelectorAll("[data-finding-group]")).toHaveLength(2)
-    expect(container.querySelector("[data-show-all]")).toBeNull()
+    expect(q('[role="alert"]').textContent).toContain("not in the pack")
   })
 
   it("is drawn for its own block name, and the trial-numbers block still is for its", () => {

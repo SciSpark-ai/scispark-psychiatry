@@ -315,7 +315,7 @@ export const CLINICAL_COPY = {
   evidence: {
     home: {
       heading: "Conditions you follow",
-      count: (total: number, recent: number) => (total === 0 ? "No papers yet" : `${total} ${total === 1 ? "paper" : "papers"}${recent > 0 ? ` · ${recent} first listed in the last two weeks` : ""}`),
+      count: (total: number, recent: number) => (total === 0 ? "No papers yet" : `${total} ${total === 1 ? "paper" : "papers"}${recent > 0 ? ` · ${recent} new` : ""}`),
       open: "Open", opening: "Opening…",
       none: "You are not following a condition yet.", addTopics: "Add one under My topics",
       loading: "Loading…",
@@ -323,35 +323,38 @@ export const CLINICAL_COPY = {
     badRequest: "The request was not understood.",
     noSuchCondition: "That condition is not in the pack.",
     requestFailed: (status: number) => `The evidence could not be reached (${status}).`,
-    basis: (count: number, condition: string) => `From the ${count} ${count === 1 ? "paper" : "papers"} your feed has listed on ${condition}. Not all the evidence on it; studies are counted, not pooled.`,
+    /** The line above the tabs. `since` is the day the earliest paper was first listed. */
+    basis: (count: number, condition: string, since: string | null) =>
+      `From the ${count} ${count === 1 ? "paper" : "papers"} your feed has listed on ${condition}${since ? ` since ${since}` : ""}. Not all the evidence on it; papers are counted, nothing is pooled.`,
+    basisPeriod: (count: number, collected: number, phrase: string, condition: string) =>
+      `${count} of ${collected} ${collected === 1 ? "paper" : "papers"} your feed has listed on ${condition}, published in the last ${phrase}. Not all the evidence on it; papers are counted, nothing is pooled.`,
     empty: (condition: string) => `Your feed has not listed a paper on ${condition} yet. Follow it under My topics and refresh your feed.`,
+    emptyPeriod: (condition: string, phrase: string, collected: number) => `No paper on ${condition} was published in the last ${phrase}. ${collected} ${collected === 1 ? "is" : "are"} collected in all.`,
     notAQuery: "This block does not name a condition. It should read: condition: <the pack's id of the condition>.",
     loading: "Counting…",
-    headings: { recent: "First listed in the last two weeks", treatments: "Treatments", safety: "Safety", findings: "Findings", timeline: "When they were published" },
-    showAll: "Show all",
-    /** Beside the heading of the newest findings when there are more than are shown. */
-    recentShown: (shown: number, total: number) => `${shown} of ${total}`,
+    periodLabel: "Period",
+    periods: { all: "All time", "12m": "Last 12 months", "6m": "Last 6 months", "3m": "Last 3 months" },
+    /** After "in the last". */
+    periodPhrases: { "12m": "12 months", "6m": "6 months", "3m": "3 months" },
+    tabs: { treatments: "Treatments", safety: "Safety", research: "Other research" },
+    tabsLabel: "Kinds of evidence",
+    safetyEmpty: "No safety findings among these papers.",
+    /** Class names by their key, for classes the pack does not name. */
+    classLabels: { medicine: "Medicines", psychotherapy: "Psychotherapy", neuromodulation: "Neuromodulation", digital: "Digital tools", lifestyle: "Lifestyle", other: "Other treatments" },
+    researchTypes: { "risk-factor": "Risk factors", prediction: "Prediction and biomarkers", mechanism: "Mechanisms", epidemiology: "Epidemiology", services: "Services and policy", other: "Other" },
     noTreatment: "No treatment named",
-    /** The one row of the treatments the pack does not know that have a single paper each. */
-    folded: (count: number) => `Other treatments, one paper each (${count})`,
-    foldedNote: "A count of papers, each on a different treatment. Not a pooled effect.",
     /** A review or an editorial is not a study, so papers are counted. */
     papers: (count: number) => `${count} ${count === 1 ? "paper" : "papers"}`,
+    newCount: (count: number) => `+${count} new`,
+    /** The few words under a treatment: what it did, and what to watch for. */
+    did: (texts: string[]) => `Did: ${texts.join("; ")}`,
+    watch: (texts: string[]) => `Watch: ${texts.join("; ")}`,
     kinds: { benefit: "benefit", "no-benefit": "no benefit", mixed: "mixed", safety: "safety", other: "other", unsorted: "not sorted" },
     kindLabels: { benefit: "Benefit", "no-benefit": "No benefit", mixed: "Mixed", safety: "Safety", other: "Other" },
-    designPlurals: {
-      "meta-analysis": ["meta-analysis", "meta-analyses"], "systematic-review": ["systematic review", "systematic reviews"],
-      "randomized-trial": ["randomized trial", "randomized trials"], guideline: ["guideline", "guidelines"],
-      cohort: ["observational study", "observational studies"], "clinical-trial": ["clinical trial", "clinical trials"], review: ["review", "reviews"],
-      "case-report": ["case report", "case reports"], editorial: ["editorial", "editorials"], erratum: ["erratum", "errata"],
-      retraction: ["retracted paper", "retracted papers"], protocol: ["study protocol", "study protocols"],
-      preclinical: ["animal or lab study", "animal or lab studies"], other: ["other design", "other designs"], unknown: ["design not stated", "design not stated"],
-    },
-    latest: (date: string) => `latest ${date}`,
-    modalities: { drug: "Drug", psychotherapy: "Psychotherapy", neuromodulation: "Neuromodulation", other: "Other" },
-    pico: { population: "Population", comparator: "Compared with", outcome: "Outcome" },
-    picoJoin: " · ",
-    saved: "Saved",
+    columns: { treatment: "Treatment", study: "Study", design: "Design", population: "Population", size: "n", comparator: "Compared with", outcome: "Outcome", result: "Result", finding: "Finding" },
+    studyMarks: { new: "new", saved: "saved" },
+    dash: "–",
+    timeline: "When they were published",
     otherSeries: "Other",
     timelineLabel: (condition: string) => `Papers on ${condition} by month of publication`,
   },
