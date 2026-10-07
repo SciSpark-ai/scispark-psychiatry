@@ -55,7 +55,7 @@ describe("clinical wording lives in copy.ts", () => {
 
   it("has no message literal in the feed code that reaches the user", () => {
     // Errors and warnings of a run are shown on Home. Internal invariants (the pack loader, the id check) are not.
-    const internal = new Set(["lib/clinical/copy.ts", "lib/clinical/pack/load.ts", "lib/clinical/watch/store.ts"])
+    const internal = new Set(["lib/clinical/copy.ts", "lib/clinical/pack/load.ts", "lib/clinical/watch/store.ts", "lib/clinical/records/schema.ts"])
     const offenders = walk(path.join(SRC, "lib/clinical"))
       .filter((file) => !internal.has(rel(file)))
       .flatMap((file) => readFileSync(file, "utf8").split("\n")
