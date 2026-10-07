@@ -7,7 +7,7 @@ import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { topicLabel } from "@/lib/clinical/topic-label"
 import { GATE_STRICTNESS, PRIORITIES, type ClinicalSettings, type Priority, type WatchEntry } from "@/lib/clinical/types"
 import { loadClinicalSettings, loadWatchEntries, newEntryId, saveClinicalSettings, saveWatchEntries } from "@/lib/clinical/watch/store"
-import { checkTerm, suggestTerms } from "@/lib/clinical/watch/suggest"
+import { checkTerm, suggestWithAliases } from "@/lib/clinical/watch/suggest"
 
 export interface WatchSuggestions {
   conditions: string[]
@@ -16,17 +16,18 @@ export interface WatchSuggestions {
   /** Other names the pack knows for its conditions and treatments (synonyms, brand names). */
   conditionAliases?: string[]
   treatmentAliases?: string[]
+  /** For each other name, the term it belongs to; lets "attention deficit..." find ADHD. */
+  aliasOf?: Record<string, string>
 }
 
 const W = CLINICAL_COPY.watch
 const PRIORITY_LABEL: Record<Priority, string> = { high: W.high, normal: W.normal, paused: W.paused }
-const STRICTNESS_LABEL = { strict: W.strict, standard: W.standard, open: W.open } as const
 const input = "w-full max-w-[340px] rounded-btn border border-border-warm bg-light-surface px-3 py-2 text-[15px] text-espresso placeholder:text-muted-text/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange"
 const heading = "mb-3 text-[19px] font-semibold text-espresso"
 const fieldLabel = "mb-1 block text-[14px] font-medium text-espresso"
 
 type FieldName = "condition" | "condition2" | "treatment"
-const EMPTY = { condition: "", condition2: "", conditionJoin: "and" as "and" | "or", treatment: "", population: "", safetySignal: false }
+const EMPTY = { condition: "", condition2: "", conditionJoin: "and" as "and" | "or", treatment: "", population: "", priority: "normal" as Priority, safetySignal: false }
 
 /**
  * The My topics page: the topics you follow, and a short form to add one. A field offers the pack's
@@ -90,7 +91,7 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
       if (check.status === "close") { setError(null); setSpelling({ field, typed: text, suggestion: check.suggestion }); return }
     }
     const entry: WatchEntry = {
-      id: newEntryId(), priority: "normal", safetySignal: values.safetySignal,
+      id: newEntryId(), priority: values.priority, safetySignal: values.safetySignal,
       ...(condition ? { condition } : {}),
       // A second condition only means something next to a first one.
       ...(condition2 ? { condition2, conditionJoin: values.conditionJoin } : {}),
@@ -120,7 +121,7 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
 
   /** One short field with its own list of names right under it. */
   const termField = (field: FieldName, label: string, placeholder?: string) => {
-    const options = focused === field ? suggestTerms(namesFor(field), draft[field]) : []
+    const options = focused === field ? suggestWithAliases(namesFor(field), suggestions.aliasOf ?? {}, draft[field]).filter((option) => namesFor(field).includes(option.name)) : []
     return (
       <div className="relative max-w-[340px]">
         <label className={fieldLabel} htmlFor={`topic-${field}`}>{label}</label>
@@ -129,10 +130,12 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
           onFocus={() => setFocused(field)} onBlur={() => setFocused((current) => (current === field ? null : current))} onKeyDown={onKey} />
         {options.length > 0 && (
           <ul role="listbox" data-testid={`suggestions-${field}`} className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-btn border border-border-warm bg-light-surface shadow-lg">
-            {options.map((name) => (
+            {options.map(({ name, via }) => (
               // mousedown, not click: the field must not lose focus (and close the list) before the pick lands.
               <li key={name} role="option" aria-selected={false} onMouseDown={(event) => { event.preventDefault(); setDraft({ ...draft, [field]: name }); setFocused(null) }}
-                className="cursor-pointer px-3 py-2 text-[15px] text-espresso hover:bg-card-surface">{name}</li>
+                className="cursor-pointer px-3 py-2 text-[15px] text-espresso hover:bg-card-surface">
+                {name}{via && <span className="ml-2 text-[13px] text-muted-text">{W.alsoCalled} {via}</span>}
+              </li>
             ))}
           </ul>
         )}
@@ -175,9 +178,29 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
         <h2 className={heading}>{W.addTopic}</h2>
         <p className="mb-4 max-w-[640px] text-[15px] leading-relaxed text-secondary-dark">{W.addHelp}</p>
         <div className="space-y-4 rounded-card border border-border-warm bg-light-surface p-5">
-          {termField("condition", W.condition, W.conditionHint)}
+          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            {termField("condition", W.condition, W.conditionHint)}
+            {termField("treatment", W.treatment, W.treatmentHint)}
+            <div className="max-w-[340px]">
+              <label className={fieldLabel} htmlFor="topic-population">{W.population}</label>
+              <select id="topic-population" aria-label={W.population} className={input} value={draft.population} onChange={(event) => setDraft({ ...draft, population: event.target.value })}>
+                <option value="">—</option>
+                {suggestions.populations.map((population) => <option key={population} value={population}>{population}</option>)}
+              </select>
+            </div>
+            <div className="max-w-[340px]">
+              <label className={fieldLabel} htmlFor="topic-priority">{W.priority}</label>
+              <select id="topic-priority" aria-label={W.priority} title={W.priorityNote} className={input} value={draft.priority} onChange={(event) => setDraft({ ...draft, priority: event.target.value as Priority })}>
+                {PRIORITIES.filter((priority) => priority !== "paused").map((priority) => <option key={priority} value={priority}>{PRIORITY_LABEL[priority]}</option>)}
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-[14px] text-espresso">
+            <input type="checkbox" checked={draft.safetySignal} onChange={(event) => setDraft({ ...draft, safetySignal: event.target.checked })} />
+            {W.safetySignal}
+          </label>
           {second ? (
-            <div className="space-y-2">
+            <div className="space-y-2 border-t border-border-warm/60 pt-4">
               {termField("condition2", W.condition2)}
               <div role="group" aria-label={W.conditionJoin} className="flex flex-wrap items-center gap-2">
                 {(["and", "or"] as const).map((join) => (
@@ -189,26 +212,8 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
               </div>
             </div>
           ) : (
-            <button type="button" onClick={() => setSecond(true)} disabled={!draft.condition.trim()} className="text-[14px] text-accent-ink underline disabled:text-muted-text disabled:no-underline">{W.addSecond}</button>
+            <button type="button" onClick={() => setSecond(true)} disabled={!draft.condition.trim()} className="block text-[14px] text-accent-ink underline disabled:text-muted-text disabled:no-underline">{W.addSecond}</button>
           )}
-          {termField("treatment", W.treatment, W.treatmentHint)}
-
-          <details>
-            <summary className="cursor-pointer text-[14px] text-secondary-dark">{W.moreOptions}</summary>
-            <div className="mt-3 space-y-3">
-              <div className="max-w-[340px]">
-                <label className={fieldLabel} htmlFor="topic-population">{W.population}</label>
-                <select id="topic-population" className={input} value={draft.population} onChange={(event) => setDraft({ ...draft, population: event.target.value })}>
-                  <option value="">—</option>
-                  {suggestions.populations.map((population) => <option key={population} value={population}>{population}</option>)}
-                </select>
-              </div>
-              <label className="flex items-center gap-2 text-[14px] text-espresso">
-                <input type="checkbox" checked={draft.safetySignal} onChange={(event) => setDraft({ ...draft, safetySignal: event.target.checked })} />
-                {W.safetySignal}
-              </label>
-            </div>
-          </details>
 
           {preview && <p data-testid="topic-preview" className="text-[15px] text-secondary-dark">{W.preview} <span className="font-semibold text-espresso">{preview}</span></p>}
           {spelling && (
@@ -224,10 +229,15 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
 
       <section>
         <h2 className={heading}>{W.filterHeading}</h2>
-        <select aria-label={W.strictness} value={settings.strictness} onChange={(event) => void persistSettings({ ...settings, strictness: event.target.value as ClinicalSettings["strictness"] })}
-          className="w-full max-w-[640px] rounded-btn border border-border-warm bg-light-surface px-3 py-2 text-[15px] text-espresso">
-          {GATE_STRICTNESS.map((strictness) => <option key={strictness} value={strictness}>{STRICTNESS_LABEL[strictness]}</option>)}
-        </select>
+        <div role="group" aria-label={W.strictness} className="grid max-w-[720px] gap-3 sm:grid-cols-3">
+          {GATE_STRICTNESS.map((strictness) => (
+            <button key={strictness} type="button" aria-pressed={settings.strictness === strictness} onClick={() => void persistSettings({ ...settings, strictness })}
+              className={`rounded-card border px-4 py-3 text-left transition-colors ${settings.strictness === strictness ? "border-orange bg-orange/10" : "border-border-warm bg-light-surface hover:bg-card-surface/60"}`}>
+              <span data-choice-title="true" className="block text-[16px] font-semibold text-espresso">{W.filters[strictness].title}</span>
+              <span className="mt-0.5 block text-[13px] leading-snug text-secondary-dark">{W.filters[strictness].note}</span>
+            </button>
+          ))}
+        </div>
       </section>
     </div>
   )

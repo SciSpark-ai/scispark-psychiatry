@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { checkTerm, suggestTerms } from "../watch/suggest"
+import { checkTerm, suggestTerms, suggestWithAliases } from "../watch/suggest"
 
 const NAMES = ["Major depressive disorder", "Treatment-resistant depression", "Schizophrenia", "ADHD", "Autism spectrum disorder", "Esketamine", "Ketamine", "Methylphenidate"]
 const ALIASES = ["depression", "MDD", "TRD", "autism", "Spravato"]
@@ -28,3 +28,15 @@ describe("checking what was typed", () => {
     expect(checkTerm(NAMES, ALIASES, "ADD")).toEqual({ status: "new" })
   })
 })
+
+describe("suggestions also search the other names of a term", () => {
+  const aliasOf = { "attention deficit hyperactivity disorder": "ADHD", Spravato: "Esketamine", depression: "Major depressive disorder" }
+  it("offers the term, and says which other name matched", () => {
+    expect(suggestWithAliases(NAMES, aliasOf, "attention")).toEqual([{ name: "ADHD", via: "attention deficit hyperactivity disorder" }])
+    expect(suggestWithAliases(NAMES, aliasOf, "sprav")).toEqual([{ name: "Esketamine", via: "Spravato" }])
+  })
+  it("lists a term once, by its own name first", () => {
+    expect(suggestWithAliases(NAMES, aliasOf, "depress")).toEqual([{ name: "Major depressive disorder" }, { name: "Treatment-resistant depression" }])
+  })
+})
+

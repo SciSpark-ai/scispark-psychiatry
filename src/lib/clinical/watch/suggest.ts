@@ -54,3 +54,22 @@ export function checkTerm(names: string[], aliases: string[], typed: string): Te
   }
   return best && best.distance <= 2 && best.distance <= wanted.length / 4 ? { status: "close", suggestion: best.name } : { status: "new" }
 }
+
+/**
+ * Like `suggestTerms`, but a term is also found by one of its other names (a spelled-out name for an
+ * abbreviation, a brand name for a drug). The result names the term; `via` is the other name that
+ * matched, when it was not the term's own.
+ */
+export function suggestWithAliases(names: string[], aliasOf: Record<string, string>, typed: string, limit = 6): Array<{ name: string; via?: string }> {
+  const wanted = fold(typed)
+  if (!wanted) return []
+  const own = suggestTerms(names, typed, limit).map((name) => ({ name }))
+  const seen = new Set(own.map((entry) => entry.name))
+  const viaAlias: Array<{ name: string; via: string }> = []
+  for (const [alias, name] of Object.entries(aliasOf)) {
+    if (seen.has(name) || fold(name) === wanted || !fold(alias).includes(wanted)) continue
+    seen.add(name)
+    viaAlias.push({ name, via: alias })
+  }
+  return [...own, ...viaAlias].slice(0, limit)
+}

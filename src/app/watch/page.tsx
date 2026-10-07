@@ -14,6 +14,7 @@ export default async function WatchPage() {
     <WatchListEditor suggestions={{
       conditions: names("condition"), treatments: names("treatment"), populations: pack.onboarding.populations,
       conditionAliases: aliases("condition"), treatmentAliases: aliases("treatment"),
+      aliasOf: Object.fromEntries(pack.taxonomy.nodes.flatMap((node) => [...node.synonyms, ...node.brands].map((alias) => [alias, node.name]))),
     }} />
   )
 }

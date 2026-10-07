@@ -19,8 +19,9 @@ const SUGGESTIONS = {
   conditions: ["Major depressive disorder", "Schizophrenia", "ADHD", "Autism spectrum disorder"],
   treatments: ["Esketamine", "Ketamine", "Methylphenidate"],
   populations: ["Adults", "Children and adolescents"],
-  conditionAliases: ["depression", "autism"],
+  conditionAliases: ["depression", "autism", "attention deficit hyperactivity disorder"],
   treatmentAliases: ["Spravato"],
+  aliasOf: { "attention deficit hyperactivity disorder": "ADHD", depression: "Major depressive disorder", autism: "Autism spectrum disorder", Spravato: "Esketamine" },
 }
 
 let container: HTMLDivElement
@@ -136,15 +137,45 @@ describe("My topics", () => {
     expect((await loadWatchEntries(storage())).map((entry) => entry.id)).toEqual(["w1"])
   })
 
-  it("saves which studies to include", async () => {
+  it("offers three plainly named choices of which studies to include, and saves the one picked", async () => {
     await mount()
-    await type(container.querySelector<HTMLSelectElement>('select[aria-label="Which studies to include"]')!, "strict")
+    const group = container.querySelector('[role="group"][aria-label="Which studies to include"]')!
+    const choices = [...group.querySelectorAll("button")] as HTMLButtonElement[]
+    expect(choices.map((choice) => choice.querySelector("[data-choice-title]")!.textContent)).toEqual(["Strict", "Standard", "Everything"])
+    expect(choices[1].getAttribute("aria-pressed")).toBe("true")
+    await click(choices[0])
     expect(await loadClinicalSettings(storage())).toMatchObject({ strictness: "strict" })
+    expect(choices[0].getAttribute("aria-pressed")).toBe("true")
   })
 
   it("keeps the fields short and the type large enough to read", async () => {
     await mount()
     expect(field("Condition").className).toContain("max-w-")
     expect(container.querySelector("h2")!.className).toContain("text-espresso")
+  })
+
+  // Owner follow-up 2026-10-07.
+  it("shows every field of a new topic in one block, with no hidden options", async () => {
+    await mount()
+    expect(container.querySelector("details")).toBeNull()
+    for (const label of ["Condition", "Treatment (optional)"]) expect(field(label)).not.toBeNull()
+    expect(container.querySelector('select[aria-label="Patient group (optional)"]')).not.toBeNull()
+    expect(container.querySelector('select[aria-label="Priority"]')).not.toBeNull()
+    await type(field("Condition"), "Schizophrenia")
+    await type(container.querySelector<HTMLSelectElement>('select[aria-label="Priority"]')!, "high")
+    await type(container.querySelector<HTMLSelectElement>('select[aria-label="Patient group (optional)"]')!, "Adults")
+    await click(button("Add topic"))
+    expect(await loadWatchEntries(storage())).toMatchObject([{ condition: "Schizophrenia", priority: "high", population: "Adults" }])
+  })
+
+  it("finds a condition by its spelled-out name as well as by its short one", async () => {
+    await mount()
+    await type(field("Condition"), "attention def")
+    const options = [...container.querySelectorAll('[data-testid=suggestions-condition] [role="option"]')] as HTMLElement[]
+    expect(options).toHaveLength(1)
+    expect(options[0].textContent).toContain("ADHD")
+    expect(options[0].textContent).toContain("attention deficit hyperactivity disorder")
+    await act(async () => { options[0].dispatchEvent(new MouseEvent("mousedown", { bubbles: true })) })
+    expect(field("Condition").value).toBe("ADHD")
   })
 })
