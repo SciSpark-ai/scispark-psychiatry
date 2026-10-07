@@ -80,7 +80,7 @@ const newestFirst = (a: Finding, b: Finding) => dayOf(b).localeCompare(dayOf(a))
 /**
  * New: the later of the publication day and the day the paper entered PubMed is within RECENT_DAYS of
  * `now`. A publication day that has not come yet does not count (the entry day does); a paper with
- * neither date goes by the day it was first listed.
+ * neither date goes by the day it was first listed. The limit is inclusive: 14 days ago is new, 15 is not.
  */
 function isNew(finding: Finding, now: Date): boolean {
   const pub = published(finding)
@@ -103,8 +103,12 @@ function studyLabel(finding: Finding): string | null {
 
 interface ClassRef { key: string; label: string | null }
 
-/** Where a finding that names a treatment belongs: the key of its treatment and the class of it. Null when it names none. */
-function classifier(taxonomy: Taxonomy): (finding: Finding) => { key: string; class: ClassRef } | null {
+/**
+ * Where a finding that names a treatment belongs: the key of its treatment and the class of it. Null when it names none.
+ * The class is null when the pack does not decide it (an uncoded name, a node of modality other): the caller then takes it
+ * from the findings of that treatment, so one treatment is never in two classes.
+ */
+function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => { key: string; class: ClassRef | null } | null; byClass: (value: TreatmentClass | null) => ClassRef } {
   const nodeOf = new Map(taxonomy.nodes.map((node) => [node.id, node]))
   const treatmentNode = (id: string | null | undefined): TaxonomyNode | undefined => {
     const node = id ? nodeOf.get(id) : undefined
@@ -133,20 +137,21 @@ function classifier(taxonomy: Taxonomy): (finding: Finding) => { key: string; cl
       default: return { key: OTHER, label: null }
     }
   }
-  return (finding) => {
+  const classify = (finding: Finding) => {
     const name = finding.treatment?.trim() || null
     const node = treatmentNode(finding.treatmentCode)
-    if (!node) return name || finding.treatmentCode ? { key: `name:${(name ?? finding.treatmentCode ?? "").toLowerCase()}`, class: byClass(finding.treatmentClass) } : null
+    if (!node) return name || finding.treatmentCode ? { key: `name:${(name ?? finding.treatmentCode ?? "").toLowerCase().replace(/\s+/g, " ")}`, class: null } : null
     const top = topOf(node)
     if (top) return { key: node.id, class: { key: top.id, label: top.name } }
     if (parents.has(node.id)) return { key: node.id, class: { key: node.id, label: node.name } }
-    const cls: ClassRef =
+    const cls: ClassRef | null =
       node.modality === "drug" ? { key: "medicine", label: null }
       : node.modality === "psychotherapy" ? packClass("psychotherapy")
       : node.modality === "neuromodulation" ? packClass("neuromodulation")
-      : byClass(finding.treatmentClass)
+      : null
     return { key: node.id, class: cls }
   }
+  return { classify, byClass }
 }
 
 const inCondition = (findings: Finding[], taxonomy: Taxonomy, code: string) => {
@@ -158,7 +163,14 @@ interface Organised { classes: ClassEvidence[]; classOf: Map<string, string>; re
 
 /** The classes, treatments and studies of the findings, and the research with no treatment. `studyOf` is given each finding with the treatment it names. */
 function organise(findings: Finding[], taxonomy: Taxonomy, now: Date, studyOf: (finding: Finding) => Study): Organised {
-  const classify = classifier(taxonomy)
+  const { classify, byClass } = classifier(taxonomy)
+  // One class per treatment: where the pack does not decide it, the class of the earliest-listed finding of that treatment that has one.
+  const named = new Map<string, Finding>()
+  for (const finding of findings) {
+    const ref = classify(finding)
+    const held = ref ? named.get(ref.key) : undefined
+    if (ref && ref.class === null && finding.treatmentClass && (!held || finding.firstListedAt < held.firstListedAt)) named.set(ref.key, finding)
+  }
   const nodeOf = new Map(taxonomy.nodes.map((node) => [node.id, node]))
   const classes = new Map<string, ClassEvidence>()
   const slots = new Map<string, { evidence: TreatmentEvidence; first: Finding; findings: Finding[] }>()
@@ -171,26 +183,27 @@ function organise(findings: Finding[], taxonomy: Taxonomy, now: Date, studyOf: (
       researchFindings.set(type, [...(researchFindings.get(type) ?? []), finding])
       continue
     }
-    classOf.set(finding.key, ref.class.key)
-    const entry = classes.get(ref.class.key) ?? { key: ref.class.key, label: null, papers: 0, counts: emptyCounts(), newPapers: 0, treatments: [] }
-    entry.label ??= ref.class.label
+    const cls = ref.class ?? byClass(named.get(ref.key)?.treatmentClass ?? null)
+    classOf.set(finding.key, cls.key)
+    const entry = classes.get(cls.key) ?? { key: cls.key, label: null, papers: 0, counts: emptyCounts(), newPapers: 0, treatments: [] }
+    entry.label ??= cls.label
     const fresh = isNew(finding, now)
     const kind = finding.kind ?? "unsorted"
     entry.papers += 1
     entry.counts[kind] += 1
     if (fresh) entry.newPapers += 1
     classes.set(entry.key, entry)
-    const id = `${ref.class.key}\u0000${ref.key}`
+    const id = `${cls.key}\u0000${ref.key}`
     let slot = slots.get(id)
     if (!slot) {
-      slot = { evidence: { key: ref.key, name: nodeOf.get(ref.key)?.name ?? finding.treatment?.trim() ?? ref.key, papers: 0, counts: emptyCounts(), newPapers: 0, did: [], watch: [], studies: [] }, first: finding, findings: [] }
+      slot = { evidence: { key: ref.key, name: nodeOf.get(ref.key)?.name ?? (finding.treatment?.trim() || finding.treatmentCode || ref.key), papers: 0, counts: emptyCounts(), newPapers: 0, did: [], watch: [], studies: [] }, first: finding, findings: [] }
       slots.set(id, slot)
       entry.treatments.push(slot.evidence)
     }
     // A treatment the pack does not know is named as its earliest-listed finding wrote it.
     if (!nodeOf.has(ref.key) && finding.firstListedAt < slot.first.firstListedAt) {
       slot.first = finding
-      slot.evidence.name = finding.treatment?.trim() ?? slot.evidence.name
+      slot.evidence.name = finding.treatment?.trim() || finding.treatmentCode || slot.evidence.name
     }
     slot.evidence.papers += 1
     slot.evidence.counts[kind] += 1
@@ -254,7 +267,7 @@ export function buildConditionEvidence(findings: Finding[], taxonomy: Taxonomy, 
 }
 
 /** The conditions to show on wiki home: those of the reader's topics and those with findings. */
-export function followedConditions(findings: Finding[], taxonomy: Taxonomy, watched: string[], now: Date): Array<{ code: string; name: string; total: number; recent: number; treatments: string[] }> {
+export function followedConditions(findings: Finding[], taxonomy: Taxonomy, watched: string[], now: Date): Array<{ code: string; name: string; total: number; recent: number; treatments: Array<{ key: string; label: string | null }> }> {
   const codes = new Set([...watched, ...findings.flatMap((finding) => finding.conditionCodes)])
   return taxonomy.nodes
     .filter((node) => node.type === "condition" && codes.has(node.id))
@@ -264,7 +277,7 @@ export function followedConditions(findings: Finding[], taxonomy: Taxonomy, watc
       const { classes } = organise(mine, taxonomy, now, (finding) => ({ key: finding.key }) as Study)
       return {
         code: node.id, name: node.name, total: mine.length, recent: mine.filter((finding) => isNew(finding, now)).length,
-        treatments: classes.slice(0, TOP_CLASSES).map((entry) => entry.label ?? entry.key),
+        treatments: classes.slice(0, TOP_CLASSES).map((entry) => ({ key: entry.key, label: entry.label })),
       }
     })
     .sort((a, b) => b.recent - a.recent || b.total - a.total || a.name.localeCompare(b.name))

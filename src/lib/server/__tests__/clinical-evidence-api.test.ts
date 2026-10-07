@@ -51,5 +51,6 @@ describe("/api/clinical/evidence", () => {
     expect(byCode.schizophrenia).toMatchObject({ total: 1, pageId: "wiki/conditions/schizophrenia" })
     expect(byCode["treatment-resistant-depression"]).toMatchObject({ total: 1, pageId: null })
     expect(byCode.adhd).toMatchObject({ total: 0 })
+    expect(byCode.schizophrenia.treatments).toEqual([{ key: "antidepressant", label: "Antidepressants" }])
   })
 })

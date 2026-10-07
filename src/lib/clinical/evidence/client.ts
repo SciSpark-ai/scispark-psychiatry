@@ -4,7 +4,7 @@ import type { ConditionEvidence, Period } from "./build"
 
 // Browser-side callers of /api/clinical/evidence. Types only from ./build.
 
-export interface FollowedCondition { code: string; name: string; total: number; recent: number; treatments: string[]; pageId: string | null }
+export interface FollowedCondition { code: string; name: string; total: number; recent: number; treatments: Array<{ key: string; label: string | null }>; pageId: string | null }
 const URL = "/api/clinical/evidence"
 async function unwrap<T>(res: Response): Promise<T> {
   if (!res.ok) throw new Error(await readErrorMessage(res, CLINICAL_COPY.evidence.requestFailed(res.status)))

@@ -27,7 +27,7 @@ beforeEach(() => { document.body.innerHTML = ""; push.mockReset(); evidence.list
 describe("wiki home", () => {
   it("shows a card for each condition the reader follows, with its papers, what is new and its main classes", async () => {
     evidence.listFollowedConditionsRemote.mockResolvedValue([
-      { code: "depression", name: "Major depressive disorder", total: 22, recent: 5, treatments: ["medicine", "Neuromodulation"], pageId: "wiki/conditions/major-depressive-disorder" },
+      { code: "depression", name: "Major depressive disorder", total: 22, recent: 5, treatments: [{ key: "medicine", label: null }, { key: "neuromodulation", label: "Neuromodulation" }], pageId: "wiki/conditions/major-depressive-disorder" },
       { code: "adhd", name: "ADHD", total: 0, recent: 0, treatments: [], pageId: null },
     ])
     await render()

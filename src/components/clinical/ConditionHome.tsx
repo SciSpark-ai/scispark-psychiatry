@@ -47,7 +47,7 @@ export function ConditionHome() {
           <div key={condition.code} data-condition={condition.code} className="rounded-card border border-border-warm/70 bg-light-surface px-5 py-4">
             <h3 className="font-heading text-[19px] font-semibold text-espresso">{condition.name}</h3>
             <p data-count="true" className="mt-1 text-[13px] text-secondary-dark">{H.count(condition.total, condition.recent)}</p>
-            {condition.treatments.length > 0 && <p data-treatments="true" className="mt-1 text-[13px] text-muted-text">{condition.treatments.map((entry) => classNameOf(entry, null)).join(", ")}</p>}
+            {condition.treatments.length > 0 && <p data-treatments="true" className="mt-1 text-[13px] text-muted-text">{condition.treatments.map((entry) => classNameOf(entry.key, entry.label)).join(", ")}</p>}
             <button type="button" onClick={() => void open(condition)} disabled={opening !== null}
               className="mt-3 rounded-pill border border-border-warm px-4 py-1.5 text-[13px] text-espresso hover:bg-card-surface/60 disabled:opacity-50">
               {opening === condition.code ? H.opening : H.open}
