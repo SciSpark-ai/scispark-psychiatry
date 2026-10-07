@@ -18,8 +18,12 @@ export async function findCardDigest(storage: VaultStorage, paper: PaperRecord):
   }
   const feed = (await read(FEED_PATH)) as { items?: Array<{ key?: string; digest?: unknown }>; seenEarlier?: Array<{ key?: string; digest?: unknown }> } | null
   const listed = [...(feed?.items ?? []), ...(feed?.seenEarlier ?? [])].find((item) => item.key === key)?.digest
-  if (isDigest(listed)) return { headline: listed.headline, takeaway: listed.takeaway, quote: typeof listed.quote === "string" ? listed.quote : "" }
+  const tidy = (digest: CardDigest): CardDigest => {
+    const tags = Array.isArray(digest.tags) ? digest.tags.filter((tag) => typeof tag === "string") : []
+    return { headline: digest.headline, takeaway: digest.takeaway, quote: typeof digest.quote === "string" ? digest.quote : "", ...(tags.length > 0 ? { tags } : {}) }
+  }
+  if (isDigest(listed)) return tidy(listed)
   const cache = (await read(CACHE_PATH)) as { digests?: Record<string, { value?: unknown }> } | null
   const kept = cache?.digests?.[key]?.value
-  return isDigest(kept) ? { headline: kept.headline, takeaway: kept.takeaway, quote: typeof kept.quote === "string" ? kept.quote : "" } : null
+  return isDigest(kept) ? tidy(kept) : null
 }

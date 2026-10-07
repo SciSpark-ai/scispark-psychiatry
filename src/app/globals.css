@@ -53,9 +53,15 @@
   --viz-cat-6: #a16207; /* olive gold */
   --viz-cat-7: #0891b2; /* cyan */
   --viz-cat-8: #db2777; /* pink */
+
+  /* Clinical edition: the two colours of the AI overview (a finding of benefit, a finding of none). */
+  --clinical-benefit: #15803d;
+  --clinical-no-benefit: #b91c1c;
 }
 
 [data-theme="dark"] {
+  --clinical-benefit: #4ade80;
+  --clinical-no-benefit: #f87171;
   --bg-page: #161009;
   --bg-warm: #1e150c;
   --surface-card: #2b1e11;

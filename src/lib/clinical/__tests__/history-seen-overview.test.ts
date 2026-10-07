@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { MemoryVaultStorage } from "../../vault/memory-storage"
 import { MockProvider } from "../../llm/mock-provider"
 import { loadPsychiatryPack } from "../pack/load"
-import { checkOverview, judgeOverview, overviewTopics, tidyOverviewSentence } from "../digest/topic"
+import { checkOverview, judgeOverview, overviewTopics, tidyOverviewSentence, writeTopicOverviews } from "../digest/topic"
 import { runClinicalFeed, type ClinicalFeedDeps } from "../feed/run"
 import { FEED_PATH, loadClinicalFeed } from "../feed/stored"
 import { deleteHistory, listHistory, loadHistory, restoreHistory } from "../history/store"
@@ -263,7 +263,21 @@ describe("the overview as a synthesis", () => {
     expect(kept.map((point) => [point.kind, point.group, point.sources.length])).toEqual([["benefit", "focus", 1], ["no-benefit", "focus", 1], ["other", "related", 1]])
   })
   it("rejects a finding that runs on like a sentence about several things", () => {
-    const long = "esketamine gave more remission than quetiapine and also improved sleep, appetite, energy, concentration and overall functioning across all of the groups studied"
+    const long = "esketamine gave more remission than quetiapine and also improved sleep, appetite, energy, concentration and overall functioning across all of the groups that were studied in the trial, at every visit"
     expect(judgeOverview([{ text: long, sources: [1], kind: "benefit" }], papers).problems).toEqual(["too-long"])
+  })
+  it("keeps a finding that is part benefit, part none", () => {
+    expect(judgeOverview([{ text: "A phone app improved adherence but not symptoms.", sources: [2], kind: "mixed" }], papers).kept[0].kind).toBe("mixed")
+  })
+  it("asks again when a listed paper is left out, naming it, and keeps the answer that covers more papers", async () => {
+    const answer = (sentences: unknown[]) => llmResult({ sentences }, "claude-opus-4-8")
+    const strong = new MockProvider([
+      answer([{ text: "Esketamine gave more remission than quetiapine.", sources: [1], kind: "benefit" }]),
+      answer([{ text: "Esketamine gave more remission than quetiapine.", sources: [1], kind: "benefit" }, { text: "Adding omega-3 did not reduce symptoms.", sources: [2], kind: "no-benefit" }, { text: "Older age was linked to slower improvement.", sources: [3], kind: "other" }]),
+    ])
+    const written = await writeTopicOverviews([{ entryId: "w1", label: "Depression", papers: papers.map((paper) => ({ ...paper, part: "focus" as const })) }], { storage: new MemoryVaultStorage(), settings: SETTINGS, providerOverride: { strong } })
+    expect(strong.calls).toHaveLength(2)
+    expect(JSON.parse(strong.calls[1].req.messages.at(-1)!.content as string).problems.join(" ")).toMatch(/papers? 2, 3/i)
+    expect(written.overviews.w1.flatMap((sentence) => sentence.sources).sort()).toEqual(["k1", "k2", "k3"])
   })
 })

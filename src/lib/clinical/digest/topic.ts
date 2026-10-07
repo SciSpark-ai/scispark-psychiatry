@@ -17,22 +17,22 @@ export { tidyOverviewSentence }
  * - A sentence may use only numbers that appear in the headline or takeaway of the papers it names.
  * - A sentence must be short.
  *
- * Since 2026-10-07 the overview is a synthesis rather than a list of points: each finding is a short
- * clause with a kind (benefit, no benefit, safety, other), and papers that found the same share one
- * finding. The page groups the findings by kind. What the findings rest on (how many papers, of which
- * designs) is counted by the page from the listed papers; the model does not write it.
+ * Since 2026-10-07 the overview is a synthesis rather than a list of points: each sentence has a kind
+ * (benefit, no benefit, mixed, safety, other), papers that found related things share a sentence, and
+ * every listed paper must be a source of some sentence. The page sets the sentences as running text by
+ * kind and counts the papers of each kind itself; the model does not write the counts.
  *
  * What survives is stored with the list as sentences and the keys of their papers.
  */
 
 export const OVERVIEW_MIN_PAPERS = 2
 const OVERVIEW_MAX_PAPERS = 20
-/** A finding is a clause, not a sentence about several things. The model is asked for fewer words than this. */
-const SENTENCE_MAX_WORDS = 18
-const OVERVIEW_MAX_SENTENCES = 8
+/** One sentence about one thing. The model is asked for fewer words than this. */
+const SENTENCE_MAX_WORDS = 28
+const OVERVIEW_MAX_SENTENCES = 14
 
-/** What a finding says: a treatment helped, did not help, raised a safety concern, or something else was found. */
-export const OVERVIEW_KINDS = ["benefit", "no-benefit", "safety", "other"] as const
+/** What a finding says: a treatment helped, did not help, did both, raised a safety concern, or something else was found. */
+export const OVERVIEW_KINDS = ["benefit", "no-benefit", "mixed", "safety", "other"] as const
 export type OverviewKind = (typeof OVERVIEW_KINDS)[number]
 
 export interface OverviewSentence {
@@ -61,26 +61,27 @@ interface OverviewInput {
   problems?: string[]
 }
 
-const SYSTEM_PROMPT = `You write the synthesis a busy psychiatrist reads before the paper list of one topic: what the new papers found to help, what they found not to help, what safety concerns they raise, and what else they found. It is a synthesis, not a list of the papers. You are given the topic and, for each paper, a number, a headline, a one-sentence takeaway, and "part": "focus" for a paper about the whole topic (its condition and its treatment), "related" for a paper about the condition with another treatment or none.
+const SYSTEM_PROMPT = `You write the short overview a busy psychiatrist reads before the paper list of one topic: which treatments the new papers found to help, which they found not to help, where the result was mixed, what safety concerns they raise, and what else they found. It reads as running text, not as a list of the papers. You are given the topic and, for each paper, a number, a headline, a one-sentence takeaway, and "part": "focus" for a paper about the whole topic (its condition and its treatment), "related" for a paper about the condition with another treatment or none.
 
-Return "sentences": at most 5 findings from the focus papers and at most 3 from the related papers. Skip a part that has no papers. Leave out papers that add nothing a clinician would want (protocols, methods papers); you need not use every paper. Each finding:
-- "text": ONE short clause of at most 14 words that names the treatment or exposure and what was found, in lower case unless a name, with no full stop. Examples of the form: "adjunctive X lowered relapse compared with placebo", "X did not improve remission over usual care", "X was linked to weight gain". No filler ("recent papers explore"), no study-design words unless they are the point.
-- "kind": "benefit" if a treatment or intervention did better than its comparator or improved the outcome; "no-benefit" if it made no difference, did worse, or the trial failed; "safety" if the finding is a harm, adverse effect or risk of a treatment; "other" for everything else (risk factors, mechanisms, prediction, prevalence, service use).
-- "group": "focus" or "related", the part its papers belong to. Never mix the two parts in one finding.
-- "sources": the numbers of the papers the finding rests on. At least one. When two or more papers found the same thing, write ONE finding and list them all; do not repeat it per paper.
-- "emphasis": one or two short phrases (one to three words each) copied exactly from your text: the treatment, and the result if it is short.
+Return "sentences". Every paper must be a source of at least one sentence. Papers that found the same or a closely related thing share ONE sentence that lists them all; do not write one sentence per paper when they can be joined. Each sentence:
+- "text": one plain sentence of at most 24 words, starting with a capital letter and ending with a full stop. Name the treatment or exposure and what was found, with the patient group when it matters. No filler ("recent papers explore"), no study-design words unless they are the point.
+- "kind": "benefit" if a treatment or intervention did better than its comparator or improved the outcome; "no-benefit" if it made no difference, did worse, or the trial failed; "mixed" if it helped on one outcome and not on another; "safety" if the finding is a harm, adverse effect or risk of a treatment; "other" for everything that is not about whether a treatment works (risk factors, mechanisms, prediction, prevalence, service use, protocols).
+- "group": "focus" or "related", the part its papers belong to. Never mix the two parts in one sentence.
+- "sources": the numbers of the papers the sentence rests on. At least one.
+- "emphasis": exactly one phrase of one to four words copied exactly from your text: the name of the treatment or exposure. An empty list if the sentence has none.
 
 Rules:
 - Use only the headlines and takeaways given. Add nothing from outside knowledge.
 - Keep each paper's own level of certainty: an association is "was linked to", not "caused"; a pilot or single small study "suggested". Never write "evidence shows".
-- Use a number only if it appears in the headline or takeaway of a paper you list as a source for that finding. Copy it exactly; never calculate or round. Prefer no number.
+- When a treatment did not help, say so with the word "not" or "no".
+- Use a number only if it appears in the headline or takeaway of a paper you list as a source for that sentence. Copy it exactly; never calculate or round. Prefer no number.
 - Do not write paper numbers, brackets with numbers, or phrases like "paper 2" inside the text.
 - Do not rank the papers, do not say which is best, and do not tell the reader what to do with a patient.
-- If the input has "problems", your previous answer lost findings for those reasons: write it again without them.`
+- If the input has "problems", your previous answer had them: write it again without them.`
 
 export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof OverviewSchema>>({
   name: "clinical-topic-overview",
-  version: "5",
+  version: "6",
   run: (ctx, input) =>
     ctx.llmStructured(
       // The stronger model: weighing several papers against each other is where the small one writes filler.
@@ -140,7 +141,7 @@ function problemText(reason: string): string {
   const [kind, detail] = reason.split(":")
   if (kind === "number-not-in-sources") return `A sentence used the number ${detail}, which is not in the headline or takeaway of the papers it listed as sources. Use only numbers from the sources of that sentence, or no number.`
   if (kind === "no-source") return "A sentence listed no valid paper number in its sources. Every sentence needs at least one."
-  if (kind === "too-long") return "A finding was too long. Keep each finding to one clause of at most 14 words; put a second result in a finding of its own."
+  if (kind === "too-long") return "A sentence was too long. Keep each sentence to at most 24 words; put a second result in a sentence of its own."
   return "A sentence was empty."
 }
 
@@ -163,10 +164,14 @@ export async function writeTopicOverviews(
       return run.status === "ok" && run.output ? judgeOverview(run.output.sentences, topic.papers) : null
     }
     try {
+      // The overview is about the whole list: a paper no sentence rests on is a reason to ask again.
+      const leftOut = (answer: { kept: OverviewSentence[] }) => topic.papers.flatMap((paper, index) => (answer.kept.some((sentence) => sentence.sources.includes(paper.key)) ? [] : index + 1))
       let best = await ask()
-      if (best && best.problems.length > 0) {
-        const again = await ask([...new Set(best.problems.map(problemText))]).catch(() => null)
-        if (again && again.kept.length >= best.kept.length) best = again
+      if (best && (best.problems.length > 0 || leftOut(best).length > 0)) {
+        const missing = leftOut(best)
+        const problems = [...new Set(best.problems.map(problemText)), ...(missing.length > 0 ? [`No sentence listed ${missing.length === 1 ? "paper" : "papers"} ${missing.join(", ")} as a source. Every paper must be a source of at least one sentence; join papers that found related things.`] : [])]
+        const again = await ask(problems).catch(() => null)
+        if (again && (leftOut(again).length < missing.length || (leftOut(again).length === missing.length && again.kept.length >= best.kept.length))) best = again
       }
       // An overview is a glance, not a second list.
       if (best && best.kept.length > 0) overviews[topic.entryId] = best.kept.slice(0, OVERVIEW_MAX_SENTENCES)

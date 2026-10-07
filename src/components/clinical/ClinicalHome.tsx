@@ -28,8 +28,13 @@ type Loaded = {
   later: Set<string>
 }
 
-const OVERVIEW_KIND_ORDER = ["benefit", "no-benefit", "safety", "other"] as const
-const FINDING_SEPARATOR = "; "
+const OVERVIEW_KIND_ORDER = ["benefit", "no-benefit", "mixed", "safety", "other"] as const
+/** The colour of a kind of finding: green for benefit, red for none; the rest are set in the text colour. */
+const KIND_COLOUR: Partial<Record<(typeof OVERVIEW_KIND_ORDER)[number], string>> = { benefit: "var(--clinical-benefit)", "no-benefit": "var(--clinical-no-benefit)" }
+const SPACE = " "
+const tint = (colour: string) => `color-mix(in srgb, ${colour} 16%, transparent)`
+/** The words that turn a finding round. Marked in findings of no benefit and in mixed ones. */
+const NEGATION = /\b(?:not|no|nor|neither|without)\b/gi
 
 export function ClinicalHome() {
   const [storage, setStorage] = useState<VaultStorage | null>(null)
@@ -140,29 +145,44 @@ export function ClinicalHome() {
   // Each part as a synthesis: one line per kind of finding. An overview stored before findings had a kind reads as "other".
   const overviewRows = (points: NonNullable<typeof overview>) =>
     OVERVIEW_KIND_ORDER.map((kind) => ({ kind, points: points.filter((point) => (point.kind ?? "other") === kind) })).filter((row) => row.points.length > 0)
-  // What the overview rests on, counted from the listed papers it cites.
-  const citedItems = [...new Set((overview ?? []).flatMap((point) => point.sources))].flatMap((key) => inTab.find((item) => item.key === key) ?? [])
-  const basisDesigns = DESIGNS
-    .map((design) => ({ design, count: citedItems.filter((item) => (item.designSource === "none" ? "unknown" : item.design) === design).length }))
+  // The first line of the overview: the papers of the tab, and how many the overview cites under each kind.
+  const kindCounts = OVERVIEW_KIND_ORDER
+    .filter((kind) => kind !== "other")
+    .map((kind) => ({ label: CLINICAL_COPY.feed.overviewKinds[kind], count: new Set((overview ?? []).filter((point) => point.kind === kind).flatMap((point) => point.sources).filter((key) => inTab.some((item) => item.key === key))).size }))
     .filter((entry) => entry.count > 0)
-    .map((entry) => `${entry.count} ${CLINICAL_COPY.feed.basisDesigns[entry.design][entry.count === 1 ? 0 : 1]}`)
   const forgetSeen = async () => {
     if (!storage) return
     try { setSeenNote(CLINICAL_COPY.feed.seenForgotten(await clearSeen(storage, current))) } catch { setSeenNote(CLINICAL_COPY.feed.seenForgetFailed) }
   }
-  /** The sentence with its key words in bold. Only words that are in it as written are marked. */
-  const marked = (text: string, emphasis: string[]) => {
-    const found = emphasis.map((phrase) => ({ phrase, at: text.indexOf(phrase) })).filter((entry) => entry.at >= 0).sort((a, b) => a.at - b.at)
-    const parts: Array<string | { strong: string }> = []
-    let cursor = 0
-    for (const { phrase, at } of found) {
-      if (at < cursor) continue
-      if (at > cursor) parts.push(text.slice(cursor, at))
-      parts.push({ strong: phrase })
-      cursor = at + phrase.length
+  /**
+   * A sentence with its treatment marked and, where the finding is that something did not help, the
+   * word that says so. Only words that are in the sentence as written are marked.
+   */
+  const marked = (text: string, treatment: string | undefined, kind: (typeof OVERVIEW_KIND_ORDER)[number]) => {
+    const colour = KIND_COLOUR[kind]
+    const spans: Array<{ at: number; end: number; negation: boolean }> = []
+    const found = treatment ? text.indexOf(treatment) : -1
+    if (treatment && found >= 0) spans.push({ at: found, end: found + treatment.length, negation: false })
+    if (kind === "no-benefit" || kind === "mixed") {
+      for (const match of text.matchAll(NEGATION)) {
+        const at = match.index ?? 0
+        if (!spans.some((span) => at < span.end && at + match[0].length > span.at)) spans.push({ at, end: at + match[0].length, negation: true })
+      }
     }
-    if (cursor < text.length) parts.push(text.slice(cursor))
-    return parts.map((part, index) => (typeof part === "string" ? <span key={index}>{part}</span> : <strong key={index} className="font-semibold">{part.strong}</strong>))
+    spans.sort((a, b) => a.at - b.at)
+    const parts: React.ReactNode[] = []
+    let cursor = 0
+    for (const span of spans) {
+      if (span.at > cursor) parts.push(<span key={cursor}>{text.slice(cursor, span.at)}</span>)
+      const shade = span.negation ? "var(--clinical-no-benefit)" : colour
+      parts.push(
+        <mark key={span.at} {...(span.negation ? { "data-negation": "true" } : { "data-treatment": "true" })}
+          className={`rounded-[3px] px-0.5 text-espresso ${shade ? "" : "bg-orange/15"}`} style={shade ? { backgroundColor: tint(shade) } : undefined}>{text.slice(span.at, span.end)}</mark>,
+      )
+      cursor = span.end
+    }
+    if (cursor < text.length) parts.push(<span key={cursor}>{text.slice(cursor)}</span>)
+    return parts
   }
   // The count line of the tab: how many papers, how many match a condition and a treatment together,
   // how many are in leading journals, and the most common designs that someone has named.
@@ -261,20 +281,22 @@ export function ClinicalHome() {
           </p>
           {overview && overview.length > 0 && (
             <div data-testid="clinical-topic-overview" className="mb-5 rounded-card border border-border-warm/70 bg-light-surface px-5 py-4">
-              <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-text"><span title={CLINICAL_COPY.feed.aiOverviewNote} className="cursor-help underline decoration-dotted">{CLINICAL_COPY.feed.aiOverview}</span></p>
-              {/* A synthesis: what helped, what did not, safety, the rest. Papers on the whole topic first, then those on its condition alone. */}
+              <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-text">
+                <span title={CLINICAL_COPY.feed.aiOverviewNote} className="cursor-help underline decoration-dotted">{CLINICAL_COPY.feed.aiOverview}</span>
+                <span data-testid="overview-counts" className="ml-2 normal-case tracking-normal">{CLINICAL_COPY.feed.overviewCounts(inTab.length, kindCounts)}</span>
+              </p>
+              {/* Running text: what helped, what did not, mixed, safety, the rest. Papers on the whole topic first, then those on its condition alone. */}
               {overviewGroups.map((group) => (
-                <div key={group.id} data-overview-group={group.id} className="mt-2 first:mt-0">
-                  {overviewGroups.length > 1 && <p data-group-title="true" className="mb-1 text-[14px] font-semibold text-espresso">{group.title}</p>}
+                <div key={group.id} data-overview-group={group.id} className="mt-2.5 first:mt-0">
+                  {overviewGroups.length > 1 && <span data-group-title="true" className="mb-0.5 block text-[13px] font-semibold text-secondary-dark">{group.title}</span>}
                   {overviewGroups.length === 1 && <span data-group-title="true" className="sr-only">{group.title}</span>}
-                  <div className="space-y-1.5 text-[15px] leading-relaxed text-espresso">
+                  <p className="text-[15px] leading-[1.75] text-espresso">
                     {overviewRows(group.points).map((row) => (
-                      <p key={row.kind} data-kind={row.kind}>
-                        <span data-kind-label="true" className="mr-1.5 font-semibold text-secondary-dark">{CLINICAL_COPY.feed.overviewKinds[row.kind]}</span>
-                        {row.points.map((point, at) => (
+                      <span key={row.kind} data-kind={row.kind}>
+                        <span data-kind-label="true" className="mr-1.5 text-[12px] font-semibold uppercase tracking-wide" style={KIND_COLOUR[row.kind] ? { color: KIND_COLOUR[row.kind] } : undefined}>{CLINICAL_COPY.feed.overviewKinds[row.kind]}</span>
+                        {row.points.map((point) => (
                           <span key={point.text}>
-                            {at > 0 && <span>{FINDING_SEPARATOR}</span>}
-                            {marked(tidyOverviewSentence(point.text).replace(/\.$/, ""), point.emphasis ?? [])}
+                            {marked(tidyOverviewSentence(point.text), point.emphasis?.[0], row.kind)}
                             {point.sources.map((key, index) => {
                               // A source is always a paper of this list: the overview is written from the listed papers only.
                               const position = inTab.findIndex((item) => item.key === key)
@@ -284,14 +306,14 @@ export function ClinicalHome() {
                                   className={`align-super text-[11px] font-medium text-accent-ink underline decoration-dotted hover:text-accent-ink-hover ${index === 0 ? "ml-0.5" : "ml-1.5"}`}>{position + 1}</button>
                               )
                             })}
+                            <span>{SPACE}</span>
                           </span>
                         ))}
-                      </p>
+                      </span>
                     ))}
-                  </div>
+                  </p>
                 </div>
               ))}
-              {citedItems.length > 0 && <p data-testid="overview-basis" className="mt-3 text-[12px] text-muted-text">{CLINICAL_COPY.feed.overviewBasis(citedItems.length, basisDesigns)}</p>}
             </div>
           )}
           {feed.items.length === 0 && <p className="mb-4 text-[14px] text-espresso">{CLINICAL_COPY.feed.nothingNew}</p>}

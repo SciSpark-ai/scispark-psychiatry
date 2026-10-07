@@ -323,27 +323,33 @@ describe("ClinicalHome", () => {
   })
 
   // Owner request 2026-10-07: the overview as short points with the key words marked, in two parts.
-  it("shows the overview as a synthesis: what helped, what did not, what else, then the papers on the condition alone, then what it rests on", async () => {
+  it("shows the overview as running text: counts first, benefit and no benefit in their own colours, the treatment and the word not marked", async () => {
     const storage = vault.current as MemoryVaultStorage
     await saveWatchEntries(storage, [{ id: "w1", condition: "Depression", treatment: "Esketamine", priority: "normal", safetySignal: false }])
-    await saveClinicalFeed(storage, feedOf([item(1, { matched: "full" }), item(2, { matched: "full", design: "meta-analysis" }), item(3, { matched: "condition", design: "cohort" })], { topicOverviews: { w1: [
-      { text: "esketamine gave more remission than quetiapine.", sources: ["pmid:1"], group: "focus", kind: "benefit", emphasis: ["esketamine"] },
-      { text: "adding omega-3 did not reduce symptoms.", sources: ["pmid:2"], group: "focus", kind: "no-benefit" },
-      { text: "exercise lowered symptoms in adolescents.", sources: ["pmid:3"], group: "related", kind: "benefit", emphasis: ["exercise"] },
+    await saveClinicalFeed(storage, feedOf([item(1, { matched: "full" }), item(2, { matched: "full", design: "meta-analysis" }), item(3, { matched: "full" }), item(4, { matched: "condition", design: "cohort" })], { topicOverviews: { w1: [
+      { text: "Esketamine gave more remission than quetiapine.", sources: ["pmid:1"], group: "focus", kind: "benefit", emphasis: ["Esketamine"] },
+      { text: "Adding omega-3 did not reduce symptoms.", sources: ["pmid:2"], group: "focus", kind: "no-benefit", emphasis: ["omega-3"] },
+      { text: "A phone app improved adherence but not symptoms.", sources: ["pmid:3"], group: "focus", kind: "mixed", emphasis: ["phone app"] },
+      { text: "Exercise lowered symptoms in adolescents.", sources: ["pmid:4"], group: "related", kind: "benefit", emphasis: ["Exercise"] },
     ] } }))
     await mount()
     await act(async () => { ([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[])[1].click() })
     const overview = container.querySelector("[data-testid=clinical-topic-overview]")!
+    // Counted by code from the papers the overview cites.
+    expect(overview.querySelector("[data-testid=overview-counts]")!.textContent).toBe("4 papers: 2 benefit, 1 no benefit, 1 mixed")
     const groups = [...overview.querySelectorAll("[data-overview-group]")]
     expect(groups.map((group) => group.getAttribute("data-overview-group"))).toEqual(["focus", "related"])
     expect(groups[1].querySelector("[data-group-title]")!.textContent).toBe("Also on Depression")
-    const rows = (group: Element) => [...group.querySelectorAll("[data-kind]")].map((row) => [row.getAttribute("data-kind"), row.querySelector("[data-kind-label]")!.textContent])
-    expect(rows(groups[0])).toEqual([["benefit", "Reported benefit"], ["no-benefit", "No benefit found"]])
-    expect(rows(groups[1])).toEqual([["benefit", "Reported benefit"]])
-    expect(groups[0].querySelector('[data-kind="benefit"]')!.textContent).toContain("esketamine gave more remission than quetiapine")
-    expect([...groups[0].querySelectorAll("strong")].map((mark) => mark.textContent)).toEqual(["esketamine"])
-    // What the overview rests on is counted by code from the papers it cites, not written by the model.
-    expect(overview.querySelector("[data-testid=overview-basis]")!.textContent).toBe("From 3 papers: 1 meta-analysis, 1 randomized trial, 1 observational study. A finding followed by one number rests on a single study.")
+    // Each part is one paragraph; each kind of finding starts with its label.
+    expect(groups[0].querySelectorAll("p")).toHaveLength(1)
+    expect([...groups[0].querySelectorAll("[data-kind]")].map((part) => [part.getAttribute("data-kind"), part.querySelector("[data-kind-label]")!.textContent])).toEqual([["benefit", "Benefit"], ["no-benefit", "No benefit"], ["mixed", "Mixed"]])
+    expect(groups[0].querySelector('[data-kind="benefit"]')!.textContent).toContain("Esketamine gave more remission than quetiapine.")
+    // The treatment is marked, not set in bold; so is the word that turns a finding round.
+    expect(overview.querySelectorAll("strong")).toHaveLength(0)
+    expect([...groups[0].querySelectorAll("mark[data-treatment]")].map((mark) => mark.textContent)).toEqual(["Esketamine", "omega-3", "phone app"])
+    expect([...groups[0].querySelectorAll("mark[data-negation]")].map((mark) => mark.textContent)).toEqual(["not", "not"])
+    expect(groups[0].querySelector('[data-kind="benefit"] mark[data-negation]')).toBeNull()
+    expect(overview.querySelector("[data-testid=overview-basis]")).toBeNull()
   })
 
   it("offers to show seen papers again, forgets them for this time range, and asks for a refresh", async () => {

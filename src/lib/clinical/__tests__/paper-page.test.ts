@@ -77,3 +77,15 @@ describe("the order of the paper page", () => {
     expect(source).not.toMatch(/<details className=\{paperStyles\.abstract\}/)
   })
 })
+
+// Found 2026-10-07: the AI summary on the paper page had no tags although the list had them.
+describe("the card summary looked up for the paper page", () => {
+  it("keeps the tags", async () => {
+    const { MemoryVaultStorage } = await import("../../vault/memory-storage")
+    const { findCardDigest } = await import("../digest/lookup")
+    const storage = new MemoryVaultStorage()
+    const record = paper({ title: "T", ids: { pmid: "5" } })
+    await storage.write(".scispark/clinical/cache.json", JSON.stringify({ digests: { "pmid:5": { value: { headline: "H", takeaway: "S", quote: "Q", tags: ["Depression", "Esketamine"] } } } }))
+    expect((await findCardDigest(storage, record))?.tags).toEqual(["Depression", "Esketamine"])
+  })
+})
