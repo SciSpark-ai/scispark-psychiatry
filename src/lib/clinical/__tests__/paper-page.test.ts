@@ -75,6 +75,8 @@ describe("the order of the paper page", () => {
     expect(abstract).toBeGreaterThan(-1)
     expect(source.indexOf("<ClinicalPaperDigest")).toBeGreaterThan(-1)
     expect(source.indexOf("<ClinicalPaperDigest")).toBeLessThan(abstract)
+    expect(source.indexOf("<ClinicalTrialRecord")).toBeGreaterThan(source.indexOf("<ClinicalPaperDigest"))
+    expect(source.indexOf("<ClinicalTrialRecord")).toBeLessThan(abstract)
     expect(source).not.toMatch(/<details className=\{paperStyles\.abstract\}/)
     expect(source).not.toContain("<PaperDigestView")
     expect(source).toContain("digestAction={<ClinicalDigestButton")
