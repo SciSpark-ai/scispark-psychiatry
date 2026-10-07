@@ -111,6 +111,53 @@ export function sharesWords(summary: string, source: string): boolean {
   return wanted.length === 0 || wanted.filter((word) => have.has(word)).length / wanted.length >= 0.5
 }
 
+/** Words that sit beside any number and say nothing about what it belongs to. */
+const LINKING_WORDS = new Set(["with", "were", "than", "that", "from", "this", "have", "been", "into", "over", "among", "versus", "compared", "respectively", "after", "before", "between", "both", "each", "those", "these", "their", "there", "which", "while", "also", "only", "about", "group", "groups", "patients", "participants", "percent"])
+
+/** For each number of a text, the nearest content word within three words on either side (compared by its first six letters). */
+function numberCompany(text: string): Map<string, Set<string>> {
+  const tokens = text.toLowerCase().split(/\s+/).filter(Boolean)
+  const word = (token: string) => {
+    const found = /\d/.test(token) ? undefined : token.match(/[a-z][a-z-]{3,}/)?.[0]
+    return found && !LINKING_WORDS.has(found) ? found.slice(0, 6) : null
+  }
+  const company = new Map<string, Set<string>>()
+  tokens.forEach((token, at) => {
+    const value = /\d/.test(token) ? numbers(token)[0] : undefined
+    if (value === undefined) return
+    const near = company.get(value) ?? new Set<string>()
+    for (const step of [-1, 1]) {
+      for (let distance = 1; distance <= 3; distance += 1) {
+        const found = word(tokens[at + step * distance] ?? "")
+        if (found) { near.add(found); break }
+      }
+    }
+    company.set(value, near)
+  })
+  return company
+}
+
+/**
+ * A number that the summary gives to the wrong thing, or null. Being printed in the abstract is not
+ * enough: "21% with sertraline and 42% with placebo" uses the abstract's numbers on the wrong arms.
+ * Two numbers have changed places when each stands, in the summary, beside a word that the abstract
+ * puts beside the other and not beside it. Anything short of that (a free rewording, a statistic
+ * such as "95% CI" that sits beside many numbers) is left alone: measured on 89 stored summaries, a
+ * looser rule rejected 14 sound ones.
+ */
+export function misplacedNumber(summary: string, source: string): string | null {
+  const inSummary = [...numberCompany(summary)]
+  if (inSummary.length < 2) return null
+  const inSource = numberCompany(source)
+  /** A word the summary puts beside `a` that the abstract puts beside `b` and not beside `a`. */
+  const borrowed = (a: [string, Set<string>], b: [string, Set<string>]) =>
+    [...a[1]].some((word) => inSource.get(b[0])?.has(word) === true && inSource.get(a[0])?.has(word) !== true)
+  for (const a of inSummary) for (const b of inSummary) {
+    if (a[0] < b[0] && inSource.has(a[0]) && inSource.has(b[0]) && borrowed(a, b) && borrowed(b, a)) return a[0]
+  }
+  return null
+}
+
 /** Checks one answer. Returns the digest, or the reason it is rejected. */
 export function checkDigest(answer: Pick<DigestAnswer, "headline" | "takeaway" | "source"> & { tags?: string[] }, paper: PaperRecord): { digest: CardDigest } | { reason: string } {
   const headline = answer.headline.trim()
@@ -125,6 +172,8 @@ export function checkDigest(answer: Pick<DigestAnswer, "headline" | "takeaway" |
   const printed = new Set(numbers(`${paper.title} ${paper.abstract ?? ""}`))
   const invented = numbers(`${headline} ${takeaway}`).find((value) => !printed.has(value))
   if (invented) return { reason: `number-not-in-text:${invented}` }
+  const misplaced = misplacedNumber(takeaway, `${paper.title} ${paper.abstract ?? ""}`)
+  if (misplaced) return { reason: `number-context:${misplaced}` }
   return { digest: { headline, takeaway, quote, tags: checkedTags(answer.tags ?? [], paper) } }
 }
 
@@ -135,6 +184,7 @@ function problemText(reason: string): string | undefined {
   if (kind === "no-such-sentence") return `There is no sentence number ${detail}. Give the number of an existing sentence.`
   if (kind === "too-long") return "The headline must be at most 12 words and the takeaway at most 35 words."
   if (kind === "empty") return "The headline and the takeaway must both be filled in."
+  if (kind === "number-context") return `The number ${detail} was given to the wrong group or outcome. Give each number to the group and outcome the abstract gives it to.`
   if (kind === "not-about-this-paper") return "The headline and takeaway were not about this paper: they used words its title and abstract do not have. Check the index of each answer and write about that paper only."
   return undefined
 }

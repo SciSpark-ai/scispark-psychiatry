@@ -31,7 +31,13 @@ export async function loadWatchEntries(storage: VaultStorage): Promise<WatchEntr
 export async function saveWatchEntries(storage: VaultStorage, entries: WatchEntry[]): Promise<void> {
   const valid = entries.map((entry) => WatchEntrySchema.parse(entry))
   if (new Set(valid.map((entry) => entry.id)).size !== valid.length) throw new Error("watch entry ids must be unique")
-  await withVaultExclusive(storage, LOCK, () => storage.write(WATCH_PATH, JSON.stringify({ version: 1, entries: valid }, null, 2)))
+  await withVaultExclusive(storage, LOCK, async () => {
+    // Entries the file holds that this version cannot read are copied aside before the file is written again.
+    const held = z.object({ entries: z.array(z.unknown()) }).safeParse(await readJson(storage, WATCH_PATH))
+    const unreadable = held.success ? held.data.entries.filter((entry) => !WatchEntrySchema.safeParse(entry).success) : []
+    if (unreadable.length > 0) await storage.write(WATCH_PATH.replace(/\.json$/, ".unreadable.json"), JSON.stringify({ entries: unreadable }, null, 2))
+    await storage.write(WATCH_PATH, JSON.stringify({ version: 1, entries: valid }, null, 2))
+  })
 }
 
 export async function loadClinicalSettings(storage: VaultStorage): Promise<ClinicalSettings> {

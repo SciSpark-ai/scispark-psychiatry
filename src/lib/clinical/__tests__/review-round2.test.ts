@@ -9,7 +9,9 @@ import { selectFeed } from "../select/select"
 import { loadRecordStore } from "../retrieve/record-store"
 import { cachedDigest, DIGEST_SCHEME, type FeedCache, textHash } from "../feed/cache"
 import { emptyListIsFailure } from "../feed/run"
-import { paper, scored, watch } from "./helpers"
+import { gated, paper, scored, watch } from "./helpers"
+
+const gatedOf = (title: string) => gated({ title, abstract: "Adults were studied in this trial.", ids: { pmid: title.length.toString() }, fields: [] }, "randomized-trial", `k${title.length}`)
 
 // Findings of the independent review of 2026-10-07, each pinned here.
 
@@ -147,5 +149,93 @@ describe("card summaries kept between runs", () => {
     const cache = (scheme?: number): FeedCache => ({ version: 1, entriesKey: "k", grades: {}, digests: { "pmid:1": { hash: textHash(record), at: "2026-10-07T00:00:00.000Z", value, ...(scheme ? { scheme } : {}) } }, overviews: {} })
     expect(cachedDigest(cache(DIGEST_SCHEME), "pmid:1", record)).toEqual(value)
     expect(cachedDigest(cache(), "pmid:1", record)).toBeUndefined()
+  })
+})
+
+// The four findings first left open, closed at the owner's request (2026-10-07).
+
+describe("a number in a card summary keeps the company it has in the abstract", () => {
+  const trial = paper({ title: "Sertraline versus placebo in depression", abstract: "Methods: Adults were randomised.\nResults: Response occurred in 42% with sertraline and 21% with placebo.", ids: { pmid: "3" } })
+  it("rejects two numbers given to the wrong arms", () => {
+    const swapped = { headline: "Sertraline versus placebo for depression", takeaway: "Response occurred in 21% with sertraline and 42% with placebo.", source: 2 }
+    expect(checkDigest(swapped, trial)).toEqual({ reason: expect.stringMatching(/^number-context:(?:21|42)$/) })
+  })
+  it("accepts the numbers with their own arms, also when reworded", () => {
+    expect("digest" in checkDigest({ headline: "Sertraline beat placebo for depression", takeaway: "Response occurred in 42% with sertraline and 21% with placebo.", source: 2 }, trial)).toBe(true)
+    expect("digest" in checkDigest({ headline: "Sertraline beat placebo for depression", takeaway: "Response was more frequent with sertraline (42%) than with placebo (21%) in adults.", source: 2 }, trial)).toBe(true)
+  })
+  it("does not apply to a summary with one number", () => {
+    expect("digest" in checkDigest({ headline: "Sertraline beat placebo for depression", takeaway: "Response to sertraline in randomised adults reached 42%.", source: 2 }, trial)).toBe(true)
+  })
+})
+
+describe("the treatment an overview names", () => {
+  const papers = [{ key: "k1", headline: "Esketamine beat quetiapine", takeaway: "Remission was more frequent with esketamine than with quetiapine.", abstract: "Patients had earlier received sertraline or venlafaxine.", part: "focus" as const }]
+  it("must be named in the paper's summary, not only somewhere in its abstract", () => {
+    const { kept, problems } = judgeOverview([{ text: "gave more remission than quetiapine", sources: [1], kind: "benefit", treatment: "sertraline" }], papers)
+    expect(kept[0].treatment).toBeUndefined()
+    expect(problems).toEqual(["treatment-not-in-source:sertraline"])
+  })
+  it("is not the comparator of the paper's own headline", () => {
+    const { kept, problems } = judgeOverview([{ text: "gave less remission than esketamine", sources: [1], kind: "benefit", treatment: "quetiapine" }], papers)
+    expect(kept[0].treatment).toBeUndefined()
+    expect(problems).toEqual(["treatment-is-comparator:quetiapine"])
+    expect(judgeOverview([{ text: "gave more remission than quetiapine", sources: [1], kind: "benefit", treatment: "Esketamine" }], papers).kept[0].treatment).toBe("Esketamine")
+  })
+})
+
+describe("another form of a word, when a match is confirmed", () => {
+  const entry = (condition: string, treatment?: string) => watch({ id: "w1", condition, ...(treatment ? { treatment } : {}) })
+  const check = async (title: string, condition: string, treatment?: string) => {
+    const { loadPsychiatryPack } = await import("../pack/load")
+    const { verifyMatchedParts } = await import("../grade/verify-parts")
+    const candidate = gatedOf(title)
+    return verifyMatchedParts({ key: candidate.key, entryId: "w1", grade: 4, topicGrade: 4, quote: "q", quoteVerified: true, ungraded: false, matched: treatment ? "treatment" : "condition" } as never, candidate, [entry(condition, treatment)], await loadPsychiatryPack()).matched
+  }
+  it("does not take psychotherapy for psychosis, methylation for methylphenidate, or schizoaffective for schizophrenia", async () => {
+    expect(await check("Psychotherapy and psychological support after stroke", "Psychosis")).toBeUndefined()
+    expect(await check("DNA methylation in ageing adults", "ADHD", "Methylphenidate")).toBeUndefined()
+    expect(await check("Lithium in schizoaffective presentations", "Schizophrenia")).toBeUndefined()
+  })
+  it("still takes depressive for depression and schizophrenic for schizophrenia", async () => {
+    // A topic with a condition and no treatment is matched in full by a paper on the condition.
+    expect(await check("Exercise for depressive symptoms in adults", "Depression")).toBe("full")
+    expect(await check("Cognition in schizophrenic patients", "Schizophrenia")).toBe("full")
+  })
+})
+
+describe("files that only grow", () => {
+  it("keeps the newest 200 searches and lets the oldest go", async () => {
+    const { saveHistory, listHistory, HISTORY_KEEP } = await import("../history/store")
+    const storage = new MemoryVaultStorage()
+    const feed = (n: number) => ({ version: 1 as const, generatedAt: new Date(Date.UTC(2026, 0, 1, 0, n)).toISOString(), mode: "whats-new" as const, strictness: "standard" as const, items: [], lowerConfidence: [], safetySignals: [], stats: { retrieved: n, domain: 0, gated: 0, graded: 0, listed: 0 }, costUsd: null, warnings: [] })
+    expect(HISTORY_KEEP).toBe(200)
+    for (let n = 0; n < HISTORY_KEEP + 3; n += 1) await saveHistory(storage, feed(n))
+    const kept = await listHistory(storage)
+    expect(kept).toHaveLength(HISTORY_KEEP)
+    expect(kept.at(-1)?.found).toBe(3)
+  })
+  it("forgets papers seen more than 400 days ago, and custom date ranges not used for 90 days", async () => {
+    const { recordSeen, loadSeenTimes } = await import("../seen/store")
+    const storage = new MemoryVaultStorage()
+    await recordSeen(storage, ["old"], new Date("2025-01-01T00:00:00.000Z"), "30d")
+    await recordSeen(storage, ["ranged"], new Date("2026-05-01T00:00:00.000Z"), "2026-04-01..2026-04-15")
+    await recordSeen(storage, ["new"], new Date("2026-10-07T00:00:00.000Z"), "30d")
+    expect([...(await loadSeenTimes(storage, "30d")).keys()]).toEqual(["new"])
+    expect((await loadSeenTimes(storage, "2026-04-01..2026-04-15")).size).toBe(0)
+    expect([...(await loadSeenTimes(storage)).keys()]).toEqual(["new"])
+  })
+  it("keeps a copy of entries it cannot read before a list is written again", async () => {
+    const { toggleReadLater, READ_LATER_PATH } = await import("../readlater/store")
+    const { saveWatchEntries, loadWatchEntries } = await import("../watch/store")
+    const storage = new MemoryVaultStorage()
+    await storage.write(READ_LATER_PATH, JSON.stringify({ version: 1, items: [{ from: "a newer version", key: "pmid:9" }] }))
+    await storage.write(".scispark/clinical/watch.json", JSON.stringify({ version: 1, entries: [{ id: "old", shape: "unknown" }, watch({ id: "w1", condition: "Depression" })] }))
+    expect(await loadWatchEntries(storage)).toHaveLength(1)
+    await saveWatchEntries(storage, [watch({ id: "w1", condition: "Depression" })])
+    expect(JSON.parse((await storage.read(".scispark/clinical/watch.unreadable.json")) as string).entries).toEqual([{ id: "old", shape: "unknown" }])
+    const item = { paper: paper({ title: "T", ids: { pmid: "1" } }), key: "pmid:1", design: "randomized-trial", designSource: "publication-type", entryId: null, grade: 0, topicGrade: 0, quote: "", quoteVerified: false, ungraded: false, score: 1, flags: [] }
+    await toggleReadLater(storage, item as never)
+    expect(JSON.parse((await storage.read(".scispark/clinical/read-later.unreadable.json")) as string).items).toEqual([{ from: "a newer version", key: "pmid:9" }])
   })
 })

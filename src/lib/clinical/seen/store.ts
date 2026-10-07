@@ -55,9 +55,22 @@ export async function recordSeen(storage: VaultStorage, keys: string[], at: Date
       range[key] = at.toISOString()
       file.seen[key] ??= at.toISOString()
     }
-    await storage.write(SEEN_PATH, JSON.stringify({ version: 1, seen: file.seen, byLookBack }))
+    // The file does not grow for ever: a paper seen long ago is forgotten, and so is a custom date range not used for a while.
+    const older = (iso: string, days: number) => at.getTime() - new Date(iso).getTime() > days * 86_400_000
+    for (const [name, entries] of Object.entries(byLookBack)) {
+      const custom = name.includes("..")
+      for (const [key, seenAt] of Object.entries(entries)) if (older(seenAt, custom ? FORGET_RANGE_DAYS : FORGET_DAYS)) delete entries[key]
+      if (custom && Object.keys(entries).length === 0) delete byLookBack[name]
+    }
+    const still = new Set(Object.values(byLookBack).flatMap((entries) => Object.keys(entries)))
+    const seen = Object.fromEntries(Object.entries(file.seen).filter(([key]) => still.has(key)))
+    await storage.write(SEEN_PATH, JSON.stringify({ version: 1, seen, byLookBack }))
   })
 }
+
+/** A paper seen this long ago may be listed again; a custom date range is forgotten sooner. */
+const FORGET_DAYS = 400
+const FORGET_RANGE_DAYS = 90
 
 /**
  * How long a displayed paper stays under "Seen earlier" (owner decision 2026-10-06: about a day, so

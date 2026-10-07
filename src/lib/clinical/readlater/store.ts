@@ -24,12 +24,24 @@ export async function loadReadLater(storage: VaultStorage): Promise<StoredFeedIt
   }
 }
 
+/** Before the list is written again, entries it could not read (written by another version, say) are copied aside rather than lost. */
+async function keepUnreadable(storage: VaultStorage): Promise<void> {
+  try {
+    const file = FileSchema.safeParse(JSON.parse((await storage.read(READ_LATER_PATH)) ?? "null"))
+    const unreadable = file.success ? file.data.items.filter((entry) => !StoredItemSchema.safeParse(entry).success) : []
+    if (unreadable.length > 0) await storage.write(READ_LATER_PATH.replace(/\.json$/, ".unreadable.json"), JSON.stringify({ items: unreadable }, null, 2))
+  } catch {
+    // Nothing readable to keep.
+  }
+}
+
 /** Adds the paper, or removes it if it is already there. Returns whether it is on the list afterwards. */
 export async function toggleReadLater(storage: VaultStorage, item: StoredFeedItem): Promise<boolean> {
   return withVaultExclusive(storage, "clinical-read-later", async () => {
     const items = await loadReadLater(storage)
     const present = items.some((entry) => entry.key === item.key)
     const next = present ? items.filter((entry) => entry.key !== item.key) : [item, ...items]
+    await keepUnreadable(storage)
     await storage.write(READ_LATER_PATH, JSON.stringify({ version: 1, items: next }))
     return !present
   })

@@ -21,8 +21,14 @@ export interface HistoryEntry {
 const idOf = (generatedAt: string) => generatedAt.replaceAll(":", "-")
 const pathOf = (id: string) => `${HISTORY_DIR}${id}.json`
 
+/** How many searches are kept. The oldest beyond this are let go, so the folder and the History page stay usable. */
+export const HISTORY_KEEP = 200
+
 export async function saveHistory(storage: VaultStorage, feed: StoredFeed): Promise<void> {
   await storage.write(pathOf(idOf(feed.generatedAt)), JSON.stringify(feed))
+  // File names are timestamps, so their order is the order of the searches.
+  const paths = (await storage.list(HISTORY_DIR)).filter((path) => path.endsWith(".json")).sort()
+  for (const path of paths.slice(0, Math.max(0, paths.length - HISTORY_KEEP))) await storage.delete(path)
 }
 
 export async function loadHistory(storage: VaultStorage, id: string): Promise<StoredFeed | null> {

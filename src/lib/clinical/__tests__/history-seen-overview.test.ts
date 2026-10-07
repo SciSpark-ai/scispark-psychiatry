@@ -314,7 +314,8 @@ describe("the overview from per-paper answers", () => {
   // Owner decision 2026-10-07: a comparison of two drugs is sorted by what happened to the illness, read from the abstract.
   it("gives the model each paper's abstract to sort by, and accepts a number or a treatment the abstract prints", async () => {
     const withAbstract = [
-      { ...papers[0], abstract: "RESULTS: Depression scores fell by 9.4 points with esketamine nasal spray." },
+      // The treatment's full name is in the abstract; its first word is in the paper's summary.
+      { ...papers[0], headline: "Esketamine lowered depression scores", abstract: "RESULTS: Depression scores fell by 9.4 points with esketamine nasal spray." },
       { ...papers[1], abstract: "CONCLUSIONS: Both doses improved psychotic symptoms." },
     ]
     const strong = new MockProvider([llmResult({ sentences: [

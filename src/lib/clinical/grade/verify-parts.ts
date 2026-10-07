@@ -20,15 +20,20 @@ import type { GatedCandidate, MatchedPart, StageAGrade, WatchEntry } from "../ty
  */
 
 const lower = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim()
-const STEM = 6
+/**
+ * How much of a long word must agree for another form of it to count: all but its last three letters,
+ * and never fewer than seven. Six letters took "psychotherapy" for "psychosis" and "methylation" for
+ * "methylphenidate" (review finding, 2026-10-07).
+ */
+const stemOf = (term: string) => term.slice(0, Math.max(7, term.length - 3))
 
 function names(text: string, headings: string[], terms: string[], mesh: string[]): boolean {
   if (mesh.some((heading) => headings.includes(lower(heading)))) return true
   return terms.map(lower).some((term) => {
     if (mentions(text, term)) return true
     // Another form of the same word: only for one long word, and only at the start of a word.
-    if (term.includes(" ") || term.length < STEM + 2) return false
-    return new RegExp(`(?<![a-z0-9])${term.slice(0, STEM).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[a-z]*`).test(text)
+    if (term.includes(" ") || term.length < 9) return false
+    return new RegExp(`(?<![a-z0-9])${stemOf(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[a-z]*`).test(text)
   })
 }
 

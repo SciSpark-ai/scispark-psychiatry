@@ -41,6 +41,28 @@ const OVERVIEW_MAX_PAPERS = 40
 const SENTENCE_MAX_WORDS = 28
 const OVERVIEW_MAX_SENTENCES = OVERVIEW_MAX_PAPERS
 
+const flat = (text: string) => ` ${(text.toLowerCase().match(/[a-z0-9]+/g) ?? []).join(" ")} `
+const COMPARATOR_BEFORE = /(?:than|versus|vs|compared with|compared to|against|beat|outperformed|superior to|inferior to|matched)(?: with| the)? $/
+
+/**
+ * Why a treatment name is not accepted, or null. It must be printed, as a phrase, in a paper the
+ * finding rests on, and its first word must be in that paper's headline or takeaway: a drug the
+ * abstract mentions in passing is not what the paper is about. Nor is the comparator: a name that
+ * the headline brings in only after "than", "versus" or "beat".
+ */
+function treatmentFault(treatment: string, cited: Array<{ headline: string; takeaway: string; abstract?: string }>): "treatment-not-in-source" | "treatment-is-comparator" | null {
+  const phrase = flat(treatment)
+  const head = ` ${phrase.trim().split(" ")[0]} `
+  const named = cited.filter((paper) => flat(`${paper.headline} . ${paper.takeaway} . ${paper.abstract ?? ""}`).includes(phrase) && flat(`${paper.headline} . ${paper.takeaway}`).includes(head))
+  if (named.length === 0) return "treatment-not-in-source"
+  const comparator = named.every((paper) => {
+    const headline = flat(paper.headline)
+    const at = headline.indexOf(head)
+    return at >= 0 && COMPARATOR_BEFORE.test(headline.slice(0, at + 1))
+  })
+  return comparator ? "treatment-is-comparator" : null
+}
+
 const NOT_INFERIOR = /\b(?:not|non)[- ]?inferior|\bnoninferior/i
 const OPENS_WITH_NO = /^(?:did not|does not|do not|was not|were not|not|no|failed to|showed no|had no|made no)\b/i
 
@@ -169,9 +191,11 @@ export function judgeOverview(
     // A finding that opens by saying the treatment did not do something is not a benefit.
     else if (kind === "benefit" && OPENS_WITH_NO.test(text)) { problems.push(`kind-contradicted:${kind}`); kind = "other" }
     // The treatment must be named in the summaries of the papers the finding rests on.
-    const sourceWords = new Set(cited.flatMap((paper) => `${paper.headline} ${paper.takeaway} ${paper.abstract ?? ""}`.toLowerCase().match(/[a-z0-9]+/g) ?? []))
     let treatment = sentence.treatment?.replace(/\s+/g, " ").trim() || undefined
-    if (treatment && !(treatment.toLowerCase().match(/[a-z0-9]+/g) ?? []).every((word) => sourceWords.has(word))) { problems.push(`treatment-not-in-source:${treatment}`); treatment = undefined }
+    if (treatment) {
+      const fault = treatmentFault(treatment, cited)
+      if (fault) { problems.push(`${fault}:${treatment}`); treatment = undefined }
+    }
     if (cited.length === 1) answered.add(cited[0].key)
     kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
   }
@@ -190,6 +214,7 @@ function problemText(reason: string): string {
   if (kind === "no-source") return "A sentence listed no valid paper number in its sources. Every sentence needs at least one."
   if (kind === "kind-contradicted") return `An entry was filed under "${detail}" but its text says the opposite. A text that starts with "did not" or "no" is not a benefit; "not inferior" is not a finding of no benefit. Use "other" when unsure.`
   if (kind === "kind-not-stated") return `An entry was filed under "${detail}" but its text does not say in words that something did not work. Use "${detail}" only when the paper says so, with "not" or "no" in the text; otherwise use "benefit" or "other".`
+  if (kind === "treatment-is-comparator") return `"${detail}" is what the treatment was compared with, not the treatment the paper is about. Name the treatment under study.`
   if (kind === "treatment-not-in-source") return `The treatment "${detail}" is not named in the headline or takeaway of its paper. Copy the name from there.`
   if (kind === "too-long") return "A sentence was too long. Keep each sentence to at most 24 words; put a second result in a sentence of its own."
   return "A sentence was empty."
