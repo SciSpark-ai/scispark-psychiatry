@@ -17,7 +17,9 @@ export interface ReviewItem {
    * producing changeset. This is not the changeset for applying a lint fix.
    */
   changesetId?: string
-  kind: "contradiction" | "duplicate" | "missing-page" | "suggestion" | "lint-finding"
+  kind: "contradiction" | "duplicate" | "missing-page" | "suggestion" | "lint-finding" | "extraction-review"
+  /** Clinical edition: for "extraction-review", the paper whose extracted trial data waits to be checked. */
+  paperSlug?: string
   title: string
   description: string
   pages: string[] // bare slugs of related wiki pages

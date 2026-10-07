@@ -25,6 +25,7 @@ import { wikiHref } from "@/lib/wiki/href"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { Button } from "@/components/ui/Button"
 import { LoadingState } from "@/components/ui/LoadingState"
+import { CLINICAL_COPY } from "@/lib/clinical/copy"
 
 const KIND_LABEL: Record<ReviewItem["kind"], string> = {
   contradiction: "Contradiction",
@@ -32,6 +33,7 @@ const KIND_LABEL: Record<ReviewItem["kind"], string> = {
   "missing-page": "Missing page",
   suggestion: "Suggestion",
   "lint-finding": "Lint",
+  "extraction-review": CLINICAL_COPY.records.inboxKind,
 }
 
 type LintState =
@@ -274,6 +276,9 @@ export default function WikiInboxPage() {
 
               <div className="mt-2 font-heading text-[16px] text-espresso tracking-heading-card">{item.title}</div>
               <div className="mt-1 text-[13px]/[14px] text-muted-text">{item.description}</div>
+              {item.kind === "extraction-review" && item.paperSlug && (
+                <Link href={`/paper/${item.paperSlug}#paper-trial-record`} className="mt-2 inline-block text-[13px] text-accent-ink underline">{CLINICAL_COPY.records.inboxOpen}</Link>
+              )}
 
               {needsManualIds.has(item.id) && (
                 <p className="mt-1 text-[12px] text-muted-text/80">

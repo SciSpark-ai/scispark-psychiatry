@@ -227,6 +227,15 @@ export const CLINICAL_COPY = {
     notATrial: "The paper does not report a trial with two or more groups.",
     tooFewArms: "Fewer than two groups could be read from the paper and checked against it.",
     extractFailed: (status: string) => `The trial data could not be extracted (${status}).`,
+    inboxKind: "Trial data",
+    inboxOpen: "Check the extracted values",
+    inboxTitle: (title: string) => `Check the trial data of “${title}”`,
+    inboxDescription: (fields: number, dropped: number) =>
+      `${fields} values were read from the paper and matched to a sentence in it.${dropped > 0 ? ` ${dropped} more were given by the model and dropped because they failed that check.` : ""} Confirm or correct them before relying on the table.`,
+    notANumber: "This field holds a number.",
+    nothingToConfirm: "There is nothing to confirm: no value was read for this field.",
+    conflict: "This value was changed elsewhere since you opened the page. Reload to see it.",
+    notFound: "No trial data has been extracted for this paper.",
   },
 } as const
 
