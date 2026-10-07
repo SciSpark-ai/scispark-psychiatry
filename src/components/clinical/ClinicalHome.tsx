@@ -11,7 +11,7 @@ import { LlmErrorMessage } from "@/components/papers/LlmErrorMessage"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { LOOK_BACK, lookBackOf, settingsForLookBack, type LookBack } from "@/lib/clinical/modes"
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
-import { loadSeenTimes, recordSeen, seenRecently } from "@/lib/clinical/seen/store"
+import { recordSeen } from "@/lib/clinical/seen/store"
 import { loadReadLater } from "@/lib/clinical/readlater/store"
 import { entryLabel, topicLookup } from "./topic"
 import { refreshClinicalFeed } from "@/lib/clinical/feed/client"
@@ -22,17 +22,9 @@ import { ClinicalFeedCard } from "./ClinicalFeedCard"
 
 type Loaded = {
   entries: WatchEntry[]; settings: ClinicalSettings; feed: StoredFeed | null; saved: Set<string>; votes: Map<string, FeedbackKind>
-  /** Papers first displayed within the last day; only these are shown under "Seen earlier today". */
-  seenToday: Set<string>
   /** Papers on the Read later list. */
   later: Set<string>
 }
-
-async function loadSeenToday(vault: VaultStorage): Promise<Set<string>> {
-  const now = new Date()
-  return new Set([...(await loadSeenTimes(vault))].filter(([, at]) => seenRecently(at, now)).map(([key]) => key))
-}
-
 
 export function ClinicalHome() {
   const [storage, setStorage] = useState<VaultStorage | null>(null)
@@ -49,13 +41,13 @@ export function ClinicalHome() {
     ;(async () => {
       try {
         const vault = await getOpenVault()
-        const [entries, settings, feed, bundle, feedback, seenKeys, laterItems] = await Promise.all([
-          loadWatchEntries(vault), loadClinicalSettings(vault), loadClinicalFeed(vault), loadBundle(vault), loadFeedback(vault), loadSeenToday(vault), loadReadLater(vault),
+        const [entries, settings, feed, bundle, feedback, laterItems] = await Promise.all([
+          loadWatchEntries(vault), loadClinicalSettings(vault), loadClinicalFeed(vault), loadBundle(vault), loadFeedback(vault), loadReadLater(vault),
         ])
         const saved = new Set([...bundle.pages.values()].filter((page) => page.frontmatter.type === "paper").map((page) => paperKey(paperRecordFromFrontmatter(page.frontmatter))))
         if (cancelled) return
         setStorage(vault)
-        setData({ entries, settings, feed, saved, votes: new Map(feedback.map((event) => [event.paperKey, event.kind])), seenToday: seenKeys, later: new Set(laterItems.map((entry) => entry.key)) })
+        setData({ entries, settings, feed, saved, votes: new Map(feedback.map((event) => [event.paperKey, event.kind])), later: new Set(laterItems.map((entry) => entry.key)) })
       } catch (failure) {
         if (!cancelled) setError(failure instanceof Error ? failure.message : String(failure))
       }
@@ -69,8 +61,7 @@ export function ClinicalHome() {
     setError(null)
     try {
       const feed = await refreshClinicalFeed((next) => setStage(next))
-      const seenKeys = storage ? await loadSeenToday(storage) : new Set<string>()
-      setData((current) => (current ? { ...current, feed, seenToday: seenKeys } : current))
+      setData((current) => (current ? { ...current, feed } : current))
       setPages(1)
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
@@ -78,7 +69,7 @@ export function ClinicalHome() {
       setRunning(false)
       setStage(null)
     }
-  }, [running, storage])
+  }, [running])
 
   // The mode and the Catch up window are chosen here, on Home (owner decision 2026-10-06). They take effect on the next Refresh.
   async function changeSettings(patch: Partial<ClinicalSettings>) {
@@ -111,7 +102,6 @@ export function ClinicalHome() {
   // from the history still reads correctly after the topics have changed.
   const listTopics: WatchEntry[] = feed?.topics ? feed.topics.map((entry) => ({ ...entry, priority: "normal", safetySignal: false })) : entries
   const { topicOf, toneOf } = topicLookup(listTopics)
-  const seenToday = (feed?.seenEarlier ?? []).filter((item) => data.seenToday.has(item.key))
   const shown = inTab.slice(0, pages * PAGE_SIZE)
   const current = lookBackOf(settings)
   const feedLookBack = feed ? ((feed.lookBack ?? lookBackOf({ mode: feed.mode, catchUpMonths: 6, windowDays: 30 })) as LookBack) : current
@@ -138,6 +128,11 @@ export function ClinicalHome() {
       ...designCounts.map((entry) => ({ key: entry.design, label: CLINICAL_COPY.designLabels[entry.design], count: entry.count })),
     ].filter((entry) => entry.count > 0).map((entry) => ({ key: entry.key, text: `${entry.label} ${entry.count}` })),
   ]
+  // Jump to a card by its place in the tab, opening as much of the list as it takes to reach it.
+  const jumpTo = (position: number) => {
+    setPages((current) => Math.max(current, Math.ceil((position + 1) / PAGE_SIZE)))
+    setTimeout(() => document.getElementById(`paper-${position + 1}`)?.scrollIntoView?.({ behavior: "smooth", block: "center" }), 0)
+  }
   const markSaved = (key: string) => setData((current) => (current ? { ...current, saved: new Set(current.saved).add(key) } : current))
 
   return (
@@ -198,9 +193,14 @@ export function ClinicalHome() {
                   <span key={sentence.text}>
                     {sentence.text}
                     {sentence.sources.map((key, index) => {
+                      // A source is always a paper of this list: the overview is written from the listed papers only.
                       const position = inTab.findIndex((item) => item.key === key)
+                      if (position < 0) return null
                       // Separate markers, so that papers 1 and 4 do not read as "14".
-                      return <sup key={key} data-source="true" title={headlineOf.get(key) ?? key} className={`cursor-help text-[11px] text-accent-ink ${index === 0 ? "ml-0.5" : "ml-1.5"}`}>{position >= 0 ? position + 1 : "·"}</sup>
+                      return (
+                        <button key={key} type="button" data-source="true" title={headlineOf.get(key) ?? key} onClick={() => jumpTo(position)}
+                          className={`align-super text-[11px] font-medium text-accent-ink underline decoration-dotted hover:text-accent-ink-hover ${index === 0 ? "ml-0.5" : "ml-1.5"}`}>{position + 1}</button>
+                      )
                     })}{" "}
                   </span>
                 ))}
@@ -210,8 +210,8 @@ export function ClinicalHome() {
           {feed.items.length === 0 && <p className="mb-4 text-[14px] text-espresso">{CLINICAL_COPY.feed.nothingNew}</p>}
           {feed.warnings.length > 0 && <ul className="mb-4 list-disc pl-5 text-[12px] text-muted-text">{feed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           <div className="grid gap-4 lg:grid-cols-2">
-            {shown.map((item) => (
-              <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
+            {shown.map((item, index) => (
+              <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved} position={index + 1}
                 entryLabel={topicOf(item)} tone={toneOf(item)} vote={votes.get(item.key)} readLater={data.later.has(item.key)} />
             ))}
           </div>
@@ -219,17 +219,6 @@ export function ClinicalHome() {
             <button type="button" onClick={() => setPages(pages + 1)} className="mt-5 rounded-pill border border-border-warm px-4 py-1.5 text-[13px] text-espresso hover:bg-card-surface/60">
               {CLINICAL_COPY.feed.morePapers}
             </button>
-          )}
-          {seenToday.length > 0 && (
-            <details className="mt-8">
-              <summary className="cursor-pointer text-[14px] text-espresso">{CLINICAL_COPY.feed.seenEarlier} ({seenToday.length})</summary>
-              <div className="mt-3 grid gap-4 lg:grid-cols-2">
-                {seenToday.map((item) => (
-                  <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
-                    entryLabel={topicOf(item)} tone={toneOf(item)} vote={votes.get(item.key)} readLater={data.later.has(item.key)} />
-                ))}
-              </div>
-            </details>
           )}
           {feed.safetySignals.length > 0 && (
             <details className="mt-6">

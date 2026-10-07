@@ -29,7 +29,7 @@ export const CARD_TONES = [
   "var(--band-trending)", "var(--band-application)", "var(--band-dataset)", "var(--band-review)",
 ] as const
 
-export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vote, tone, readLater = false, onReadLater }: {
+export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vote, tone, readLater = false, onReadLater, position }: {
   item: StoredFeedItem; storage: VaultStorage; saved: boolean; onSave: (key: string) => void
   /** Human label of the matched watch entry, when there is one. */
   entryLabel?: string
@@ -39,6 +39,8 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   /** Whether the paper is on the Read later list when the card is drawn. */
   readLater?: boolean
   onReadLater?: (key: string, on: boolean) => void
+  /** The card's place in the list on screen (1, 2, ...); the AI overview refers to papers by it. */
+  position?: number
 }) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
@@ -82,6 +84,7 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   return (
     <Card
       data-testid="clinical-feed-card"
+      {...(position === undefined ? {} : { id: `paper-${position}` })}
       // Inline, not utility classes: the tint has to win over the card's own background class.
       {...(tone === undefined ? {} : { "data-tone": String(tone), style: {
         "--card-tone": CARD_TONES[tone % CARD_TONES.length],
@@ -92,6 +95,7 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
     >
       {/* Tags are plain text, not pills: a pill's own background fights with the card's tint. */}
       <p className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-snug">
+        {position !== undefined && <span data-position="true" className="min-w-[1.1em] font-semibold tabular-nums text-muted-text">{position}</span>}
         {/* Topic first (the user's own watch entry, in the accent colour), then the study type in plain text. */}
         {entryLabel && (
           <span

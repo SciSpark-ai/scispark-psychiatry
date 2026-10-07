@@ -120,16 +120,15 @@ describe("ClinicalHome", () => {
     expect((await loadFeedback(storage)).map((e) => [e.paperKey, e.kind])).toEqual([["pmid:1", "relevant"]])
   })
 
-  it("shows under Seen earlier only the papers displayed in the last 24 hours", async () => {
+  // Owner decision 2026-10-07: the History page replaces the "Seen earlier" section.
+  it("has no Seen earlier section; earlier lists are in the History", async () => {
     const storage = vault.current as MemoryVaultStorage
     await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
-    await saveClinicalFeed(storage, feedOf([item(1)], { seenEarlier: [item(5), item(6)] }))
-    const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString()
-    await storage.write(".scispark/clinical/seen.json", JSON.stringify({ version: 1, seen: { "pmid:5": hoursAgo(2), "pmid:6": hoursAgo(72) } }))
+    await saveClinicalFeed(storage, feedOf([item(1)], { seenEarlier: [item(5)] }))
+    await storage.write(".scispark/clinical/seen.json", JSON.stringify({ version: 1, seen: { "pmid:5": new Date().toISOString() } }))
     await mount()
-    expect(container.textContent).toContain("Seen earlier today (1)")
-    expect(container.textContent).toContain("Paper 5")
-    expect(container.textContent).not.toContain("Paper 6")
+    expect(container.textContent).not.toContain("Seen earlier")
+    expect(container.textContent).not.toContain("Paper 5")
   })
 
   it("has a bold heading, one status line, and the notes at the foot of the page", async () => {
@@ -272,5 +271,32 @@ describe("ClinicalHome", () => {
     const file = JSON.parse((await storage.read(".scispark/clinical/seen.json")) as string)
     expect(Object.keys(file.byLookBack["7d"])).toEqual(["pmid:1"])
     expect(file.byLookBack["30d"] ?? {}).toEqual({})
+  })
+
+  it("numbers the cards of a tab in order, and uses the same numbers for the sources of the AI overview", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "Depression", priority: "normal", safetySignal: false }, { id: "w2", condition: "ADHD", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1), item(2, { entryId: "w2" }), item(3)], { topicOverviews: { w1: [{ text: "Two trials reported benefit.", sources: ["pmid:1", "pmid:3"] }] } }))
+    await mount()
+    const numbers = () => [...container.querySelectorAll("[data-testid=clinical-feed-card] [data-position]")].map((el) => el.textContent)
+    expect(numbers()).toEqual(["1", "2", "3"])
+    await act(async () => { ([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[])[1].click() })
+    expect(numbers()).toEqual(["1", "2"])
+    expect([...container.querySelectorAll("[data-testid=clinical-topic-overview] [data-source]")].map((el) => el.textContent)).toEqual(["1", "2"])
+  })
+
+  it("jumps from a source of the overview to its card, opening more of the list when the card is further down", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "Depression", priority: "normal", safetySignal: false }])
+    const items = Array.from({ length: 14 }, (_, n) => item(n + 1))
+    await saveClinicalFeed(storage, feedOf(items, { topicOverviews: { w1: [{ text: "A later trial agreed.", sources: ["pmid:14"] }] } }))
+    await mount()
+    await act(async () => { ([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[])[1].click() })
+    expect(container.querySelectorAll("[data-testid=clinical-feed-card]")).toHaveLength(12)
+    const source = container.querySelector<HTMLButtonElement>("[data-testid=clinical-topic-overview] [data-source]")!
+    expect(source.tagName).toBe("BUTTON")
+    await act(async () => { source.click() })
+    expect(container.querySelectorAll("[data-testid=clinical-feed-card]")).toHaveLength(14)
+    expect(container.querySelector("#paper-14")).not.toBeNull()
   })
 })
