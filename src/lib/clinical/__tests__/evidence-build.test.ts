@@ -18,7 +18,7 @@ const finding = (n: number, over: Partial<Finding> & { date?: string } = {}): Fi
   return {
     key: `pmid:${n}`, slug: `paper-${n}`, paper: paper({ title: `Paper ${n}`, ids: { pmid: String(n) }, venue: "A Journal", ...(date === undefined ? { date: "2026-09-20" } : date ? { date } : {}) }),
     headline: `Headline ${n}`, takeaway: `Takeaway ${n}.`, design: "randomized-trial", designSource: "publication-type", journalBand: null,
-    conditionCodes: ["depression"], kind: "benefit", treatment: "ketamine", treatmentCode: "ketamine", text: "reduced symptoms",
+    conditionCodes: ["depression"], kind: "benefit", treatment: "ketamine", treatmentCode: "ketamine", treatmentClass: null, researchType: null, sampleSize: null, text: "reduced symptoms",
     population: "adults", comparator: "placebo", outcome: "symptoms", firstListedAt: "2026-10-01T10:00:00.000Z", lastListedAt: "2026-10-01T10:00:00.000Z", ...rest,
   }
 }

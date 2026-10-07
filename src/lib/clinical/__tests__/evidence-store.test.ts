@@ -102,6 +102,25 @@ describe("the findings store", () => {
     expect(finding).toMatchObject({ kind: "no-benefit", text: "was no better than placebo", treatment: "ketamine", treatmentCode: "ketamine" })
   })
 
+  it("stores the class of treatment, the type of research and the sample size, keeps earlier ones through a newer listing without them, and reads a finding stored without them as null", async () => {
+    const storage = new MemoryVaultStorage()
+    const answer = (extra: object) => ({ text: "reduced symptoms", sources: ["pmid:1"], kind: "benefit" as const, ...extra })
+    await recordFindings(storage, feed([item(1)], { topicOverviews: { w1: [answer({ treatment: "ketamine", treatmentClass: "medicine", sampleSize: 180 })] } }), TAXONOMY)
+    expect((await readFindings(storage))[0]).toMatchObject({ treatmentClass: "medicine", researchType: null, sampleSize: 180 })
+    await recordFindings(storage, feed([item(1)], { generatedAt: "2026-10-09T10:00:00.000Z", topicOverviews: { w1: [answer({})] } }), TAXONOMY)
+    expect((await readFindings(storage))[0]).toMatchObject({ treatmentClass: "medicine", sampleSize: 180 })
+    await recordFindings(storage, feed([item(1)], { generatedAt: "2026-10-10T10:00:00.000Z", topicOverviews: { w1: [answer({ treatmentClass: "digital", researchType: "other", sampleSize: 200 })] } }), TAXONOMY)
+    expect((await readFindings(storage))[0]).toMatchObject({ treatmentClass: "digital", researchType: "other", sampleSize: 200 })
+    const research = new MemoryVaultStorage()
+    await recordFindings(research, feed([item(1)], { topicOverviews: { w1: [answer({ researchType: "risk-factor" })] } }), TAXONOMY)
+    expect((await readFindings(research))[0]).toMatchObject({ treatmentClass: null, researchType: "risk-factor", sampleSize: null })
+    // A file written before the fields existed still reads, with null.
+    const old = JSON.parse((await research.read(FINDINGS_PATH))!)
+    for (const finding of Object.values<Record<string, unknown>>(old.findings)) { delete finding.treatmentClass; delete finding.researchType; delete finding.sampleSize }
+    await research.write(FINDINGS_PATH, JSON.stringify(old))
+    expect((await readFindings(research))[0]).toMatchObject({ treatmentClass: null, researchType: null, sampleSize: null })
+  })
+
   it("keeps the PICO line and the journal band through a listing without an answer, and takes a newer answer over an older one", async () => {
     const storage = new MemoryVaultStorage()
     await recordFindings(storage, feed([item(1, { journalBand: 1 })]), TAXONOMY)

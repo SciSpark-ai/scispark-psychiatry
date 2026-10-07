@@ -4,6 +4,7 @@ import { runSkill } from "../../skills/runner"
 import { addCosts } from "../../llm/pricing"
 import type { CardDigest, DigestRunOpts } from "./card"
 import { numbers, sharesWords } from "./card"
+import { TREATMENT_CLASSES, RESEARCH_TYPES, type TreatmentClass, type ResearchType } from "../evidence/schema"
 import { negationWords, tidyOverviewSentence } from "../text/overview-text"
 
 export { tidyOverviewSentence }
@@ -29,7 +30,7 @@ export { tidyOverviewSentence }
  */
 
 /** The version of the overview skill; also part of the key its answers are kept under. */
-export const OVERVIEW_VERSION = "12"
+export const OVERVIEW_VERSION = "13"
 
 export const OVERVIEW_MIN_PAPERS = 1
 // One short answer per paper, so a long list is still one modest call.
@@ -63,6 +64,8 @@ function treatmentFault(treatment: string, cited: Array<{ headline: string; take
   return comparator ? "treatment-is-comparator" : null
 }
 
+/** A number followed by a percent sign ("42%", "1,234 %"): a share, not a count of people. */
+const PERCENTAGE = /\d(?:[\d,]*\d)?(?:\.\d+)?\s*%/g
 const NOT_INFERIOR = /\b(?:not|non)[- ]?inferior|\bnoninferior/i
 const OPENS_WITH_NO = /^(?:did not|does not|do not|was not|were not|not|no|failed to|showed no|had no|made no)\b/i
 
@@ -83,6 +86,12 @@ export interface OverviewSentence {
   population?: string
   comparator?: string
   outcome?: string
+  /** What kind of treatment `treatment` is; kept only with a treatment. */
+  treatmentClass?: TreatmentClass
+  /** What kind of research the paper is; kept only without a treatment. */
+  researchType?: ResearchType
+  /** The number of participants (or of included studies), kept only when the paper prints that number. */
+  sampleSize?: number
   /** Words of the sentence to mark, so the eye finds the point. Each is in `text` as written. */
   emphasis?: string[]
 }
@@ -100,6 +109,7 @@ const OverviewSchema = z.object({
     text: z.string(), sources: z.array(z.number().int()),
     group: z.enum(["focus", "related"]).nullable().default(null), kind: z.enum(OVERVIEW_KINDS).nullable().default(null), treatment: z.string().nullable().default(null), emphasis: z.array(z.string()).default([]),
     population: z.string().nullable().default(null), comparator: z.string().nullable().default(null), outcome: z.string().nullable().default(null),
+    treatmentClass: z.enum(TREATMENT_CLASSES).nullable().default(null), researchType: z.enum(RESEARCH_TYPES).nullable().default(null), sampleSize: z.number().nullable().default(null),
   })),
 })
 
@@ -129,6 +139,9 @@ Return "sentences": exactly one entry for every paper. Each entry:
 - "population": who was studied, in a few words as the paper says it ("adults with treatment-resistant depression"); null if the paper does not say.
 - "comparator": what the treatment was compared with ("placebo", "quetiapine", "usual care"); null when there was no comparison group or the paper does not say.
 - "outcome": the main outcome the finding is about ("depressive symptoms at week 8", "relapse"); null if the paper does not say.
+- "treatmentClass": when you named a treatment, what kind it is: "medicine", "psychosocial", "neuromodulation", "digital", "lifestyle" or "other"; null when there is no treatment or the paper does not say.
+- "researchType": when you named no treatment, what kind of research the paper is: "risk-factor", "prediction", "mechanism", "epidemiology", "services" or "other"; null when there is a treatment or the paper does not say.
+- "sampleSize": the number of participants, or of included studies for a review, as a whole number printed in the paper; null when the paper does not say.
 - "group": null. "emphasis": an empty list.
 
 Rules:
@@ -170,7 +183,7 @@ export function overviewTopics(
 
 /** Checks each sentence. `kept` have the keys of their papers as sources; `problems` say why the others were rejected. */
 export function judgeOverview(
-  sentences: Array<{ text: string; sources: number[]; group?: "focus" | "related" | null; kind?: OverviewKind | null; treatment?: string | null; emphasis?: string[]; population?: string | null; comparator?: string | null; outcome?: string | null }>, papers: Array<Omit<OverviewPaper, "part"> & { part?: OverviewPaper["part"] }>,
+  sentences: Array<{ text: string; sources: number[]; group?: "focus" | "related" | null; kind?: OverviewKind | null; treatment?: string | null; emphasis?: string[]; population?: string | null; comparator?: string | null; outcome?: string | null; treatmentClass?: TreatmentClass | null; researchType?: ResearchType | null; sampleSize?: number | null }>, papers: Array<Omit<OverviewPaper, "part"> & { part?: OverviewPaper["part"] }>,
 ): { kept: OverviewSentence[]; problems: string[] } {
   const kept: OverviewSentence[] = []
   const problems: string[] = []
@@ -212,7 +225,13 @@ export function judgeOverview(
       const checkable = /[a-z][a-z-]{3,}/i.test(phrase)
       return (checkable ? sharesWords(phrase, sourceText) : flat(sourceText).includes(flat(phrase))) ? phrase : undefined }
     const [population, comparator, outcome] = [stated(sentence.population), stated(sentence.comparator), stated(sentence.outcome)]
-    kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(population ? { population } : {}), ...(comparator ? { comparator } : {}), ...(outcome ? { outcome } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
+    // The class belongs to a treatment, the type of research to a paper with none.
+    const treatmentClass = treatment ? sentence.treatmentClass ?? undefined : undefined
+    const researchType = treatment ? undefined : sentence.researchType ?? undefined
+    // A sample size is kept only when its number is printed, and not only as a percentage, in the paper's own text.
+    const size = sentence.sampleSize
+    const sampleSize = typeof size === "number" && Number.isInteger(size) && size > 0 && numbers(sourceText.replace(PERCENTAGE, " ")).some((value) => Number(value) === size) ? size : undefined
+    kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(treatmentClass ? { treatmentClass } : {}), ...(researchType ? { researchType } : {}), ...(sampleSize ? { sampleSize } : {}), ...(population ? { population } : {}), ...(comparator ? { comparator } : {}), ...(outcome ? { outcome } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
   }
   return { kept, problems }
 }

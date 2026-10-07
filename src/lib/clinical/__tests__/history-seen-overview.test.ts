@@ -352,3 +352,40 @@ describe("the overview from per-paper answers", () => {
     expect(topic.papers.map((paper) => paper.abstract)).toEqual(["A1", undefined])
   })
 })
+
+// Owner decision 2026-10-08: the answer also names the kind of treatment or research and the sample size.
+describe("the kind of treatment or research and the sample size", () => {
+  const paperWith = (abstract: string) => [{ key: "k1", headline: "Ketamine improved symptoms", takeaway: "Ketamine reduced sadness in adults.", part: "focus" as const, abstract }]
+  const one = (extra: Record<string, unknown>, abstract = "Adults received ketamine.") => judgeOverview([{ text: "reduced sadness", sources: [1], kind: "benefit", ...extra } as never], paperWith(abstract)).kept[0]
+  it("keeps a treatment class only with a treatment, and a research type only without one", () => {
+    expect(one({ treatment: "ketamine", treatmentClass: "medicine", researchType: "prediction" })).toMatchObject({ treatment: "ketamine", treatmentClass: "medicine" })
+    expect(one({ treatment: "ketamine", treatmentClass: "medicine", researchType: "prediction" }).researchType).toBeUndefined()
+    const none = one({ treatment: null, treatmentClass: "medicine", researchType: "prediction" })
+    expect(none.treatmentClass).toBeUndefined()
+    expect(none.researchType).toBe("prediction")
+    // A treatment the checks reject leaves the entry without one, so the class goes and the type may stay.
+    const rejected = one({ treatment: "lithium", treatmentClass: "medicine", researchType: "mechanism" })
+    expect(rejected.treatmentClass).toBeUndefined()
+    expect(rejected.researchType).toBe("mechanism")
+  })
+  it("keeps a sample size printed as a number in the headline, takeaway or abstract", () => {
+    expect(one({ sampleSize: 180 }, "We enrolled 180 participants.").sampleSize).toBe(180)
+    expect(one({ sampleSize: 1234 }, "Data from 1,234 adults.").sampleSize).toBe(1234)
+    expect(one({ sampleSize: 42 }, "Sample: n = 42.").sampleSize).toBe(42)
+    expect(one({ sampleSize: 42 }, "Remission was 42% and 42 patients dropped out.").sampleSize).toBe(42)
+  })
+  it("drops a sample size that is not printed, is only a percentage, or is not a positive integer", () => {
+    expect(one({ sampleSize: 180 }, "We enrolled 200 participants.").sampleSize).toBeUndefined()
+    expect(one({ sampleSize: 42 }, "Remission was 42% with ketamine.").sampleSize).toBeUndefined()
+    expect(one({ sampleSize: 42 }, "Remission was 42 % with ketamine.").sampleSize).toBeUndefined()
+    expect(one({ sampleSize: 0 }, "0 events in 5 patients.").sampleSize).toBeUndefined()
+    expect(one({ sampleSize: -5 }, "Change of -5 points.").sampleSize).toBeUndefined()
+    expect(one({ sampleSize: 4.5 }, "Mean age 4.5 years.").sampleSize).toBeUndefined()
+    expect(one({ sampleSize: null }, "n = 42").sampleSize).toBeUndefined()
+  })
+  it("asks for the three fields and files the version under a new key", async () => {
+    const { OVERVIEW_VERSION, topicOverviewSkill } = await import("../digest/topic")
+    expect(Number(OVERVIEW_VERSION)).toBeGreaterThan(12)
+    expect(topicOverviewSkill.version).toBe(OVERVIEW_VERSION)
+  })
+})

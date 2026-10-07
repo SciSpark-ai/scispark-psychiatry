@@ -29,6 +29,7 @@ function findingsOf(feed: StoredFeed, taxonomy: Taxonomy): Finding[] {
       // the paper matched is not recorded.
       conditionCodes: item.matched === "treatment" ? [] : [codeOf(topic?.condition), codeOf(topic?.condition2)].filter((code): code is string => Boolean(code)),
       kind: answer?.kind ?? null, treatment, treatmentCode: treatment ? findNode(taxonomy, treatment, "treatment")?.id ?? null : null,
+      treatmentClass: answer?.treatmentClass ?? null, researchType: answer?.researchType ?? null, sampleSize: answer?.sampleSize ?? null,
       text: answer?.text ?? null, population: answer?.population ?? null, comparator: answer?.comparator ?? null, outcome: answer?.outcome ?? null,
       firstListedAt: feed.generatedAt, lastListedAt: feed.generatedAt,
     }
@@ -46,6 +47,8 @@ function merged(earlier: Finding, newer: Finding): Finding {
     ...(answered ? { kind: newer.kind, text: newer.text, population: newer.population, comparator: newer.comparator, outcome: newer.outcome } : {}),
     // A newer answer that names no treatment does not erase one an earlier answer named.
     ...(answered && newer.treatment !== null ? { treatment: newer.treatment, treatmentCode: newer.treatmentCode } : {}),
+    // Likewise for the class, the type of research and the sample size.
+    ...(answered ? { treatmentClass: newer.treatmentClass ?? earlier.treatmentClass, researchType: newer.researchType ?? earlier.researchType, sampleSize: newer.sampleSize ?? earlier.sampleSize } : {}),
     conditionCodes: [...new Set([...earlier.conditionCodes, ...newer.conditionCodes])],
     firstListedAt: earlier.firstListedAt < newer.firstListedAt ? earlier.firstListedAt : newer.firstListedAt,
     lastListedAt: earlier.lastListedAt > newer.lastListedAt ? earlier.lastListedAt : newer.lastListedAt,
