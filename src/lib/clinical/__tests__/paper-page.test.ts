@@ -65,16 +65,17 @@ describe("author names", () => {
 
 // Owner decision 2026-10-07: the paper page reads header, AI summary, abstract, digest, in that order.
 describe("the order of the paper page", () => {
-  it("shows the abstract open, above the digest, not folded away under it", async () => {
+  it("puts the digest, once written, above the abstract, which stays open; one digest and its button in the top row", async () => {
     const { readFileSync } = await import("node:fs")
     const source = readFileSync("src/app/paper/[key]/page.tsx", "utf8")
     const abstract = source.indexOf('data-testid="paper-abstract"')
     expect(abstract).toBeGreaterThan(-1)
-    expect(abstract).toBeLessThan(source.indexOf("<ClinicalPaperDigest"))
-    // One digest and one button for it: upstream's prose digest and its button are not on this page.
-    expect(source).not.toContain("<PaperDigestView")
-    expect(source).toContain("hideDigest")
+    expect(source.indexOf("<ClinicalPaperDigest")).toBeGreaterThan(-1)
+    expect(source.indexOf("<ClinicalPaperDigest")).toBeLessThan(abstract)
     expect(source).not.toMatch(/<details className=\{paperStyles\.abstract\}/)
+    expect(source).not.toContain("<PaperDigestView")
+    expect(source).toContain("digestAction={<ClinicalDigestButton")
+    expect(source).toContain("<ClinicalPaperNav")
   })
 })
 

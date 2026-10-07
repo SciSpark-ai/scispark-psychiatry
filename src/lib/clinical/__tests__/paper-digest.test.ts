@@ -24,8 +24,17 @@ const strong = (...answers: unknown[]) => new MockProvider(answers.map((answer) 
 const FULL = { access: "full-text" as const, locator: "PMC", checkedAt: "2026-10-07T10:00:00.000Z", truncated: false, notes: [] }
 
 describe("the clinical paper digest", () => {
-  it("has nine items in the agreed order", () => {
-    expect(PAPER_DIGEST_ITEMS).toEqual(["question", "design", "population", "intervention", "mainResult", "safety", "limitations", "conclusion", "funding"])
+  it("has its items in the agreed order", () => {
+    expect(PAPER_DIGEST_ITEMS).toEqual(["question", "design", "population", "intervention", "primaryOutcome", "mainResult", "secondaryOutcomes", "safety", "limitations", "conclusion", "funding"])
+  })
+
+  it("reads a digest stored before the two detail items existed", async () => {
+    const storage = new MemoryVaultStorage()
+    await storage.write(`.scispark/clinical/paper-digests/${paperSlug(RCT)}.json`, JSON.stringify({ version: 1, unverified: [], source: FULL,
+      items: { question: "Q?", design: null, population: null, intervention: null, mainResult: "R.", safety: null, limitations: null, conclusion: null, funding: null } }))
+    const stored = await loadCachedPaperDigest(storage, paperSlug(RCT))
+    expect(stored?.items.mainResult).toBe("R.")
+    expect(stored?.items.primaryOutcome).toBeNull()
   })
 
   it("writes the items from the full text, records what it was written from, and keeps it", async () => {

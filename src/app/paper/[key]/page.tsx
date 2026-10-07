@@ -25,7 +25,8 @@ import { ClinicalPaperSummary } from "@/components/clinical/ClinicalPaperSummary
 import { useCardDigest } from "@/components/clinical/useCardDigest"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { PaperActions, type DigestState, type EnrichState, type IngestState, type SaveState } from "@/components/paper/PaperActions"
-import { ClinicalPaperDigest } from "@/components/clinical/ClinicalPaperDigest"
+import { ClinicalDigestButton, ClinicalPaperDigest, ClinicalPaperNav } from "@/components/clinical/ClinicalPaperDigest"
+import { usePaperDigest } from "@/components/clinical/usePaperDigest"
 import paperStyles from "@/components/paper/PaperLayout.module.css"
 import { PaperFeedContext } from "@/components/paper/PaperFeedContext"
 import { RecommendationDetails } from "@/components/feed/RecommendationDetails"
@@ -115,6 +116,7 @@ function PaperPageContent() {
   const [load, setLoad] = useState<LoadState>({ status: "loading" })
   // Clinical edition: the AI headline and summary the feed wrote for this paper, if any.
   const cardDigest = useCardDigest(load.status === "ready" ? load.paper : null)
+  const clinicalDigest = usePaperDigest(load.status === "ready" ? load.paper : null)
   const [digestState, setDigestState] = useState<DigestState>({ status: "idle" })
   const [ingestState, setIngestState] = useState<IngestState>({ phase: "idle" })
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" })
@@ -482,7 +484,7 @@ function PaperPageContent() {
                   enrichState={enrichState}
                   digestState={digestState}
                   onGenerateDigest={handleGenerateDigest}
-                  hideDigest
+                  digestAction={<ClinicalDigestButton state={clinicalDigest} />}
                   ingestState={ingestState}
                   onIngest={handleIngest}
                   onUndo={handleUndo}
@@ -493,16 +495,14 @@ function PaperPageContent() {
 
               <div className={paperStyles.layout}>
                 <article aria-label="Paper reading" className={paperStyles.reading}>
-                  {/* Clinical edition: the authors' abstract is always open and comes before the digest. */}
+                  {/* Clinical edition: the nine-item digest in place of upstream's prose digest; once written it sits above the abstract, which stays open. */}
+                  <ClinicalPaperDigest state={clinicalDigest} />
                   {load.paper.abstract && (
-                    <section data-testid="paper-abstract" className="mb-10">
+                    <section id="paper-abstract" data-testid="paper-abstract" tabIndex={-1} className="mb-10 scroll-mt-6">
                       <h2 className="mb-3 font-heading text-[20px] font-semibold text-espresso">{CLINICAL_COPY.paper.originalAbstract}</h2>
                       <ClinicalAbstract text={load.paper.abstract} />
                     </section>
                   )}
-
-                  {/* Clinical edition: nine short items in place of upstream's prose digest (PaperDigestView). */}
-                  <ClinicalPaperDigest paper={load.paper} />
 
                   {feedContext && (
                     <div className={digestState.status === "done" ? "mt-10" : undefined}>
@@ -522,11 +522,13 @@ function PaperPageContent() {
 
                 </article>
 
-                {page && (
+                {/* Clinical edition: the rail is always there, with the page's parts to jump to. */}
+                {(
                   <aside
                     aria-label="Paper context"
                     className={`${paperStyles.rail} ${!page ? paperStyles.navigationOnly : ""} flex flex-col gap-6`}
                   >
+                    <ClinicalPaperNav hasSummary={Boolean(cardDigest)} digest={clinicalDigest.digest} hasAbstract={Boolean(load.paper.abstract)} />
                     {page && (
                       <div className="flex flex-col gap-4 [&>*]:mt-0">
                         <ProjectMembershipControl pageId={page.id} />

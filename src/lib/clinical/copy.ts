@@ -92,15 +92,19 @@ export const CLINICAL_COPY = {
     digest: {
       heading: "Digest",
       labels: {
-        question: "Research question", design: "Study design", population: "Population", intervention: "Intervention and comparator",
-        mainResult: "Main result", safety: "Safety", limitations: "Limitations", conclusion: "Authors' conclusion", funding: "Funding and conflicts of interest",
+        question: "Research question", design: "Study design", population: "Population", intervention: "Intervention and comparator", primaryOutcome: "Primary outcome",
+        mainResult: "Main result", secondaryOutcomes: "Secondary outcomes", safety: "Safety",
+        limitations: "Limitations", conclusion: "Authors' conclusion", funding: "Funding and conflicts of interest",
       },
-      none: "No digest yet. Writing one reads the paper, the full text when it can be had, and uses your AI model.",
-      write: "Write digest", writing: "Reading the paper…", update: "Update from full text",
+      groups: { study: "The study", results: "Results", appraisal: "Appraisal" },
+      write: "Write digest", writing: "Reading the paper…", update: "Update from full text", written: "Digest written",
+      writeNote: "Reads the paper, the full text when it can be had, and uses your AI model.",
       fromFullText: "Written by AI from the full text", fromExcerpt: "Written by AI from the first part of the full text",
       fromAbstract: "Written by AI from the abstract only. The full text could not be read.",
-      notInPaper: "Not stated in the paper.", notInAbstract: "Not stated in the abstract.",
+      notStated: (fromFullText: boolean, labels: string[]) => `Not stated in the ${fromFullText ? "paper" : "abstract"}: ${labels.map((label) => label.toLowerCase()).join(", ")}.`,
       unverified: "Check this against the paper: a number here was not found in the text.",
+      /** The side navigation of the paper page. */
+      nav: { label: "On this page", summary: "AI summary", digest: "Digest", abstract: "Abstract" },
     },
   },
   readLater: {

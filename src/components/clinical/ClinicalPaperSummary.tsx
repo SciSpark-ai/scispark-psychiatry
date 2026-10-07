@@ -7,7 +7,7 @@ const P = CLINICAL_COPY.paper
 export function ClinicalPaperSummary({ digest }: { digest: CardDigest }) {
   const tags = digest.tags ?? []
   return (
-    <section className="mt-5 max-w-[720px] rounded-card border border-border-warm/70 bg-light-surface px-5 py-4">
+    <section id="paper-summary" tabIndex={-1} className="mt-5 max-w-[720px] scroll-mt-6 rounded-card border border-border-warm/70 bg-light-surface px-5 py-4">
       <p className="mb-1 text-[12px] font-medium uppercase tracking-wide text-muted-text"><span title={P.aiSummaryNote(digest.quote)} className="cursor-help underline decoration-dotted">{P.aiSummary}</span></p>
       <p className="text-[17px] leading-relaxed text-espresso">{digest.takeaway}</p>
       {tags.length > 0 && (

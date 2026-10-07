@@ -11,7 +11,8 @@ import type { LLMSettings } from "../../llm/settings"
 import { numbers } from "./card"
 
 /**
- * The digest on the paper page (owner decision 2026-10-07): nine short items in a fixed order, in
+ * The digest on the paper page (owner decision 2026-10-07): short items in a fixed order (nine, and
+ * two more that mostly only a full text gives: the primary outcome and the secondary outcomes), in
  * place of upstream's long prose digest. Written from the full text when it can be read, from the
  * abstract otherwise; which of the two is recorded by code and shown with the digest.
  *
@@ -21,18 +22,19 @@ import { numbers } from "./card"
  *   asked once more; an item that still fails is kept but listed in `unverified`, so the page can say so.
  */
 
-export const PAPER_DIGEST_ITEMS = ["question", "design", "population", "intervention", "mainResult", "safety", "limitations", "conclusion", "funding"] as const
+export const PAPER_DIGEST_ITEMS = ["question", "design", "population", "intervention", "primaryOutcome", "mainResult", "secondaryOutcomes", "safety", "limitations", "conclusion", "funding"] as const
 export type PaperDigestItem = (typeof PAPER_DIGEST_ITEMS)[number]
 
 const item = z.string().nullable().default(null)
 const PaperDigestOutputSchema = z.object({
-  question: item, design: item, population: item, intervention: item, mainResult: item, safety: item, limitations: item, conclusion: item, funding: item,
+  question: item, design: item, population: item, intervention: item, primaryOutcome: item, mainResult: item, secondaryOutcomes: item, safety: item, limitations: item, conclusion: item, funding: item,
 })
 type PaperDigestOutput = z.infer<typeof PaperDigestOutputSchema>
 
 const StoredPaperDigestSchema = z.object({
   version: z.literal(1),
-  items: z.object(Object.fromEntries(PAPER_DIGEST_ITEMS.map((key) => [key, z.string().nullable()])) as Record<PaperDigestItem, z.ZodNullable<z.ZodString>>),
+  // An item added later is empty in a digest stored before it existed.
+  items: z.object(Object.fromEntries(PAPER_DIGEST_ITEMS.map((key) => [key, item])) as Record<PaperDigestItem, typeof item>),
   unverified: z.array(z.enum(PAPER_DIGEST_ITEMS)),
   source: PaperTextInfoSchema,
 })
@@ -45,12 +47,14 @@ interface PaperDigestInput { title: string; journal?: string; abstract?: string;
 
 const SYSTEM_PROMPT = `You write a short structured digest of one clinical research paper for a psychiatrist. You are given the title, the abstract and, when it could be read, the full text.
 
-Return these nine items. Each is one or two plain sentences, at most 45 words, or null when the paper does not state it. Never write "not reported" or a guess: use null.
+Return these eleven items. Each is one or two plain sentences, at most 45 words (at most 70 for "mainResult" and "secondaryOutcomes" when you have the full text), or null when the text does not state it. Never write "not reported" or a guess: use null.
 - "question": the research question, as a question.
 - "design": how the study was done: the design (for example randomised double-blind trial, cohort, meta-analysis of N trials), setting, duration or follow-up.
 - "population": who was studied: number of participants, diagnosis, age group, key inclusion criteria.
 - "intervention": what was compared: the intervention or exposure with its dose, and the comparator.
-- "mainResult": the primary result with its key numbers exactly as printed, and the comparison.
+- "primaryOutcome": the primary outcome: what was measured, with which scale or definition, and at what time point.
+- "mainResult": the result on the primary outcome in each group, with the effect size, confidence interval and p value exactly as printed when the text gives them.
+- "secondaryOutcomes": the key secondary outcomes with their results.
 - "safety": adverse events, harms, dropouts due to adverse events.
 - "limitations": the main limitations the authors state.
 - "conclusion": the authors' conclusion, in their level of certainty.
@@ -64,9 +68,9 @@ Rules:
 
 export const paperDigestSkill = defineSkill<PaperDigestInput, PaperDigestOutput>({
   name: "clinical-paper-digest",
-  version: "1",
+  version: "2",
   run: (ctx, input) =>
-    ctx.llmStructured("strong", { maxTokens: 2048, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] }, PaperDigestOutputSchema),
+    ctx.llmStructured("strong", { maxTokens: 3072, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] }, PaperDigestOutputSchema),
 })
 
 const EMPTY_ANSWER = /^(?:n\/?a|none|null|not (?:reported|stated|mentioned|described|available|applicable|specified|provided)|no (?:information|data)[^.]*|unknown)\.?$/i
