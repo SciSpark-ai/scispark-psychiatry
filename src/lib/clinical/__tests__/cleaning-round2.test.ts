@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { loadPsychiatryPack } from "../pack/load"
 import { abstractSections } from "../text/abstract-sections"
 import { displayVenue } from "../text/venue"
+import { journalTierOf } from "../score/journal-tiers"
 
 // Owner report 2026-10-07: sections such as "Background" in ordinary capitals were not recognised, and
 // journal names were shown the way PubMed prints them ("The lancet. Psychiatry").
@@ -45,4 +46,12 @@ describe("displayVenue", () => {
     expect(displayVenue("Brain, behavior, & immunity - health", journals)).toBe("Brain, Behavior, & Immunity - Health")
     expect(displayVenue(undefined, journals)).toBeUndefined()
   })
+  // Seen on the run of 2026-10-07: this journal is in the pack, written with "and", and was not recognised.
+  it("knows a journal whether its name is written with & or with and", async () => {
+    const { journals } = await loadPsychiatryPack()
+    expect(displayVenue("Progress in neuro-psychopharmacology & biological psychiatry", journals)).toBe("Progress in Neuro-Psychopharmacology and Biological Psychiatry")
+    expect(journalTierOf(journals, new Map(), "Progress in neuro-psychopharmacology & biological psychiatry")).toBe(2)
+    expect(journalTierOf(journals, new Map(), "The Australian and New Zealand journal of psychiatry")).toBe(2)
+  })
 })
+

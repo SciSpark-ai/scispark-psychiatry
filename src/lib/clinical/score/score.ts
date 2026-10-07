@@ -39,6 +39,8 @@ export function normaliseJournalName(name: string): string {
     .split(/\s[:=]\s/)[0]
     .toLowerCase()
     .replace(/^the\s+/, "")
+    // "&" and "and" are the same word in a journal's name.
+    .replace(/\s*&\s*/g, " and ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
 }
