@@ -68,7 +68,7 @@ export const CLINICAL_COPY = {
     guideline: "Guideline", cohort: "Observational", "clinical-trial": "Clinical trial", review: "Review",
     "case-report": "Case report", editorial: "Editorial", erratum: "Erratum", retraction: "Retracted", other: "Other design", unknown: "Design unknown",
   },
-  designNote: "Design comes from the record's publication types or its text. It is not a judgement of study quality.",
+  designNote: "The publication type PubMed assigned to this record. It is not a judgement of study quality. New records may not have one yet.",
   watch: {
     heading: "Watch list",
     intro: "The conditions and treatments you follow. Each entry needs a condition, a treatment, or both.",

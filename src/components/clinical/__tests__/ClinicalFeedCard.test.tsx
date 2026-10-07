@@ -71,4 +71,15 @@ describe("ClinicalFeedCard", () => {
     const note = [...container.querySelectorAll("[title]")].find((el) => el.textContent?.includes("AI summary"))!
     expect(note.getAttribute("title")).toContain("Drug A improved response at week 8.")
   })
+
+  it("shows the study design only when PubMed assigned it, never a guess from the text", async () => {
+    await mount(ITEM)
+    expect(container.textContent).toContain("Randomized trial")
+    document.body.innerHTML = ""
+    await mount({ ...ITEM, designSource: "text-rule" })
+    expect(container.textContent).not.toContain("Randomized trial")
+    document.body.innerHTML = ""
+    await mount({ ...ITEM, design: "unknown", designSource: "none" })
+    expect(container.textContent).not.toContain("Design unknown")
+  })
 })

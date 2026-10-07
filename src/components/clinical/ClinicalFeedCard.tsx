@@ -54,28 +54,29 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   return (
     <Card className="flex flex-col gap-3 p-4" data-testid="clinical-feed-card">
       <div className="flex flex-wrap items-center gap-2">
-        <Chip tone="accent" title={CLINICAL_COPY.designNote}>{CLINICAL_COPY.designLabels[item.design]}</Chip>
+        {/* Only a design PubMed itself assigned is shown; one guessed from the text is used for filtering but not displayed. */}
+        {item.designSource === "publication-type" && <Chip tone="accent" title={CLINICAL_COPY.designNote}>{CLINICAL_COPY.designLabels[item.design]}</Chip>}
         {entryLabel && <Chip title={matchNote}>{entryLabel}{matched !== null ? ` · ${F.matchLabels[matched]}` : ""}</Chip>}
         {item.flags.includes("title-only") && <Chip>{CLINICAL_COPY.feed.noAbstract}</Chip>}
         {item.ungraded && <Chip>{CLINICAL_COPY.feed.notGraded}</Chip>}
       </div>
       <button type="button" onClick={() => void open()} className="text-left" title={displayTitle(paper.title)}>
-        <h3 className="line-clamp-3 font-heading text-[17px] leading-snug tracking-heading-card text-espresso">{item.digest ? item.digest.headline : displayTitle(paper.title)}</h3>
-        {item.digest && <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-muted-text">{displayTitle(paper.title)}</p>}
+        <h3 className="line-clamp-3 font-heading text-[18px] font-semibold leading-snug tracking-heading-card text-espresso">{item.digest ? item.digest.headline : displayTitle(paper.title)}</h3>
+        {item.digest && <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-muted-text">{displayTitle(paper.title)}</p>}
       </button>
       {item.digest ? (
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-muted-text"><span title={F.aiSummaryNote(item.digest.quote)} className="cursor-help underline decoration-dotted">{F.aiSummaryLabel}</span></p>
-          <p className="text-[13px] leading-relaxed text-espresso">{item.digest.takeaway}</p>
+          <p className="text-[12px] font-medium uppercase tracking-wide text-muted-text"><span title={F.aiSummaryNote(item.digest.quote)} className="cursor-help underline decoration-dotted">{F.aiSummaryLabel}</span></p>
+          <p className="text-[15px] leading-relaxed text-espresso">{item.digest.takeaway}</p>
         </div>
       ) : conclusion && (
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-muted-text">{F.conclusionLabel}</p>
-          <p className="line-clamp-4 text-[13px] leading-relaxed text-espresso">{conclusion}</p>
+          <p className="text-[12px] font-medium uppercase tracking-wide text-muted-text">{F.conclusionLabel}</p>
+          <p className="line-clamp-4 text-[15px] leading-relaxed text-espresso">{conclusion}</p>
         </div>
       )}
       <div className="flex flex-wrap items-end justify-between gap-2 border-t border-border-warm/60 pt-3">
-        <div className="min-w-0 flex-1 text-[11px] leading-relaxed text-muted-text">
+        <div className="min-w-0 flex-1 text-[13px] leading-relaxed text-muted-text">
           {meta && <p className="truncate" title={meta}>{meta}</p>}
           <p>{paper.date ? CLINICAL_COPY.feed.published(paper.date.slice(0, 10)) : CLINICAL_COPY.feed.noDate}</p>
         </div>
