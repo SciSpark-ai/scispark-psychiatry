@@ -30,7 +30,7 @@ export const FindingSchema = z.object({
   kind: z.enum(FINDING_KINDS).nullable().default(null),
   treatment: text, treatmentCode: text,
   treatmentClass: z.enum(TREATMENT_CLASSES).nullable().default(null), researchType: z.enum(RESEARCH_TYPES).nullable().default(null),
-  /** Participants (or included studies, for a review), when the paper prints the number. */
+  /** Participants, when the paper prints the number as a count of people. Never a count of studies. */
   sampleSize: z.number().nullable().default(null),
   /** The short finding: what the treatment did, or a statement when there is no treatment. */
   text, population: text, comparator: text, outcome: text,

@@ -6,6 +6,7 @@ import type { CardDigest, DigestRunOpts } from "./card"
 import { numbers, sharesWords } from "./card"
 import { TREATMENT_CLASSES, RESEARCH_TYPES, type TreatmentClass, type ResearchType } from "../evidence/schema"
 import { negationWords, tidyOverviewSentence } from "../text/overview-text"
+import { sampleSizeStated } from "../text/sample-size"
 
 export { tidyOverviewSentence }
 
@@ -30,7 +31,7 @@ export { tidyOverviewSentence }
  */
 
 /** The version of the overview skill; also part of the key its answers are kept under. */
-export const OVERVIEW_VERSION = "13"
+export const OVERVIEW_VERSION = "14"
 
 export const OVERVIEW_MIN_PAPERS = 1
 // One short answer per paper, so a long list is still one modest call.
@@ -64,10 +65,10 @@ function treatmentFault(treatment: string, cited: Array<{ headline: string; take
   return comparator ? "treatment-is-comparator" : null
 }
 
-/** A number followed by a percent sign ("42%", "1,234 %"): a share, not a count of people. */
-const PERCENTAGE = /\d(?:[\d,]*\d)?(?:\.\d+)?\s*%/g
 const NOT_INFERIOR = /\b(?:not|non)[- ]?inferior|\bnoninferior/i
 const OPENS_WITH_NO = /^(?:did not|does not|do not|was not|were not|not|no|failed to|showed no|had no|made no)\b/i
+/** The wording of an association ("was linked to", "may be associated with", "predicted"): not a finding that a treatment helped. */
+const ASSOCIATION = /\b(was|were|is|are|may be)?\s*(linked to|associated with|correlated with|correlates with|predicts?|predicted)\b/i
 
 /** What a finding says: a treatment helped, did not help, did both, raised a safety concern, or something else was found. */
 export const OVERVIEW_KINDS = ["benefit", "no-benefit", "mixed", "safety", "other"] as const
@@ -90,7 +91,7 @@ export interface OverviewSentence {
   treatmentClass?: TreatmentClass
   /** What kind of research the paper is; kept only without a treatment. */
   researchType?: ResearchType
-  /** The number of participants (or of included studies), kept only when the paper prints that number. */
+  /** The number of participants, kept only when the paper prints that number as a count of people (never a count of studies). */
   sampleSize?: number
   /** Words of the sentence to mark, so the eye finds the point. Each is in `text` as written. */
   emphasis?: string[]
@@ -141,7 +142,7 @@ Return "sentences": exactly one entry for every paper. Each entry:
 - "outcome": the main outcome the finding is about ("depressive symptoms at week 8", "relapse"); null if the paper does not say.
 - "treatmentClass": when you named a treatment, what kind it is: "medicine", "psychosocial", "neuromodulation", "digital", "lifestyle" or "other"; null when there is no treatment or the paper does not say.
 - "researchType": when you named no treatment, what kind of research the paper is: "risk-factor", "prediction", "mechanism", "epidemiology", "services" or "other"; null when there is a treatment or the paper does not say.
-- "sampleSize": the number of participants, or of included studies for a review, as a whole number printed in the paper; null when the paper does not say.
+- "sampleSize": the number of participants, as a whole number printed in the paper. For a review or meta-analysis: the total participants when printed; null when only the number of studies is printed. null when the paper does not say.
 - "group": null. "emphasis": an empty list.
 
 Rules:
@@ -211,6 +212,8 @@ export function judgeOverview(
     else if (kind === "no-benefit" && NOT_INFERIOR.test(text)) { problems.push(`kind-contradicted:${kind}`); kind = "other" }
     // A finding that opens by saying the treatment did not do something is not a benefit.
     else if (kind === "benefit" && OPENS_WITH_NO.test(text)) { problems.push(`kind-contradicted:${kind}`); kind = "other" }
+    // An association ("was linked to", "predicted") is not a benefit: nothing was shown to help.
+    else if (kind === "benefit" && ASSOCIATION.test(text)) { problems.push(`kind-association:${kind}`); kind = "other" }
     // The treatment must be named in the summaries of the papers the finding rests on.
     let treatment = sentence.treatment?.replace(/\s+/g, " ").trim() || undefined
     if (treatment) {
@@ -228,9 +231,8 @@ export function judgeOverview(
     // The class belongs to a treatment, the type of research to a paper with none.
     const treatmentClass = treatment ? sentence.treatmentClass ?? undefined : undefined
     const researchType = treatment ? undefined : sentence.researchType ?? undefined
-    // A sample size is kept only when its number is printed, and not only as a percentage, in the paper's own text.
-    const size = sentence.sampleSize
-    const sampleSize = typeof size === "number" && Number.isInteger(size) && size > 0 && numbers(sourceText.replace(PERCENTAGE, " ")).some((value) => Number(value) === size) ? size : undefined
+    // A sample size is kept only when the paper's own text prints its number as a count of people: not a year, a duration, a share or a count of studies.
+    const sampleSize = typeof sentence.sampleSize === "number" && sampleSizeStated(sentence.sampleSize, sourceText) ? sentence.sampleSize : undefined
     kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(treatmentClass ? { treatmentClass } : {}), ...(researchType ? { researchType } : {}), ...(sampleSize ? { sampleSize } : {}), ...(population ? { population } : {}), ...(comparator ? { comparator } : {}), ...(outcome ? { outcome } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
   }
   return { kept, problems }
@@ -247,6 +249,7 @@ function problemText(reason: string): string {
   if (kind === "number-not-in-sources") return `A sentence used the number ${detail}, which is not in the headline or takeaway of the papers it listed as sources. Use only numbers from the sources of that sentence, or no number.`
   if (kind === "no-source") return "A sentence listed no valid paper number in its sources. Every sentence needs at least one."
   if (kind === "kind-contradicted") return `An entry was filed under "${detail}" but its text says the opposite. A text that starts with "did not" or "no" is not a benefit; "not inferior" is not a finding of no benefit. Use "other" when unsure.`
+  if (kind === "kind-association") return `An entry was filed under "${detail}" but its text reports an association ("linked to", "associated with", "predicted"). An association is "other"; use "${detail}" only when the treatment improved the illness or a clinical outcome.`
   if (kind === "kind-not-stated") return `An entry was filed under "${detail}" but its text does not say in words that something did not work. Use "${detail}" only when the paper says so, with "not" or "no" in the text; otherwise use "benefit" or "other".`
   if (kind === "treatment-is-comparator") return `"${detail}" is what the treatment was compared with, not the treatment the paper is about. Name the treatment under study.`
   if (kind === "treatment-not-in-source") return `The treatment "${detail}" is not named in the headline or takeaway of its paper. Copy the name from there.`

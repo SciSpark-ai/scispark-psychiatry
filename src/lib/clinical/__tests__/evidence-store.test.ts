@@ -110,7 +110,8 @@ describe("the findings store", () => {
     await recordFindings(storage, feed([item(1)], { generatedAt: "2026-10-09T10:00:00.000Z", topicOverviews: { w1: [answer({})] } }), TAXONOMY)
     expect((await readFindings(storage))[0]).toMatchObject({ treatmentClass: "medicine", sampleSize: 180 })
     await recordFindings(storage, feed([item(1)], { generatedAt: "2026-10-10T10:00:00.000Z", topicOverviews: { w1: [answer({ treatmentClass: "digital", researchType: "other", sampleSize: 200 })] } }), TAXONOMY)
-    expect((await readFindings(storage))[0]).toMatchObject({ treatmentClass: "digital", researchType: "other", sampleSize: 200 })
+    // Final review I3: the latest answer decides what the paper is about. One that names no treatment and a type of research clears the treatment.
+    expect((await readFindings(storage))[0]).toMatchObject({ treatment: null, treatmentCode: null, treatmentClass: null, researchType: "other", sampleSize: 200 })
     const research = new MemoryVaultStorage()
     await recordFindings(research, feed([item(1)], { topicOverviews: { w1: [answer({ researchType: "risk-factor" })] } }), TAXONOMY)
     expect((await readFindings(research))[0]).toMatchObject({ treatmentClass: null, researchType: "risk-factor", sampleSize: null })
@@ -119,6 +120,35 @@ describe("the findings store", () => {
     for (const finding of Object.values<Record<string, unknown>>(old.findings)) { delete finding.treatmentClass; delete finding.researchType; delete finding.sampleSize }
     await research.write(FINDINGS_PATH, JSON.stringify(old))
     expect((await readFindings(research))[0]).toMatchObject({ treatmentClass: null, researchType: null, sampleSize: null })
+  })
+
+  it("never leaves a finding with both a treatment and a type of research", async () => {
+    const answer = (extra: object) => ({ text: "reduced symptoms", sources: ["pmid:1"], kind: "benefit" as const, ...extra })
+    const record = async (storage: MemoryVaultStorage, day: string, extra: object) => {
+      await recordFindings(storage, feed([item(1)], { generatedAt: `2026-10-${day}T10:00:00.000Z`, topicOverviews: { w1: [answer(extra)] } }), TAXONOMY)
+      return (await readFindings(storage))[0]
+    }
+    // A treatment after a type of research: the type goes.
+    const first = new MemoryVaultStorage()
+    await record(first, "07", { researchType: "risk-factor" })
+    expect(await record(first, "08", { treatment: "ketamine", treatmentClass: "medicine" })).toMatchObject({ treatment: "ketamine", treatmentCode: "ketamine", treatmentClass: "medicine", researchType: null })
+    // A type of research after a treatment: the treatment, its code and its class go.
+    expect(await record(first, "09", { researchType: "mechanism" })).toMatchObject({ treatment: null, treatmentCode: null, treatmentClass: null, researchType: "mechanism" })
+    // An answer with neither keeps the earlier treatment, and no type of research beside it.
+    const second = new MemoryVaultStorage()
+    await record(second, "07", { treatment: "ketamine", treatmentClass: "medicine" })
+    expect(await record(second, "08", {})).toMatchObject({ treatment: "ketamine", treatmentCode: "ketamine", treatmentClass: "medicine", researchType: null })
+    // An answer with neither keeps an earlier type of research when no treatment stands.
+    const third = new MemoryVaultStorage()
+    await record(third, "07", { researchType: "prediction" })
+    expect(await record(third, "08", {})).toMatchObject({ treatment: null, researchType: "prediction" })
+    // A finding stored with both (before this rule) loses the type when an answer with neither comes.
+    const fourth = new MemoryVaultStorage()
+    await record(fourth, "07", { treatment: "ketamine" })
+    const both = JSON.parse((await fourth.read(FINDINGS_PATH))!)
+    both.findings["pmid:1"].researchType = "risk-factor"
+    await fourth.write(FINDINGS_PATH, JSON.stringify(both))
+    expect(await record(fourth, "08", {})).toMatchObject({ treatment: "ketamine", researchType: null })
   })
 
   it("keeps the PICO line and the journal band through a listing without an answer, and takes a newer answer over an older one", async () => {

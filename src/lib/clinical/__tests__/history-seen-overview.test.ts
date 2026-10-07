@@ -368,11 +368,13 @@ describe("the kind of treatment or research and the sample size", () => {
     expect(rejected.treatmentClass).toBeUndefined()
     expect(rejected.researchType).toBe("mechanism")
   })
-  it("keeps a sample size printed as a number in the headline, takeaway or abstract", () => {
+  it("keeps a sample size the paper ties to people: after n =, or before a people word", () => {
     expect(one({ sampleSize: 180 }, "We enrolled 180 participants.").sampleSize).toBe(180)
     expect(one({ sampleSize: 1234 }, "Data from 1,234 adults.").sampleSize).toBe(1234)
     expect(one({ sampleSize: 42 }, "Sample: n = 42.").sampleSize).toBe(42)
     expect(one({ sampleSize: 42 }, "Remission was 42% and 42 patients dropped out.").sampleSize).toBe(42)
+    expect(one({ sampleSize: 180 }, "We enrolled 180 treatment-resistant patients.").sampleSize).toBe(180)
+    expect(one({ sampleSize: 2856 }, "We pooled 52 studies (2856 participants).").sampleSize).toBe(2856)
   })
   it("drops a sample size that is not printed, is only a percentage, or is not a positive integer", () => {
     expect(one({ sampleSize: 180 }, "We enrolled 200 participants.").sampleSize).toBeUndefined()
@@ -383,9 +385,36 @@ describe("the kind of treatment or research and the sample size", () => {
     expect(one({ sampleSize: 4.5 }, "Mean age 4.5 years.").sampleSize).toBeUndefined()
     expect(one({ sampleSize: null }, "n = 42").sampleSize).toBeUndefined()
   })
+  // Final review I1: a printed number is not a sample size unless the paper ties it to people.
+  it("drops a year, a duration, a range of shares and a count of studies", () => {
+    expect(one({ sampleSize: 2019 }, "Adults were recruited between 2019 and 2021.").sampleSize).toBeUndefined()
+    expect(one({ sampleSize: 12 }, "Adults were followed for 12 weeks.").sampleSize).toBeUndefined()
+    expect(one({ sampleSize: 42 }, "Response was 42-45% across arms.").sampleSize).toBeUndefined()
+    expect(one({ sampleSize: 52 }, "We pooled 52 studies (2856 participants).").sampleSize).toBeUndefined()
+  })
+  // Final review I2: one unit, participants.
+  it("asks for the number of participants, never the number of studies", async () => {
+    const { topicOverviewSkill } = await import("../digest/topic")
+    let prompt = ""
+    await topicOverviewSkill.run({ llmStructured: async (_tier: unknown, request: { messages: Array<{ content: string }> }) => { prompt = request.messages[0].content; return { sentences: [] } } } as never, { topic: "t", papers: [] })
+    const bullet = prompt.split("\n").find((line) => line.startsWith('- "sampleSize"')) ?? ""
+    expect(bullet).toContain("participants")
+    expect(bullet).toContain("null when only the number of studies is printed")
+    expect(bullet).not.toContain("or of included studies")
+  })
+  // Final review I5: an association is not a benefit.
+  it("files association wording under other, not benefit", () => {
+    const linked = judgeOverview([{ text: "may be associated with lower mood symptoms", sources: [1], kind: "benefit" } as never], paperWith("Adults received ketamine."))
+    expect(linked.kept[0].kind).toBe("other")
+    expect(linked.problems).toEqual(["kind-association:benefit"])
+    for (const text of ["was linked to fewer relapses", "predicted remission", "correlates with symptom change"]) expect(one({ text }).kind).toBe("other")
+    expect(one({ text: "reduced depressive symptoms" }).kind).toBe("benefit")
+    // Only a benefit is demoted: the other kinds keep their own checks.
+    expect(one({ text: "was associated with weight gain", kind: "safety" }).kind).toBe("safety")
+  })
   it("asks for the three fields and files the version under a new key", async () => {
     const { OVERVIEW_VERSION, topicOverviewSkill } = await import("../digest/topic")
-    expect(Number(OVERVIEW_VERSION)).toBeGreaterThan(12)
+    expect(Number(OVERVIEW_VERSION)).toBeGreaterThan(13)
     expect(topicOverviewSkill.version).toBe(OVERVIEW_VERSION)
   })
 })

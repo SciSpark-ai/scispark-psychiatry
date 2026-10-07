@@ -1,6 +1,7 @@
 // src/lib/clinical/evidence/build.ts
 import type { Taxonomy, TaxonomyNode } from "../pack/schema"
 import { withDescendants } from "../pack/taxonomy"
+import { sampleSizeStated } from "../text/sample-size"
 import type { Design } from "../types"
 import { FINDING_KINDS, RESEARCH_TYPES, type Finding, type FindingKind, type ResearchType, type TreatmentClass } from "./schema"
 
@@ -18,6 +19,8 @@ const SHORT_LIST = 4
 const TOP_CLASSES = 3
 /** The key of the timeline's series of everything that has no line of its own, and of the class of treatments no other class holds. */
 const OTHER = "other"
+/** The class of a pack treatment whose modality is "other", when none of its findings names one (final review M2). */
+const CLASS_BY_ID: Readonly<Record<string, TreatmentClass>> = { exercise: "lifestyle", "light-therapy": "lifestyle", "digital-interventions": "digital", "mdma-assisted-therapy": "medicine" }
 
 export type Period = "all" | "12m" | "6m" | "3m"
 /** Calendar-free: the last 365, 183 or 92 days. */
@@ -76,6 +79,16 @@ const designNamed = (finding: Finding) => finding.designSource !== "none" && fin
 const day = (date: Date) => date.toISOString().slice(0, 10)
 const daysBefore = (now: Date, days: number) => day(new Date(now.getTime() - days * 86_400_000))
 const newestFirst = (a: Finding, b: Finding) => dayOf(b).localeCompare(dayOf(a)) || a.key.localeCompare(b.key)
+/**
+ * Is the finding inside the period that starts on `cutoff` (YYYY-MM-DD)? A publication day that has not come yet is
+ * inside every period. A publication date that is only a year is outside when that year is before the cutoff's; in
+ * the cutoff's year or later the year cannot tell, so the day the paper entered PubMed (else was first listed) decides.
+ */
+const inPeriod = (finding: Finding, cutoff: string) => {
+  const date = finding.paper.date
+  if (date && /^\d{4}$/.test(date) && date < cutoff.slice(0, 4)) return false
+  return dayOf(finding) >= cutoff
+}
 
 /**
  * New: the later of the publication day and the day the paper entered PubMed is within RECENT_DAYS of
@@ -100,6 +113,23 @@ function studyLabel(finding: Finding): string | null {
   const year = date && /^\d{4}/.test(date) ? date.slice(0, 4) : finding.paper.year ? String(finding.paper.year) : ""
   return [family, year].filter(Boolean).join(" ") || null
 }
+
+/**
+ * The sample size to show: the stored number only when the paper's own text (its title and abstract, the headline and
+ * the takeaway) prints it as a count of people. A number stored before that check (a year, "12 weeks") is not shown.
+ */
+const shownSampleSize = (finding: Finding): number | null => {
+  const size = finding.sampleSize
+  if (size === null) return null
+  return sampleSizeStated(size, [finding.paper.title, finding.paper.abstract ?? "", finding.headline, finding.takeaway].join(" . ")) ? size : null
+}
+
+const studyOf = (finding: Finding, now: Date, saved?: ReadonlySet<string>): Study => ({
+  key: finding.key, slug: finding.slug, headline: finding.headline, takeaway: finding.takeaway, label: studyLabel(finding),
+  venue: finding.paper.venue ?? null, date: shownDate(finding), design: finding.design, designNamed: designNamed(finding),
+  population: finding.population, sampleSize: shownSampleSize(finding), comparator: finding.comparator, outcome: finding.outcome,
+  kind: finding.kind, text: finding.text, treatment: finding.treatment?.trim() || null, isNew: isNew(finding, now), saved: saved?.has(finding.slug) ?? false,
+})
 
 interface ClassRef { key: string; label: string | null }
 
@@ -138,6 +168,8 @@ function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => { key
     }
   }
   const classify = (finding: Finding) => {
+    // A paper filed under a type of research, with no class and no code of a treatment, is research: the treatment an earlier answer named is not what it is about.
+    if (finding.researchType !== null && finding.treatmentClass === null && !finding.treatmentCode) return null
     const name = finding.treatment?.trim() || null
     const node = treatmentNode(finding.treatmentCode)
     if (!node) return name || finding.treatmentCode ? { key: `name:${(name ?? finding.treatmentCode ?? "").toLowerCase().replace(/\s+/g, " ")}`, class: null } : null
@@ -161,19 +193,28 @@ const inCondition = (findings: Finding[], taxonomy: Taxonomy, code: string) => {
 
 interface Organised { classes: ClassEvidence[]; classOf: Map<string, string>; research: ResearchGroup[] }
 
-/** The classes, treatments and studies of the findings, and the research with no treatment. `studyOf` is given each finding with the treatment it names. */
-function organise(findings: Finding[], taxonomy: Taxonomy, now: Date, studyOf: (finding: Finding) => Study): Organised {
+/**
+ * The classes, treatments and studies of `findings`, and the research with no treatment. The class and the spelling of a
+ * treatment the pack does not decide are taken from `all` the condition's findings, of which `findings` are those of the
+ * period, so neither changes with the period.
+ */
+function organise(findings: Finding[], all: Finding[], taxonomy: Taxonomy, now: Date, saved?: ReadonlySet<string>): Organised {
   const { classify, byClass } = classifier(taxonomy)
   // One class per treatment: where the pack does not decide it, the class of the earliest-listed finding of that treatment that has one.
   const named = new Map<string, Finding>()
-  for (const finding of findings) {
+  // A treatment the pack does not know is named as its earliest-listed finding wrote it.
+  const firstOf = new Map<string, Finding>()
+  for (const finding of all) {
     const ref = classify(finding)
-    const held = ref ? named.get(ref.key) : undefined
-    if (ref && ref.class === null && finding.treatmentClass && (!held || finding.firstListedAt < held.firstListedAt)) named.set(ref.key, finding)
+    if (!ref) continue
+    const held = named.get(ref.key)
+    if (ref.class === null && finding.treatmentClass && (!held || finding.firstListedAt < held.firstListedAt)) named.set(ref.key, finding)
+    const first = firstOf.get(ref.key)
+    if (!first || finding.firstListedAt < first.firstListedAt) firstOf.set(ref.key, finding)
   }
   const nodeOf = new Map(taxonomy.nodes.map((node) => [node.id, node]))
   const classes = new Map<string, ClassEvidence>()
-  const slots = new Map<string, { evidence: TreatmentEvidence; first: Finding; findings: Finding[] }>()
+  const slots = new Map<string, { evidence: TreatmentEvidence; findings: Finding[] }>()
   const classOf = new Map<string, string>()
   const researchFindings = new Map<ResearchType, Finding[]>()
   for (const finding of findings) {
@@ -183,7 +224,7 @@ function organise(findings: Finding[], taxonomy: Taxonomy, now: Date, studyOf: (
       researchFindings.set(type, [...(researchFindings.get(type) ?? []), finding])
       continue
     }
-    const cls = ref.class ?? byClass(named.get(ref.key)?.treatmentClass ?? null)
+    const cls = ref.class ?? byClass(named.get(ref.key)?.treatmentClass ?? CLASS_BY_ID[ref.key] ?? null)
     classOf.set(finding.key, cls.key)
     const entry = classes.get(cls.key) ?? { key: cls.key, label: null, papers: 0, counts: emptyCounts(), newPapers: 0, treatments: [] }
     entry.label ??= cls.label
@@ -196,14 +237,10 @@ function organise(findings: Finding[], taxonomy: Taxonomy, now: Date, studyOf: (
     const id = `${cls.key}\u0000${ref.key}`
     let slot = slots.get(id)
     if (!slot) {
-      slot = { evidence: { key: ref.key, name: nodeOf.get(ref.key)?.name ?? (finding.treatment?.trim() || finding.treatmentCode || ref.key), papers: 0, counts: emptyCounts(), newPapers: 0, did: [], watch: [], studies: [] }, first: finding, findings: [] }
+      const first = firstOf.get(ref.key) ?? finding
+      slot = { evidence: { key: ref.key, name: nodeOf.get(ref.key)?.name ?? (first.treatment?.trim() || first.treatmentCode || ref.key), papers: 0, counts: emptyCounts(), newPapers: 0, did: [], watch: [], studies: [] }, findings: [] }
       slots.set(id, slot)
       entry.treatments.push(slot.evidence)
-    }
-    // A treatment the pack does not know is named as its earliest-listed finding wrote it.
-    if (!nodeOf.has(ref.key) && finding.firstListedAt < slot.first.firstListedAt) {
-      slot.first = finding
-      slot.evidence.name = finding.treatment?.trim() || finding.treatmentCode || slot.evidence.name
     }
     slot.evidence.papers += 1
     slot.evidence.counts[kind] += 1
@@ -213,7 +250,7 @@ function organise(findings: Finding[], taxonomy: Taxonomy, now: Date, studyOf: (
   for (const slot of slots.values()) {
     const ordered = [...slot.findings].sort(newestFirst)
     const withText = ordered.filter((finding) => finding.text?.trim())
-    slot.evidence.studies = ordered.map(studyOf)
+    slot.evidence.studies = ordered.map((finding) => studyOf(finding, now, saved))
     slot.evidence.did = withText.filter((finding) => finding.kind === "benefit").slice(0, SHORT_LIST).map((finding) => ({ text: finding.text as string, key: finding.key }))
     slot.evidence.watch = withText
       .filter((finding) => finding.kind === "safety" || finding.kind === "no-benefit" || finding.kind === "mixed")
@@ -223,7 +260,7 @@ function organise(findings: Finding[], taxonomy: Taxonomy, now: Date, studyOf: (
   for (const entry of ordered) entry.treatments.sort((a, b) => b.papers - a.papers || a.name.localeCompare(b.name))
   const research = RESEARCH_TYPES.filter((type) => researchFindings.has(type)).map((type) => {
     const mine = [...(researchFindings.get(type) as Finding[])].sort(newestFirst)
-    return { type, papers: mine.length, newPapers: mine.filter((finding) => isNew(finding, now)).length, studies: mine.map(studyOf) }
+    return { type, papers: mine.length, newPapers: mine.filter((finding) => isNew(finding, now)).length, studies: mine.map((finding) => studyOf(finding, now, saved)) }
   }).sort((a, b) => b.papers - a.papers)
   return { classes: ordered, classOf, research }
 }
@@ -242,16 +279,9 @@ export function buildConditionEvidence(findings: Finding[], taxonomy: Taxonomy, 
   const period = opts.period ?? "all"
   const all = inCondition(findings, taxonomy, conditionCode)
   const cutoff = period === "all" ? null : daysBefore(opts.now, PERIOD_DAYS[period])
-  // A publication day that has not come yet is inside every period.
-  const mine = cutoff === null ? all : all.filter((finding) => dayOf(finding) >= cutoff)
-  const studyOf = (finding: Finding): Study => ({
-    key: finding.key, slug: finding.slug, headline: finding.headline, takeaway: finding.takeaway, label: studyLabel(finding),
-    venue: finding.paper.venue ?? null, date: shownDate(finding), design: finding.design, designNamed: designNamed(finding),
-    population: finding.population, sampleSize: finding.sampleSize, comparator: finding.comparator, outcome: finding.outcome,
-    kind: finding.kind, text: finding.text, treatment: finding.treatment?.trim() || null, isNew: isNew(finding, opts.now), saved: opts.savedSlugs?.has(finding.slug) ?? false,
-  })
-  const { classes, classOf, research } = organise(mine, taxonomy, opts.now, studyOf)
-  const safety = mine.filter((finding) => finding.kind === "safety").sort(newestFirst).map(studyOf)
+  const mine = cutoff === null ? all : all.filter((finding) => inPeriod(finding, cutoff))
+  const { classes, classOf, research } = organise(mine, all, taxonomy, opts.now, opts.savedSlugs)
+  const safety = mine.filter((finding) => finding.kind === "safety").sort(newestFirst).map((finding) => studyOf(finding, opts.now, opts.savedSlugs))
 
   const months = monthsBefore(opts.now, TIMELINE_MONTHS)
   const drawn = classes.filter((entry) => entry.key !== OTHER).slice(0, TIMELINE_SERIES)
@@ -273,8 +303,7 @@ export function followedConditions(findings: Finding[], taxonomy: Taxonomy, watc
     .filter((node) => node.type === "condition" && codes.has(node.id))
     .map((node) => {
       const mine = inCondition(findings, taxonomy, node.id)
-      // Only the classes are read here, so the studies are left empty.
-      const { classes } = organise(mine, taxonomy, now, (finding) => ({ key: finding.key }) as Study)
+      const { classes } = organise(mine, mine, taxonomy, now)
       return {
         code: node.id, name: node.name, total: mine.length, recent: mine.filter((finding) => isNew(finding, now)).length,
         treatments: classes.slice(0, TOP_CLASSES).map((entry) => ({ key: entry.key, label: entry.label })),

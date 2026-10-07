@@ -21,6 +21,10 @@ const TAXONOMY = TaxonomySchema.parse({ version: "t", nodes: [
   { id: "rtms", type: "treatment", name: "rTMS", modality: "neuromodulation", parents: ["neuromodulation"] },
   { id: "ect", type: "treatment", name: "Electroconvulsive therapy", modality: "neuromodulation" },
   { id: "lightbox", type: "treatment", name: "Bright light", modality: "other" },
+  { id: "exercise", type: "treatment", name: "Exercise", modality: "other" },
+  { id: "light-therapy", type: "treatment", name: "Light therapy", modality: "other" },
+  { id: "digital-interventions", type: "treatment", name: "Digital interventions", modality: "other" },
+  { id: "mdma-assisted-therapy", type: "treatment", name: "MDMA-assisted therapy", modality: "other" },
 ] })
 /** No node for psychotherapy or neuromodulation: a parentless therapy and a parentless stimulation. */
 const BARE = TaxonomySchema.parse({ version: "t", nodes: [
@@ -218,8 +222,77 @@ describe("a study", () => {
     expect(build([finding(1, { date: "" })]).classes[0].treatments[0].studies[0].label).toBeNull()
   })
   it("carries its parts, and whether the paper is saved", () => {
-    const study = build([finding(1, { sampleSize: 120 })], { now: NOW, savedSlugs: new Set(["paper-1"]) }).classes[0].treatments[0].studies[0]
+    const study = build([finding(1, { sampleSize: 120, takeaway: "Ketamine helped 120 adults." })], { now: NOW, savedSlugs: new Set(["paper-1"]) }).classes[0].treatments[0].studies[0]
     expect(study).toMatchObject({ key: "pmid:1", slug: "paper-1", headline: "Headline 1", venue: "A Journal", date: "2026-09-20", designNamed: true, sampleSize: 120, text: "reduced symptoms", treatment: "Ketamine", saved: true })
+  })
+  // Final review I1: a size stored before the check is not shown unless the paper ties it to people.
+  it("shows a stored sample size only when the paper's title, abstract, headline or takeaway ties it to people", () => {
+    const sizeOf = (over: Partial<Finding>, abstract?: string) => {
+      const base = finding(1, over)
+      return build([abstract === undefined ? base : { ...base, paper: { ...base.paper, abstract } }]).classes[0].treatments[0].studies[0].sampleSize
+    }
+    expect(sizeOf({ sampleSize: 2019 }, "Adults were recruited between 2019 and 2021.")).toBeNull()
+    expect(sizeOf({ sampleSize: 12 }, "Adults were followed for 12 weeks.")).toBeNull()
+    expect(sizeOf({ sampleSize: 52 }, "We pooled 52 studies (2856 participants).")).toBeNull()
+    expect(sizeOf({ sampleSize: 2856 }, "We pooled 52 studies (2856 participants).")).toBe(2856)
+    expect(sizeOf({ sampleSize: 180 }, "We enrolled 180 treatment-resistant patients.")).toBe(180)
+    expect(sizeOf({ sampleSize: 42, headline: "Ketamine in depression (n = 42)" })).toBe(42)
+    expect(sizeOf({ sampleSize: 120 })).toBeNull()
+    expect(sizeOf({ sampleSize: null }, "n = 42")).toBeNull()
+  })
+})
+
+describe("what the period does not change", () => {
+  // Final review M1.
+  it("keeps the class of an uncoded treatment when the finding that gives it is outside the period", () => {
+    const findings = [uncoded(1, "Yoga", { date: daysAgo(10) }), uncoded(2, "Yoga", { treatmentClass: "lifestyle", date: daysAgo(300) })]
+    expect(build(findings).classes.map((entry) => [entry.key, entry.papers])).toEqual([["lifestyle", 2]])
+    expect(build(findings, { now: NOW, period: "3m" }).classes.map((entry) => [entry.key, entry.papers])).toEqual([["lifestyle", 1]])
+  })
+  it("keeps the spelling of an uncoded treatment when its earliest-listed finding is outside the period", () => {
+    const findings = [
+      uncoded(1, "exercise training", { date: daysAgo(10), firstListedAt: "2026-10-03T10:00:00.000Z" }),
+      uncoded(2, "Exercise Training", { date: daysAgo(300), firstListedAt: "2026-01-03T10:00:00.000Z" }),
+    ]
+    for (const period of ["all", "3m"] as const) expect(build(findings, { now: NOW, period }).classes[0].treatments[0].name).toBe("Exercise Training")
+  })
+})
+
+describe("a pack treatment of no modality the pack names", () => {
+  // Final review M2.
+  const node = (n: number, id: string, over: Partial<Finding> = {}) => finding(n, { treatment: id, treatmentCode: id, ...over })
+  it("takes a class by its id when no finding gives one", () => {
+    const evidence = build([node(1, "exercise"), node(2, "light-therapy"), node(3, "digital-interventions"), node(4, "mdma-assisted-therapy"), node(5, "lightbox")])
+    expect(evidence.classes.map((entry) => [entry.key, entry.treatments.map((treatment) => treatment.key).sort()])).toEqual([
+      ["lifestyle", ["exercise", "light-therapy"]], ["digital", ["digital-interventions"]], ["medicine", ["mdma-assisted-therapy"]], ["other", ["lightbox"]],
+    ])
+  })
+  it("takes the class of its findings before the one of its id", () => {
+    expect(classKeys(build([node(1, "exercise"), node(2, "exercise", { treatmentClass: "digital" })]))).toEqual(["digital"])
+  })
+})
+
+describe("a paper filed under both a treatment and a type of research", () => {
+  // Final review I3: the five stored before the store kept them apart.
+  it("goes to Other research when it has a type of research, no class and no code", () => {
+    const evidence = build([uncoded(1, "sleep", { researchType: "risk-factor" }), uncoded(2, "sleep", { researchType: "risk-factor", treatmentClass: "lifestyle" }), finding(3, { researchType: "mechanism" })])
+    expect(evidence.research.map((group) => [group.type, group.studies.map((study) => study.key)])).toEqual([["risk-factor", ["pmid:1"]]])
+    expect(evidence.classes.map((entry) => [entry.key, entry.papers])).toEqual([["lifestyle", 1], ["medicine", 1]])
+  })
+})
+
+describe("a publication date that is only a year", () => {
+  // Final review M3. NOW is 2026-10-07: the 12-month cutoff is in 2025, the 3-month one in 2026.
+  const yearOnly = (year: string) => [finding(1, { date: year, addedDate: daysAgo(5) })]
+  it("is outside a period when the year is before the year of the cutoff", () => {
+    expect(build(yearOnly("2024"), { now: NOW, period: "12m" }).total).toBe(0)
+    expect(build(yearOnly("2025"), { now: NOW, period: "3m" }).total).toBe(0)
+    expect(build(yearOnly("2024"), { now: NOW, period: "all" }).total).toBe(1)
+  })
+  it("goes by the day it entered PubMed, as before, when the year is the cutoff's or later", () => {
+    expect(build(yearOnly("2025"), { now: NOW, period: "12m" }).total).toBe(1)
+    expect(build(yearOnly("2026"), { now: NOW, period: "3m" }).total).toBe(1)
+    expect(build([finding(1, { date: "2026", addedDate: daysAgo(200) })], { now: NOW, period: "3m" }).total).toBe(0)
   })
 })
 

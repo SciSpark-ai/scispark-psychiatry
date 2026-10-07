@@ -36,6 +36,19 @@ function findingsOf(feed: StoredFeed, taxonomy: Taxonomy): Finding[] {
   })
 }
 
+/**
+ * What the paper is about after a newer answer (final review I3): a treatment, or a type of research, never both.
+ * The latest answer decides. One that names a treatment files the paper under it; one that names none and gives a
+ * type of research clears the treatment, its code and its class; one that gives neither keeps an earlier treatment,
+ * so a thin answer does not erase it, and with a treatment standing there is no type of research.
+ */
+function subjectOf(earlier: Finding, newer: Finding): Pick<Finding, "treatment" | "treatmentCode" | "treatmentClass" | "researchType"> {
+  if (newer.treatment !== null) return { treatment: newer.treatment, treatmentCode: newer.treatmentCode, treatmentClass: newer.treatmentClass ?? earlier.treatmentClass, researchType: null }
+  if (newer.researchType !== null) return { treatment: null, treatmentCode: null, treatmentClass: null, researchType: newer.researchType }
+  const { treatment, treatmentCode } = earlier
+  return { treatment, treatmentCode, treatmentClass: newer.treatmentClass ?? earlier.treatmentClass, researchType: treatment !== null ? null : earlier.researchType }
+}
+
 /** The earlier finding of a paper joined with a newer listing of it. */
 function merged(earlier: Finding, newer: Finding): Finding {
   const answered = newer.kind !== null
@@ -45,10 +58,8 @@ function merged(earlier: Finding, newer: Finding): Finding {
     // A newer listing replaces text only when it has some: a search without summaries must not blank an earlier one.
     ...(newer.takeaway ? { headline: newer.headline, takeaway: newer.takeaway } : {}),
     ...(answered ? { kind: newer.kind, text: newer.text, population: newer.population, comparator: newer.comparator, outcome: newer.outcome } : {}),
-    // A newer answer that names no treatment does not erase one an earlier answer named.
-    ...(answered && newer.treatment !== null ? { treatment: newer.treatment, treatmentCode: newer.treatmentCode } : {}),
-    // Likewise for the class, the type of research and the sample size.
-    ...(answered ? { treatmentClass: newer.treatmentClass ?? earlier.treatmentClass, researchType: newer.researchType ?? earlier.researchType, sampleSize: newer.sampleSize ?? earlier.sampleSize } : {}),
+    // A listing without an answer changes nothing of what the paper is about; a newer sample size replaces an earlier one only when it has one.
+    ...(answered ? { ...subjectOf(earlier, newer), sampleSize: newer.sampleSize ?? earlier.sampleSize } : {}),
     conditionCodes: [...new Set([...earlier.conditionCodes, ...newer.conditionCodes])],
     firstListedAt: earlier.firstListedAt < newer.firstListedAt ? earlier.firstListedAt : newer.firstListedAt,
     lastListedAt: earlier.lastListedAt > newer.lastListedAt ? earlier.lastListedAt : newer.lastListedAt,
