@@ -12,6 +12,7 @@ import type { SpecialtyPack } from "../pack/schema"
 import { planQueries } from "../plan/skill"
 import { retrieve, type EnumerateFn } from "../retrieve/pool"
 import { scoreCandidate, type ScoredItem } from "../score/score"
+import { JOURNAL_TIER_BOOST, journalTierOf, loadJournalTiers } from "../score/journal-tiers"
 import { digestCards } from "../digest/card"
 import { seenRecently } from "../seen/store"
 import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
@@ -168,8 +169,11 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   })
 
   deps.onStage?.("select")
-  const scored = assessed.map((candidate) =>
-    scoreCandidate({ candidate, grade: gradeOf(candidate.key), mode, now: now(), journals: deps.pack.journals }))
+  const journalTiers = await loadJournalTiers(storage)
+  const scored = assessed.map((candidate) => {
+    const tier = journalTierOf(deps.pack.journals, journalTiers, candidate.paper.venue)
+    return scoreCandidate({ candidate, grade: gradeOf(candidate.key), mode, now: now(), journals: deps.pack.journals, journalBoost: tier ? JOURNAL_TIER_BOOST[tier] : 0 })
+  })
   // A paper already displayed to the user is not recommended again: it leaves the list and, if it
   // still matches, is kept under "Seen earlier".
   const selected = selectFeed(scored.filter((item) => !context.seen.has(item.candidate.key)), context.entries)

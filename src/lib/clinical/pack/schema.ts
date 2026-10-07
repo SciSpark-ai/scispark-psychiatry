@@ -49,6 +49,12 @@ export const JournalSchema = z
     openalexSourceId: z.string().regex(/^S\d+$/).optional(),
     tier: z.enum(["A", "B"]),
     state: z.enum(JOURNAL_STATES).default("normal"),
+    /**
+     * Leading journal (1), established specialty journal (2) or other (3): an editorial choice made by
+     * hand in journal-bands.json and written here by scripts/apply-journal-bands.mjs. No journal
+     * metric is used. It only orders papers within a match layer; a journal is not a paper.
+     */
+    band: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   })
   .refine((journal) => journal.issn !== undefined || journal.eissn !== undefined, {
     message: "a journal needs an ISSN or an eISSN",

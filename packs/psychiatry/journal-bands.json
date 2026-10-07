@@ -1,0 +1,26 @@
+{
+ "note": "An editorial choice, made by hand for this pack and meant to be edited: which journals count as leading (band 1) and as established specialty journals (band 2). Every other journal of the pack is band 3. No journal metric (impact factor, SJR, citation counts) was used to build this list. A band only orders papers within a match layer; it says nothing about an individual paper.",
+ "band1": [
+  "New England Journal of Medicine", "The Lancet", "JAMA", "BMJ", "JAMA Internal Medicine", "JAMA Network Open",
+  "Annals of Internal Medicine", "PLOS Medicine", "CMAJ", "Cochrane Database of Systematic Reviews",
+  "World Psychiatry", "JAMA Psychiatry", "The Lancet Psychiatry", "American Journal of Psychiatry",
+  "Molecular Psychiatry", "Biological Psychiatry", "The British Journal of Psychiatry", "Schizophrenia Bulletin",
+  "Journal of the American Academy of Child & Adolescent Psychiatry", "Journal of Child Psychology and Psychiatry",
+  "Neuropsychopharmacology", "Psychotherapy and Psychosomatics", "Nature Mental Health", "BMJ Mental Health",
+  "Evidence-Based Mental Health", "Epidemiology and Psychiatric Sciences", "Journal of Neurology Neurosurgery & Psychiatry"
+ ],
+ "band2": [
+  "Acta Psychiatrica Scandinavica", "The Journal of Clinical Psychiatry", "Translational Psychiatry",
+  "European Neuropsychopharmacology", "European Psychiatry", "Schizophrenia Research", "Psychiatry Research",
+  "Journal of Psychiatric Research", "The Canadian Journal of Psychiatry", "Australian & New Zealand Journal of Psychiatry",
+  "European Child & Adolescent Psychiatry", "American Journal of Geriatric Psychiatry", "International Journal of Geriatric Psychiatry",
+  "Psychiatric Services", "General Hospital Psychiatry", "Journal of Psychopharmacology", "Psychopharmacology",
+  "The International Journal of Neuropsychopharmacology", "Journal of Clinical Psychopharmacology",
+  "Journal of Child and Adolescent Psychopharmacology", "Social Psychiatry and Psychiatric Epidemiology",
+  "Current Opinion in Psychiatry", "Current Psychiatry Reports", "Harvard Review of Psychiatry", "Psychosomatic Medicine",
+  "Journal of Psychiatry and Neuroscience", "Biological Psychiatry Cognitive Neuroscience and Neuroimaging",
+  "The World Journal of Biological Psychiatry", "Progress in Neuro-Psychopharmacology and Biological Psychiatry",
+  "Psychiatry and Clinical Neurosciences", "Comprehensive Psychiatry", "General Psychiatry", "Schizophrenia",
+  "JMIR Mental Health", "Psychotherapy Research", "Clinical Psychology & Psychotherapy"
+ ]
+}

@@ -8,6 +8,7 @@ export interface ScoreBreakdown {
   evidence: number
   recency: number
   journalPrior: number
+  journalBoost?: number
   /** Weights actually applied, normalised over the signals available in this slice (no practice impact yet). */
   weights: { relevance: number; evidence: number; recency: number }
 }
@@ -63,6 +64,8 @@ export function scoreCandidate(input: {
   mode: FeedMode
   now: Date
   journals: Journal[]
+  /** Points for the journal's tier, from the user's own tiers file (score/journal-tiers.ts). */
+  journalBoost?: number
 }): ScoredItem {
   const params = MODES[input.mode]
   const { relevance: wr, evidence: we, recency: wc } = params.weights
@@ -72,6 +75,7 @@ export function scoreCandidate(input: {
   const relevance = relevanceScore(input.grade)
   const evidence = Math.max(0, Math.min(100, DESIGN_TIER[input.candidate.design] + prior))
   const recency = recencyScore(input.candidate.paper.date, input.now, params.halfLifeDays)
-  const score = weights.relevance * relevance + weights.evidence * evidence + weights.recency * recency
-  return { candidate: input.candidate, grade: input.grade, score, breakdown: { relevance, evidence, recency, journalPrior: prior, weights } }
+  const journalBoost = input.journalBoost ?? 0
+  const score = Math.min(100, weights.relevance * relevance + weights.evidence * evidence + weights.recency * recency + journalBoost)
+  return { candidate: input.candidate, grade: input.grade, score, breakdown: { relevance, evidence, recency, journalPrior: prior, weights, ...(journalBoost ? { journalBoost } : {}) } }
 }

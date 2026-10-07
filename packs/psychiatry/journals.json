@@ -7,7 +7,8 @@
    "eissn": "1545-7230",
    "openalexSourceId": "S156058904",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Acta Neuropsychiatrica",
@@ -15,7 +16,8 @@
    "eissn": "1601-5215",
    "openalexSourceId": "S173281865",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Acta Psychiatrica Scandinavica",
@@ -23,7 +25,8 @@
    "eissn": "1600-0447",
    "openalexSourceId": "S199498439",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Administration and Policy in Mental Health and Mental Health Services Research",
@@ -31,7 +34,8 @@
    "eissn": "1573-3289",
    "openalexSourceId": "S106668787",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Aging & Mental Health",
@@ -39,14 +43,16 @@
    "eissn": "1364-6915",
    "openalexSourceId": "S165966931",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "ALPHA PSYCHIATRY",
    "issn": "2757-8038",
    "openalexSourceId": "S4210208099",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "American Journal of Geriatric Psychiatry",
@@ -54,7 +60,8 @@
    "eissn": "1545-7214",
    "openalexSourceId": "S182891740",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "American Journal of Orthopsychiatry",
@@ -62,7 +69,8 @@
    "eissn": "1939-0025",
    "openalexSourceId": "S84156235",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "American Journal of Psychiatry",
@@ -70,7 +78,8 @@
    "eissn": "1535-7228",
    "openalexSourceId": "S116025658",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "American Journal of Psychotherapy",
@@ -78,14 +87,16 @@
    "eissn": "2575-6559",
    "openalexSourceId": "S61026369",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Annals of General Psychiatry",
    "issn": "1744-859X",
    "openalexSourceId": "S196365082",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Archives of Psychiatric Nursing",
@@ -93,7 +104,8 @@
    "eissn": "1532-8228",
    "openalexSourceId": "S69840963",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Archives of Women s Mental Health",
@@ -101,7 +113,8 @@
    "eissn": "1435-1102",
    "openalexSourceId": "S4210187589",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Asia-Pacific Psychiatry",
@@ -109,7 +122,8 @@
    "eissn": "1758-5872",
    "openalexSourceId": "S78012151",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Asian Journal of Psychiatry",
@@ -117,7 +131,8 @@
    "eissn": "1876-2026",
    "openalexSourceId": "S152361726",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Australian & New Zealand Journal of Psychiatry",
@@ -125,7 +140,8 @@
    "eissn": "1440-1614",
    "openalexSourceId": "S179943861",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Biological Psychiatry",
@@ -133,7 +149,8 @@
    "eissn": "1873-2402",
    "openalexSourceId": "S205482884",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Biological Psychiatry Cognitive Neuroscience and Neuroimaging",
@@ -141,28 +158,32 @@
    "eissn": "2451-9030",
    "openalexSourceId": "S2898601774",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Biological Psychiatry Global Open Science",
    "issn": "2667-1743",
    "openalexSourceId": "S4210179861",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "BMC Psychiatry",
    "issn": "1471-244X",
    "openalexSourceId": "S94610253",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "BMJ Mental Health",
    "issn": "2755-9734",
    "openalexSourceId": "S4387287103",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Brazilian Journal of Psychiatry",
@@ -170,14 +191,16 @@
    "eissn": "1809-452X",
    "openalexSourceId": "S71457257",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Cambridge Prisms Global Mental Health",
    "issn": "2054-4251",
    "openalexSourceId": "S4210238114",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Child and Adolescent Mental Health",
@@ -185,14 +208,16 @@
    "eissn": "1475-3588",
    "openalexSourceId": "S8329894",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Child and Adolescent Psychiatry and Mental Health",
    "issn": "1753-2000",
    "openalexSourceId": "S133884896",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Child Psychiatry & Human Development",
@@ -200,7 +225,8 @@
    "eissn": "1573-3327",
    "openalexSourceId": "S137373642",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Clinical Child Psychology and Psychiatry",
@@ -208,7 +234,8 @@
    "eissn": "1461-7021",
    "openalexSourceId": "S25859030",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Clinical Psychology & Psychotherapy",
@@ -216,7 +243,8 @@
    "eissn": "1099-0879",
    "openalexSourceId": "S24464885",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Clinical Psychopharmacology and Neuroscience",
@@ -224,7 +252,8 @@
    "eissn": "2093-4327",
    "openalexSourceId": "S2764824292",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Comprehensive Psychiatry",
@@ -232,7 +261,8 @@
    "eissn": "1532-8384",
    "openalexSourceId": "S110368005",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Culture Medicine and Psychiatry",
@@ -240,7 +270,8 @@
    "eissn": "1573-076X",
    "openalexSourceId": "S75857574",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Current Opinion in Psychiatry",
@@ -248,7 +279,8 @@
    "eissn": "1473-6578",
    "openalexSourceId": "S15258550",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Current Psychiatry Reports",
@@ -256,14 +288,16 @@
    "eissn": "1535-1645",
    "openalexSourceId": "S124600697",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Discover Mental Health",
    "issn": "2731-4383",
    "openalexSourceId": "S4210224676",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Epidemiology and Psychiatric Sciences",
@@ -271,7 +305,8 @@
    "eissn": "2045-7979",
    "openalexSourceId": "S2481255041",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "European Archives of Psychiatry and Clinical Neuroscience",
@@ -279,7 +314,8 @@
    "eissn": "0175-758X",
    "openalexSourceId": "S105662685",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "European Child & Adolescent Psychiatry",
@@ -287,7 +323,8 @@
    "eissn": "1435-165X",
    "openalexSourceId": "S159275680",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "European Neuropsychopharmacology",
@@ -295,7 +332,8 @@
    "eissn": "1873-7862",
    "openalexSourceId": "S168041952",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "European Psychiatry",
@@ -303,7 +341,8 @@
    "eissn": "1778-3585",
    "openalexSourceId": "S87202501",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Evidence-Based Mental Health",
@@ -311,7 +350,8 @@
    "eissn": "1468-960X",
    "openalexSourceId": "S160517820",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Experimental and Clinical Psychopharmacology",
@@ -319,14 +359,16 @@
    "eissn": "1936-2293",
    "openalexSourceId": "S357931",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Frontiers in Psychiatry",
    "issn": "1664-0640",
    "openalexSourceId": "S92766711",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "General Hospital Psychiatry",
@@ -334,7 +376,8 @@
    "eissn": "1873-7714",
    "openalexSourceId": "S45708651",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "General Psychiatry",
@@ -342,7 +385,8 @@
    "eissn": "2517-729X",
    "openalexSourceId": "S4210225740",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Harvard Review of Psychiatry",
@@ -350,7 +394,8 @@
    "eissn": "1465-7309",
    "openalexSourceId": "S7919625",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "International Clinical Psychopharmacology",
@@ -358,7 +403,8 @@
    "eissn": "1473-5857",
    "openalexSourceId": "S149156103",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "International Journal of Geriatric Psychiatry",
@@ -366,7 +412,8 @@
    "eissn": "1099-1166",
    "openalexSourceId": "S77085303",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "International Journal of Law and Psychiatry",
@@ -374,7 +421,8 @@
    "eissn": "1873-6386",
    "openalexSourceId": "S44052652",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "International Journal of Mental Health and Addiction",
@@ -382,7 +430,8 @@
    "eissn": "1557-1882",
    "openalexSourceId": "S47841752",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "International Journal of Mental Health Nursing",
@@ -390,14 +439,16 @@
    "eissn": "1447-0349",
    "openalexSourceId": "S175683280",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "International Journal of Mental Health Systems",
    "issn": "1752-4458",
    "openalexSourceId": "S172215273",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "International Journal of Methods in Psychiatric Research",
@@ -405,7 +456,8 @@
    "eissn": "1234-988X",
    "openalexSourceId": "S191377590",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "International Journal of Psychiatry in Clinical Practice",
@@ -413,7 +465,8 @@
    "eissn": "1471-1788",
    "openalexSourceId": "S203155535",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "International Journal of Social Psychiatry",
@@ -421,7 +474,8 @@
    "eissn": "1741-2854",
    "openalexSourceId": "S92508993",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "International Review of Psychiatry",
@@ -429,7 +483,8 @@
    "eissn": "1369-1627",
    "openalexSourceId": "S136737876",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "JAMA Psychiatry",
@@ -437,14 +492,16 @@
    "eissn": "2168-6238",
    "openalexSourceId": "S2495708506",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "JMIR Mental Health",
    "issn": "2368-7959",
    "openalexSourceId": "S2764449704",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Journal of Behavior Therapy and Experimental Psychiatry",
@@ -452,7 +509,8 @@
    "eissn": "1873-7943",
    "openalexSourceId": "S117021518",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of Child and Adolescent Psychopharmacology",
@@ -460,7 +518,8 @@
    "eissn": "1557-8992",
    "openalexSourceId": "S198272637",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Journal of Child Psychology and Psychiatry",
@@ -468,7 +527,8 @@
    "eissn": "1469-7610",
    "openalexSourceId": "S177929781",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Journal of Clinical Psychopharmacology",
@@ -476,7 +536,8 @@
    "eissn": "1533-712X",
    "openalexSourceId": "S76849566",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Journal of Gay & Lesbian Mental Health",
@@ -484,7 +545,8 @@
    "eissn": "1935-9713",
    "openalexSourceId": "S169858581",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of Geriatric Psychiatry and Neurology",
@@ -492,7 +554,8 @@
    "eissn": "1552-5708",
    "openalexSourceId": "S182765863",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of Mental Health",
@@ -500,7 +563,8 @@
    "eissn": "1360-0567",
    "openalexSourceId": "S112414500",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of Neurology Neurosurgery & Psychiatry",
@@ -508,7 +572,8 @@
    "eissn": "1468-330X",
    "openalexSourceId": "S134773490",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Journal of Neuropsychiatry",
@@ -516,7 +581,8 @@
    "eissn": "1545-7222",
    "openalexSourceId": "S50352613",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of Psychiatric and Mental Health Nursing",
@@ -524,7 +590,8 @@
    "eissn": "1365-2850",
    "openalexSourceId": "S92129386",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of Psychiatric Research",
@@ -532,7 +599,8 @@
    "eissn": "1879-1379",
    "openalexSourceId": "S160879026",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Journal of Psychiatry and Neuroscience",
@@ -540,7 +608,8 @@
    "eissn": "1488-2434",
    "openalexSourceId": "S141047287",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Journal of Psychopharmacology",
@@ -548,7 +617,8 @@
    "eissn": "1461-7285",
    "openalexSourceId": "S136368880",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Journal of Psychosomatic Obstetrics & Gynecology",
@@ -556,7 +626,8 @@
    "eissn": "1743-8942",
    "openalexSourceId": "S94520284",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of Psychosomatic Research",
@@ -564,7 +635,8 @@
    "eissn": "1879-1360",
    "openalexSourceId": "S151416048",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of the Academy of Consultation-Liaison Psychiatry",
@@ -572,7 +644,8 @@
    "eissn": "2667-2979",
    "openalexSourceId": "S4210200583",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of the American Academy of Child & Adolescent Psychiatry",
@@ -580,14 +653,16 @@
    "eissn": "1527-5418",
    "openalexSourceId": "S60711021",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Journal of the American Academy of Psychiatry and the Law online/The journal of the American Academy of Psychiatry and the Law",
    "issn": "1093-6793",
    "openalexSourceId": "S71178850",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Journal of the American Psychiatric Nurses Association",
@@ -595,14 +670,16 @@
    "eissn": "1532-5725",
    "openalexSourceId": "S45398401",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Mental Health & Prevention",
    "issn": "2212-6570",
    "openalexSourceId": "S2898104552",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Mental health and physical activity",
@@ -610,7 +687,8 @@
    "eissn": "1878-0199",
    "openalexSourceId": "S112317789",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Molecular Psychiatry",
@@ -618,14 +696,16 @@
    "eissn": "1476-5578",
    "openalexSourceId": "S71149355",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Nature Mental Health",
    "issn": "2731-6076",
    "openalexSourceId": "S4387286578",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Neuropsychiatric Disease and Treatment",
@@ -633,7 +713,8 @@
    "eissn": "1178-2021",
    "openalexSourceId": "S124245730",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Neuropsychopharmacology",
@@ -641,7 +722,8 @@
    "eissn": "1740-634X",
    "openalexSourceId": "S175030738",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Personality and Mental Health",
@@ -649,7 +731,8 @@
    "eissn": "1932-863X",
    "openalexSourceId": "S152855201",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Perspectives In Psychiatric Care",
@@ -657,7 +740,8 @@
    "eissn": "1744-6163",
    "openalexSourceId": "S160642813",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Progress in Neuro-Psychopharmacology and Biological Psychiatry",
@@ -665,7 +749,8 @@
    "eissn": "1878-4216",
    "openalexSourceId": "S142279999",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Psychiatric Clinics of North America",
@@ -673,7 +758,8 @@
    "eissn": "1558-3147",
    "openalexSourceId": "S121233926",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Psychiatric Quarterly",
@@ -681,7 +767,8 @@
    "eissn": "1573-6709",
    "openalexSourceId": "S135469663",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Psychiatric Services",
@@ -689,7 +776,8 @@
    "eissn": "1075-2730",
    "openalexSourceId": "S171176648",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Psychiatry",
@@ -697,7 +785,8 @@
    "eissn": "1943-281X",
    "openalexSourceId": "S959787170",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Psychiatry and Clinical Neurosciences",
@@ -705,7 +794,8 @@
    "eissn": "1440-1819",
    "openalexSourceId": "S111042112",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Psychiatry Psychology and Law",
@@ -713,7 +803,8 @@
    "eissn": "1934-1687",
    "openalexSourceId": "S94954469",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Psychiatry Research",
@@ -721,7 +812,8 @@
    "eissn": "1872-7123",
    "openalexSourceId": "S84074229",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Psychoanalytic Psychotherapy",
@@ -729,7 +821,8 @@
    "eissn": "1474-9734",
    "openalexSourceId": "S151718985",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Psychology and Psychotherapy Theory Research and Practice",
@@ -737,7 +830,8 @@
    "eissn": "2044-8341",
    "openalexSourceId": "S189894822",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Psychopharmacology",
@@ -745,7 +839,8 @@
    "eissn": "1432-2072",
    "openalexSourceId": "S80334769",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Psychosomatic Medicine",
@@ -753,7 +848,8 @@
    "eissn": "1534-7796",
    "openalexSourceId": "S78750095",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Psychotherapy",
@@ -761,7 +857,8 @@
    "eissn": "1939-1536",
    "openalexSourceId": "S133322011",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Psychotherapy and Psychosomatics",
@@ -769,7 +866,8 @@
    "eissn": "1423-0348",
    "openalexSourceId": "S184803288",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Psychotherapy Research",
@@ -777,7 +875,8 @@
    "eissn": "1468-4381",
    "openalexSourceId": "S204777700",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Research in Psychotherapy Psychopathology Process and Outcome",
@@ -785,14 +884,16 @@
    "eissn": "2499-7552",
    "openalexSourceId": "S4210176114",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Schizophrenia",
    "issn": "2754-6993",
    "openalexSourceId": "S4387281388",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Schizophrenia Bulletin",
@@ -800,7 +901,8 @@
    "eissn": "1745-1701",
    "openalexSourceId": "S117485531",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Schizophrenia Research",
@@ -808,14 +910,16 @@
    "eissn": "1573-2509",
    "openalexSourceId": "S144105592",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Schizophrenia Research Cognition",
    "issn": "2215-0013",
    "openalexSourceId": "S2898356475",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "School Mental Health",
@@ -823,7 +927,8 @@
    "eissn": "1866-2633",
    "openalexSourceId": "S92959288",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Social Psychiatry and Psychiatric Epidemiology",
@@ -831,7 +936,8 @@
    "eissn": "1433-9285",
    "openalexSourceId": "S189995291",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Society and Mental Health",
@@ -839,14 +945,16 @@
    "eissn": "2156-8731",
    "openalexSourceId": "S2764909113",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "SSM - Mental Health",
    "issn": "2666-5603",
    "openalexSourceId": "S4210190706",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "The Arts in Psychotherapy",
@@ -854,7 +962,8 @@
    "eissn": "1873-5878",
    "openalexSourceId": "S41882632",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "The British Journal of Psychiatry",
@@ -862,7 +971,8 @@
    "eissn": "1472-1465",
    "openalexSourceId": "S127936299",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "The Canadian Journal of Psychiatry",
@@ -870,7 +980,8 @@
    "eissn": "1497-0015",
    "openalexSourceId": "S8901149",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "The International Journal of Neuropsychopharmacology",
@@ -878,7 +989,8 @@
    "eissn": "1469-5111",
    "openalexSourceId": "S199972112",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "The Journal of Clinical Psychiatry",
@@ -886,7 +998,8 @@
    "eissn": "1534-8628",
    "openalexSourceId": "S17992710",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "The Lancet Psychiatry",
@@ -894,7 +1007,8 @@
    "eissn": "2215-0374",
    "openalexSourceId": "S2531556786",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "The World Journal of Biological Psychiatry",
@@ -902,7 +1016,8 @@
    "eissn": "1814-1412",
    "openalexSourceId": "S68933629",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "Therapeutic Advances in Psychopharmacology",
@@ -910,7 +1025,8 @@
    "eissn": "2045-1261",
    "openalexSourceId": "S2765027927",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Transcultural Psychiatry",
@@ -918,21 +1034,24 @@
    "eissn": "1461-7471",
    "openalexSourceId": "S15609493",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "Translational Psychiatry",
    "issn": "2158-3188",
    "openalexSourceId": "S163345920",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 2
   },
   {
    "name": "World Journal of Psychiatry",
    "issn": "2220-3206",
    "openalexSourceId": "S2764369821",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "World Psychiatry",
@@ -940,7 +1059,8 @@
    "eissn": "2051-5545",
    "openalexSourceId": "S183644930",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Zeitschrift für psychosomatische Medizin und Psychotherapie",
@@ -948,76 +1068,87 @@
    "eissn": "2196-8349",
    "openalexSourceId": "S105638504",
    "tier": "A",
-   "state": "normal"
+   "state": "normal",
+   "band": 3
   },
   {
    "name": "New England Journal of Medicine",
    "issn": "0028-4793",
    "eissn": "1533-4406",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "The Lancet",
    "issn": "0140-6736",
    "eissn": "1474-547X",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "JAMA",
    "issn": "0098-7484",
    "eissn": "1538-3598",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "BMJ",
    "issn": "0959-8138",
    "eissn": "1756-1833",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "JAMA Internal Medicine",
    "issn": "2168-6106",
    "eissn": "2168-6114",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "JAMA Network Open",
    "eissn": "2574-3805",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Annals of Internal Medicine",
    "issn": "0003-4819",
    "eissn": "1539-3704",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "PLOS Medicine",
    "issn": "1549-1277",
    "eissn": "1549-1676",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "CMAJ",
    "issn": "0820-3946",
    "eissn": "1488-2329",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   },
   {
    "name": "Cochrane Database of Systematic Reviews",
    "issn": "1469-493X",
    "eissn": "1361-6137",
    "tier": "B",
-   "state": "normal"
+   "state": "normal",
+   "band": 1
   }
  ]
 }
