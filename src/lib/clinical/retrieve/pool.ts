@@ -1,5 +1,5 @@
 import { paperKey, type PaperRecord } from "../../papers/types"
-import { cleanAbstract, cleanTitle, qualityFlags } from "../text/clean"
+import { cleanAbstract, cleanTitle, qualityFlags, unescapeHtml } from "../text/clean"
 import type { PlannedQuery } from "../plan/queries"
 import type { Candidate, DropRecord, Provenance } from "../types"
 import { CLINICAL_COPY } from "../copy"
@@ -35,7 +35,9 @@ export function toCandidate(paper: PaperRecord, provenance: Provenance): Candida
   const title = cleanTitle(paper.title)
   if (!title) return null
   const abstract = cleanAbstract(paper.abstract)
-  const cleaned: PaperRecord = { ...paper, title, abstract }
+  // PubMed sends accented letters in names as character codes ("M&#xf8;llegaard"); show the letters.
+  const authors = (paper.authors ?? []).map((author) => ({ ...author, name: unescapeHtml(author.name) }))
+  const cleaned: PaperRecord = { ...paper, title, abstract, authors }
   return { paper: cleaned, key: paperKey(cleaned), provenance: [provenance], flags: qualityFlags({ title, abstract }) }
 }
 

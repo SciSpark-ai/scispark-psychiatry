@@ -14,6 +14,7 @@ import type { FeedbackKind } from "@/lib/clinical/feedback/store"
 import type { StoredFeedItem } from "@/lib/clinical/feed/stored"
 import { conclusionOf } from "@/lib/clinical/text/takeaway"
 import { writeReaderHandoff } from "@/lib/reader/handoff"
+import { unescapeHtml } from "@/lib/clinical/text/clean"
 import { toggleReadLater } from "@/lib/clinical/readlater/store"
 import { ClinicalFeedback } from "./ClinicalFeedback"
 
@@ -70,7 +71,9 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
 
   // The paper page finds a paper through the reader hand-off; a feed paper is in neither the wiki nor upstream's feed cache.
   async function open() {
-    try { await writeReaderHandoff(storage, paper) } catch { /* the page then shows its own "not found" */ }
+    // Lists stored before author names were cleaned may still carry character codes in them.
+    const record = { ...paper, authors: paper.authors.map((author) => ({ ...author, name: unescapeHtml(author.name) })) }
+    try { await writeReaderHandoff(storage, record) } catch { /* the page then shows its own "not found" */ }
     router.push(`/paper/${paperSlug(paper)}`)
   }
 
@@ -86,14 +89,19 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   return (
     <Card
       data-testid="clinical-feed-card"
+      // The whole card opens the paper; its buttons (votes, read later, save) keep the click to themselves.
+      onClick={() => void open()}
       {...(position === undefined ? {} : { id: `paper-${position}` })}
       // Inline, not utility classes: the tint has to win over the card's own background class.
       {...(tone === undefined ? {} : { "data-tone": String(tone), style: {
         "--card-tone": CARD_TONES[tone % CARD_TONES.length],
-        backgroundColor: "color-mix(in srgb, var(--card-tone) 2%, var(--surface-light))",
+        // --card-strength is raised by the hover and highlight classes below: the tint deepens a little.
+        backgroundColor: "color-mix(in srgb, var(--card-tone) var(--card-strength, 2%), var(--surface-light))",
         borderColor: "color-mix(in srgb, var(--card-tone) 14%, var(--border))",
       } as CSSProperties })}
-      className={`flex flex-col gap-2.5 p-4 transition-shadow ${highlighted ? "ring-2 ring-orange ring-offset-2" : ""}`}
+      {...(highlighted ? { "data-highlighted": "true" } : {})}
+      // A card stands out by a slightly deeper tint and a lift: gently under the pointer, more when jumped to.
+      className={`flex cursor-pointer flex-col gap-2.5 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:[--card-strength:6%] ${highlighted ? "-translate-y-1 shadow-xl [--card-strength:10%]" : ""}`}
     >
       {/* Tags are plain text, not pills: a pill's own background fights with the card's tint. */}
       <p className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-snug">
@@ -111,7 +119,7 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
         {item.ungraded && <span className="text-muted-text">{CLINICAL_COPY.feed.notGraded}</span>}
       </p>
       {/* With an AI headline the card shows only headline, source and summary; the paper's own title is on its page. */}
-      <button type="button" onClick={() => void open()} className="text-left" title={displayTitle(paper.title)}>
+      <button type="button" onClick={(event) => { event.stopPropagation(); void open() }} className="text-left" title={displayTitle(paper.title)}>
         <h3 className="line-clamp-3 font-heading text-[18px] font-semibold leading-snug tracking-heading-card text-espresso">{item.digest ? item.digest.headline : displayTitle(paper.title)}</h3>
       </button>
       {source && <p className="truncate text-[13px] font-medium text-secondary-dark" title={source}>{source}</p>}

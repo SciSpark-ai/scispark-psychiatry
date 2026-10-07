@@ -26,3 +26,5 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/components/layout/Sidebar.tsx | the edition name "Psychiatry" as plain text under the unchanged SciSpark wordmark; Read later added to the navigation; the watch list is named "My topics" | owner request 2026-10-06 (D5 sub-brand) | after first runs |
 | src/components/layout/__tests__/Sidebar.test.tsx | follows the above | owner request 2026-10-06 | after first runs |
 | src/lib/papers/pubmed.ts | `enumeratePubmed` can be given a record store: it then fetches only the records not held and returns every match in PubMed's order (`PubmedDeps.records`) | owner request 2026-10-07 (search locally first) | after first runs |
+| src/components/paper/PaperHeader.tsx | optional `headline`: the AI headline becomes the heading and the paper's own title goes beneath it | owner request 2026-10-07 | after first runs |
+| src/app/paper/[key]/page.tsx | the paper page shows the feed's AI headline and summary, and the abstract by section with readable labels | owner request 2026-10-07 | after first runs |

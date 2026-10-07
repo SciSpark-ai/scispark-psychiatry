@@ -5,7 +5,7 @@ import { IdBadges } from "@/components/papers/IdBadges"
 
 /** Full-page paper header (discovery/saved/ingested alike): title, authors,
  * venue, year, citations and identifiers. The reading column owns the abstract. */
-export function PaperHeader({ paper }: { paper: PaperRecord }) {
+export function PaperHeader({ paper, headline }: { paper: PaperRecord; /** Clinical edition: the AI headline of the feed card; the paper's own title then goes beneath it. */ headline?: string }) {
   const authorLine = paper.authors.map((a) => a.name).join(", ") || "Unknown authors"
   const metaLine = venueYearLine(paper.venue, paper.year)
 
@@ -13,8 +13,9 @@ export function PaperHeader({ paper }: { paper: PaperRecord }) {
     <header>
       <div className="max-w-[960px]">
         <h1 className="font-heading text-[30px] leading-[1.2] text-espresso tracking-heading sm:text-[36px] xl:text-[40px] [overflow-wrap:anywhere]">
-          {displayTitle(paper.title)}
+          {headline ?? displayTitle(paper.title)}
         </h1>
+        {headline && <p data-original-title="true" className="mt-3 text-[17px] leading-snug text-secondary-dark [overflow-wrap:anywhere]">{displayTitle(paper.title)}</p>}
         <p className="mt-4 text-[14px] leading-relaxed text-muted-text">{authorLine}</p>
       </div>
 

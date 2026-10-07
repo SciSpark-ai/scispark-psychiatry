@@ -20,6 +20,10 @@ import { rangeToOffsets, plainTextOf } from "@/lib/reader/dom-offsets"
 import type { SurfaceSelection } from "@/components/reader/HtmlSurface"
 import AskableSurface from "@/components/reader/AskableSurface"
 import { PaperHeader } from "@/components/paper/PaperHeader"
+import { ClinicalAbstract } from "@/components/clinical/ClinicalAbstract"
+import { ClinicalPaperSummary } from "@/components/clinical/ClinicalPaperSummary"
+import { useCardDigest } from "@/components/clinical/useCardDigest"
+import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { PaperActions, type DigestState, type EnrichState, type IngestState, type SaveState } from "@/components/paper/PaperActions"
 import { PaperDigestNavigation, PaperDigestView } from "@/components/paper/PaperDigestView"
 import paperStyles from "@/components/paper/PaperLayout.module.css"
@@ -110,6 +114,8 @@ function PaperPageContent() {
   const slug = Array.isArray(rawKey) ? (rawKey[0] ?? "") : (rawKey ?? "")
 
   const [load, setLoad] = useState<LoadState>({ status: "loading" })
+  // Clinical edition: the AI headline and summary the feed wrote for this paper, if any.
+  const cardDigest = useCardDigest(load.status === "ready" ? load.paper : null)
   const [digestState, setDigestState] = useState<DigestState>({ status: "idle" })
   const [ingestState, setIngestState] = useState<IngestState>({ phase: "idle" })
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" })
@@ -467,7 +473,8 @@ function PaperPageContent() {
               <div className="border-b border-border-warm pb-6">
                 <BackLink className="mb-6" />
 
-                <PaperHeader paper={load.paper} />
+                <PaperHeader paper={load.paper} headline={cardDigest?.headline} />
+                {cardDigest && <ClinicalPaperSummary digest={cardDigest} />}
 
                 <PaperActions
                   pageState={load.pageState}
@@ -511,8 +518,8 @@ function PaperPageContent() {
 
                   {load.paper.abstract && (
                     <details className={paperStyles.abstract} open={digestState.status !== "done" && load.pageState.state !== "ingested"}>
-                      <summary>Original abstract</summary>
-                      <p className={`${paperStyles.prose} mt-4`}>{load.paper.abstract}</p>
+                      <summary>{CLINICAL_COPY.paper.originalAbstract}</summary>
+                      <ClinicalAbstract text={load.paper.abstract} />
                     </details>
                   )}
                 </article>

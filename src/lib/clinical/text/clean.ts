@@ -13,7 +13,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   beta: "β", gamma: "γ", delta: "δ", ge: "≥", le: "≤",
 }
 
-function unescapeHtml(text: string): string {
+export function unescapeHtml(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, body: string) => {
     if (body[0] === "#") {
       const code = body[1].toLowerCase() === "x" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10)

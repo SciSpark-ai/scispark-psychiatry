@@ -71,6 +71,12 @@ export const CLINICAL_COPY = {
     published: (date: string) => `Published ${date}`,
     noDate: "Publication date unavailable",
   },
+  paper: {
+    aiSummary: "AI summary",
+    aiSummaryBasis: "Based on this sentence of the abstract:",
+    aiSummaryNote: "Written by AI from the abstract, not by the authors. Read the abstract before relying on it.",
+    originalAbstract: "Abstract",
+  },
   readLater: {
     heading: "Read later",
     intro: "Papers you put aside from your feed.",
