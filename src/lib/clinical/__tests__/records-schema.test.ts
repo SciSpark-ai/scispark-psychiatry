@@ -3,6 +3,8 @@ import { PATHS, TrialRecordSchema, emptyField, fieldPaths, getCode, getField, pa
 import { hedgesG, outcomeEffect, riskRatio } from "../records/effects"
 import { RECORD, num, unconfirmed } from "./records-fixture"
 
+const without = (value: object, ...keys: string[]) => Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)))
+
 describe("the trial record", () => {
   it("parses, and rejects a record whose result names an arm it does not have", () => {
     expect(TrialRecordSchema.parse(RECORD).arms).toHaveLength(2)
@@ -22,8 +24,8 @@ describe("the trial record", () => {
   it("parses a record stored before the check states and the paper were kept, as unchecked", () => {
     const old = {
       ...RECORD,
-      arms: RECORD.arms.map(({ roleState: _role, ...arm }) => arm),
-      outcomes: RECORD.outcomes.map(({ lowerIsBetterState: _benefit, primaryState: _primary, ...outcome }) => outcome),
+      arms: RECORD.arms.map((arm) => without(arm, "roleState")),
+      outcomes: RECORD.outcomes.map((outcome) => without(outcome, "lowerIsBetterState", "primaryState")),
     }
     const parsed = TrialRecordSchema.parse(JSON.parse(JSON.stringify(old)))
     expect(parsed.arms.map((arm) => arm.roleState)).toEqual(["unverified", "unverified"])

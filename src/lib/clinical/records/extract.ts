@@ -2,7 +2,7 @@
 import { z } from "zod"
 import { defineSkill } from "../../skills/types"
 import { runSkill } from "../../skills/runner"
-import { headAndTail } from "../../text"
+import { TEXT_GAP, headAndTail } from "../../text"
 import { paperKey, type PaperRecord } from "../../papers/types"
 import { paperSlug } from "../../wiki/authoring"
 import type { PaperTextInfo } from "../../papers/text-contract"
@@ -13,7 +13,7 @@ import type { Taxonomy } from "../pack/schema"
 import type { Design } from "../types"
 import { CLINICAL_COPY } from "../copy"
 import { numbers } from "../digest/card"
-import { quoteInText } from "../text/quote"
+import { quoteInText, squash } from "../text/quote"
 import { TrialRecordSchema, emptyField, type Arm, type NumberField, type Outcome, type TextField, type TrialRecord } from "./schema"
 
 /**
@@ -21,6 +21,10 @@ import { TrialRecordSchema, emptyField, type Arm, type NumberField, type Outcome
  * the sentence it read it from; code keeps a value only when that sentence is in the paper word for
  * word and, for a number, only when the number is printed in that sentence. What fails is dropped,
  * not shown with a warning: a table is computed from these values.
+ *
+ * A quote is a sentence, not a paragraph: a paragraph holds every number of the paper, so it would
+ * "print" any of them. And the name of an arm or of the condition must itself be in its quote, or a
+ * group the paper does not have could be made up from any real sentence.
  */
 
 /** Only these designs have arms to extract. A meta-analysis or a cohort is refused before any model call. */
@@ -28,6 +32,10 @@ export const EXTRACTABLE_DESIGNS: readonly Design[] = ["randomized-trial", "clin
 export class NotATrialError extends Error {}
 
 const MAX_TEXT_CHARS = 45_000
+export const MAX_QUOTE_CHARS = 400
+/** The end of a sentence inside a quote: a full stop, "!" or "?", perhaps a closing quote or bracket, a space, a capital letter. */
+const SENTENCE_BOUNDARY = /[.!?]["'\u201d\u2019)\]]?\s+(?=[A-Z])/g
+const GAP_MARK = TEXT_GAP.trim()
 
 const quoted = <T extends z.ZodType>(value: T) => z.object({ value: value.nullable().default(null), quote: z.string().nullable().default(null) })
 const text = quoted(z.string())
@@ -54,9 +62,9 @@ Return:
 - "arms": one entry per group. "id": "a1", "a2", ... "role": "treatment" for a group that got the treatment under study, "control" for placebo, usual care, waiting list or an active comparator. "treatment": what the group received. "treatmentCode": the code from the "treatments" list, or null. "n": how many were randomised to the group.
 - "outcomes": the primary outcome first, then up to four secondary outcomes. "id": "o1", "o2", ... "name": the outcome. "instrument": the scale or definition. "timepoint": when it was measured. "kind": "continuous" for a score, "binary" for an event (remission, response, relapse). "lowerIsBetter": true if a lower score or fewer events is the better result, false if the opposite, null if the text does not make it clear. "primary": true for the primary outcome. "results": for each arm that has numbers for this outcome, "armId" and "n" (analysed), "mean" and "sd" for a continuous outcome, "events" for a binary one.
 
-Every value is an object {"value", "quote"}. "quote" is ONE sentence of the text, copied word for word, in which the value is printed. For a number, the number itself must be in the quote. If the text does not print a value, return {"value": null, "quote": null}; never estimate, convert or calculate (no standard deviation from a standard error or a confidence interval, no count from a percentage).
+Every value is an object {"value", "quote"}. "quote" is one sentence, at most ${MAX_QUOTE_CHARS} characters, of the text, copied word for word, in which the value is printed. Never quote a paragraph, and never quote across a "[...]" mark. For a number, the number itself must be in the quote. For the condition and for what a group received, the words of the value must be in the quote. If the text does not print a value, return {"value": null, "quote": null}; never estimate, convert or calculate (no standard deviation from a standard error or a confidence interval, no count from a percentage).
 
-A value whose quote is not in the text word for word, or a number that is not in its quote, is thrown away. Add nothing from outside knowledge.`
+A value whose quote is longer than that, is not in the text word for word, or does not print the value, is thrown away. Add nothing from outside knowledge.`
 
 export const trialExtractionSkill = defineSkill<ExtractionInput, Extraction>({
   name: "clinical-trial-extraction",
@@ -86,22 +94,40 @@ function signedNumbers(quote: string): number[] {
 
 const ARM_ID = /^[a-z][a-z0-9]{0,15}$/
 
+/**
+ * Whether the quote prints the name: every word of the name that has four letters or more is in it.
+ * A name of shorter words only (an abbreviation) must be in it as it stands.
+ */
+function printsName(quote: string, name: string): boolean {
+  const printed = squash(quote)
+  const words = squash(name).match(/\p{L}{4,}/gu) ?? []
+  return words.length > 0 ? words.every((word) => printed.includes(word)) : printed.includes(squash(name))
+}
+
 /** Applies the checks. `dropped` counts values the model gave that did not pass. */
 export function checkExtraction(output: Extraction, sourceText: string, taxonomy: Taxonomy): {
   condition: TextField; conditionCode: string | null; arms: Arm[]; outcomes: Outcome[]; dropped: number
 } {
   let dropped = 0
-  const textField = (given: { value: string | null; quote: string | null }): TextField => {
+  /** The quote, tidied, when it is short enough, at most two sentences, on one side of a gap and in the paper word for word. */
+  const sentence = (quote: string | null): string | null => {
+    const clean = quote?.replace(/\s+/g, " ").trim() ?? ""
+    if (!clean || clean.length > MAX_QUOTE_CHARS || clean.includes(GAP_MARK)) return null
+    if ((clean.match(SENTENCE_BOUNDARY) ?? []).length > 1) return null
+    return quoteInText(clean, sourceText) ? clean : null
+  }
+  const textField = (given: { value: string | null; quote: string | null }, named = false): TextField => {
     const value = given.value?.replace(/\s+/g, " ").trim() ?? ""
     if (!value) return emptyField()
-    if (given.quote && quoteInText(given.quote, sourceText)) return { value, quote: given.quote.replace(/\s+/g, " ").trim(), state: "quote-verified" }
+    const quote = sentence(given.quote)
+    if (quote && (!named || printsName(quote, value))) return { value, quote, state: "quote-verified" }
     dropped++
     return emptyField()
   }
   const numberField = (given: { value: number | null; quote: string | null }): NumberField => {
     if (given.value === null || !Number.isFinite(given.value)) return emptyField()
-    const printed = given.quote ? signedNumbers(given.quote) : []
-    if (given.quote && quoteInText(given.quote, sourceText) && printed.includes(given.value)) return { value: given.value, quote: given.quote.replace(/\s+/g, " ").trim(), state: "quote-verified" }
+    const quote = sentence(given.quote)
+    if (quote && signedNumbers(quote).includes(given.value)) return { value: given.value, quote, state: "quote-verified" }
     dropped++
     return emptyField()
   }
@@ -110,7 +136,7 @@ export function checkExtraction(output: Extraction, sourceText: string, taxonomy
   const seen = new Set<string>()
   const arms: Arm[] = output.arms.flatMap((arm) => {
     if (!ARM_ID.test(arm.id) || seen.has(arm.id)) return []
-    const treatment = textField(arm.treatment)
+    const treatment = textField(arm.treatment, true)
     if (!treatment.value) return []
     seen.add(arm.id)
     return [{ id: arm.id, role: arm.role, roleState: "unverified" as const, treatment, treatmentCode: code(arm.treatmentCode, "treatment"), n: numberField(arm.n) }]
@@ -129,7 +155,9 @@ export function checkExtraction(output: Extraction, sourceText: string, taxonomy
     })
     return [{ id: outcome.id, name, instrument: textField(outcome.instrument), timepoint: textField(outcome.timepoint), kind: outcome.kind, lowerIsBetter: outcome.lowerIsBetter, lowerIsBetterState: "unverified" as const, primary: outcome.primary, primaryState: "unverified" as const, results }]
   })
-  return { condition: textField(output.condition), conditionCode: code(output.conditionCode, "condition"), arms, outcomes, dropped }
+  const condition = textField(output.condition, true)
+  // A code for a condition whose name did not pass is a code for nothing that was read.
+  return { condition, conditionCode: condition.value === null ? null : code(output.conditionCode, "condition"), arms, outcomes, dropped }
 }
 
 /** Extracts and checks; returns the record without storing it. Throws NotATrialError, or an Error when the model call fails. */
@@ -151,6 +179,6 @@ export async function extractTrialRecord(storage: VaultStorage, paper: PaperReco
   return TrialRecordSchema.parse({
     version: 1, paperKey: paperKey(paper), slug: paperSlug(paper), title: paper.title, year: paper.year ?? null, design: opts.design,
     conditionCode: checked.conditionCode, condition: checked.condition, arms: checked.arms, outcomes: checked.outcomes,
-    source: opts.source, extractedAt: (opts.now?.() ?? new Date()).toISOString(), model: "strong", droppedFields: checked.dropped,
+    source: opts.source, extractedAt: (opts.now?.() ?? new Date()).toISOString(), model: "strong", droppedFields: checked.dropped, paper,
   })
 }
