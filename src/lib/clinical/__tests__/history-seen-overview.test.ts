@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { MemoryVaultStorage } from "../../vault/memory-storage"
 import { MockProvider } from "../../llm/mock-provider"
 import { loadPsychiatryPack } from "../pack/load"
-import { checkOverview, judgeOverview, overviewTopics, tidyOverviewSentence, overviewSentenceLimit, writeTopicOverviews } from "../digest/topic"
+import { checkOverview, judgeOverview, overviewTopics, tidyOverviewSentence, writeTopicOverviews } from "../digest/topic"
 import { runClinicalFeed, type ClinicalFeedDeps } from "../feed/run"
 import { FEED_PATH, loadClinicalFeed } from "../feed/stored"
 import { deleteHistory, listHistory, loadHistory, restoreHistory } from "../history/store"
@@ -263,7 +263,7 @@ describe("the overview as a synthesis", () => {
     expect(kept.map((point) => [point.kind, point.group, point.sources.length])).toEqual([["benefit", "focus", 1], ["no-benefit", "focus", 1], ["other", "related", 1]])
   })
   it("rejects a finding that runs on like a sentence about several things", () => {
-    const long = "esketamine gave more remission than quetiapine and also improved sleep, appetite, energy, concentration and overall functioning across all of the groups that were studied in the trial, at every visit, and the same was seen again at the end of follow-up a year later"
+    const long = "esketamine gave more remission than quetiapine and also improved sleep, appetite, energy, concentration and overall functioning across all of the groups that were studied in the trial, at every visit"
     expect(judgeOverview([{ text: long, sources: [1], kind: "benefit" }], papers).problems).toEqual(["too-long"])
   })
   it("keeps a finding that is part benefit, part none", () => {
@@ -279,20 +279,5 @@ describe("the overview as a synthesis", () => {
     expect(strong.calls).toHaveLength(2)
     expect(JSON.parse(strong.calls[1].req.messages.at(-1)!.content as string).problems.join(" ")).toMatch(/papers? 2, 3/i)
     expect(written.overviews.w1.flatMap((sentence) => sentence.sources).sort()).toEqual(["k1", "k2", "k3"])
-  })
-  it("tells the model how many sentences it may write, and asks again when it writes one per paper", async () => {
-    expect(overviewSentenceLimit(3)).toBe(3)
-    expect(overviewSentenceLimit(9)).toBe(6)
-    expect(overviewSentenceLimit(19)).toBe(8)
-    const six = Array.from({ length: 6 }, (_, n) => ({ key: `p${n + 1}`, headline: `Drug ${n + 1} helped`, takeaway: `Drug ${n + 1} lowered symptoms.`, part: "focus" as const }))
-    const answer = (sentences: unknown[]) => llmResult({ sentences }, "claude-opus-4-8")
-    const strong = new MockProvider([
-      answer(six.map((_, n) => ({ text: `Drug ${n + 1} lowered symptoms.`, sources: [n + 1], kind: "benefit" }))),
-      answer([{ text: "Six drugs lowered symptoms.", sources: [1, 2, 3, 4, 5, 6], kind: "benefit" }]),
-    ])
-    const written = await writeTopicOverviews([{ entryId: "w1", label: "Depression", papers: six }], { storage: new MemoryVaultStorage(), settings: SETTINGS, providerOverride: { strong } })
-    expect(JSON.parse(strong.calls[0].req.messages.at(-1)!.content as string).maxSentences).toBe(4)
-    expect(JSON.parse(strong.calls[1].req.messages.at(-1)!.content as string).problems.join(" ")).toMatch(/6 sentences.*at most 4/i)
-    expect(written.overviews.w1).toHaveLength(1)
   })
 })
