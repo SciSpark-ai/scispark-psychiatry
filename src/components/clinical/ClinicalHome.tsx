@@ -197,9 +197,10 @@ export function ClinicalHome() {
                 {overview.map((sentence) => (
                   <span key={sentence.text}>
                     {sentence.text}
-                    {sentence.sources.map((key) => {
+                    {sentence.sources.map((key, index) => {
                       const position = inTab.findIndex((item) => item.key === key)
-                      return <sup key={key} data-source="true" title={headlineOf.get(key) ?? key} className="ml-0.5 cursor-help text-[11px] text-accent-ink">{position >= 0 ? position + 1 : "·"}</sup>
+                      // Separate markers, so that papers 1 and 4 do not read as "14".
+                      return <sup key={key} data-source="true" title={headlineOf.get(key) ?? key} className={`cursor-help text-[11px] text-accent-ink ${index === 0 ? "ml-0.5" : "ml-1.5"}`}>{position >= 0 ? position + 1 : "·"}</sup>
                     })}{" "}
                   </span>
                 ))}
