@@ -7,10 +7,9 @@ import type { VaultStorage } from "@/lib/vault/storage"
 import { Card } from "@/components/ui/Card"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { deleteHistory, listHistory, restoreHistory, type HistoryEntry } from "@/lib/clinical/history/store"
-import type { LookBack } from "@/lib/clinical/modes"
+import { lookBackName } from "@/lib/clinical/modes"
 
 const H = CLINICAL_COPY.history
-const rangeLabel = (key: string) => CLINICAL_COPY.feed.lookBackOptions[key as LookBack] ?? key
 
 /** Every search that was run. One can be reopened as the list on Home, or deleted. */
 export function FeedHistory() {
@@ -73,7 +72,7 @@ export function FeedHistory() {
               <Card data-testid="history-row" className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
                 <div className="min-w-0 flex-1">
                   <p className="text-[15px] font-semibold text-espresso">{new Date(entry.generatedAt).toLocaleString()}</p>
-                  <p className="text-[13px] text-secondary-dark">{rangeLabel(entry.lookBack)} · {H.papers(entry.listed)}</p>
+                  <p className="text-[13px] text-secondary-dark">{lookBackName(entry.lookBack)} · {H.papers(entry.listed)}</p>
                   {entry.topics.length > 0 && <p className="truncate text-[13px] text-muted-text" title={entry.topics.join(", ")}>{entry.topics.join(", ")}</p>}
                 </div>
                 <button type="button" onClick={() => void open(entry.id)} className="rounded-pill bg-orange px-4 py-1.5 text-[13px] font-medium text-on-accent hover:bg-orange/90">{H.open}</button>

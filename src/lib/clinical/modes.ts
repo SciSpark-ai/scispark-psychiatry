@@ -37,11 +37,41 @@ export type LookBack = (typeof LOOK_BACK)[number]
 
 export function settingsForLookBack(key: LookBack): Pick<ClinicalSettings, "mode"> & Partial<ClinicalSettings> {
   const amount = Number.parseInt(key, 10)
+  // A fixed choice also ends a search over chosen dates.
   return key.endsWith("m")
-    ? { mode: "catch-up", catchUpMonths: amount as CatchUpMonths }
-    : { mode: "whats-new", windowDays: amount as NonNullable<ClinicalSettings["windowDays"]> }
+    ? { mode: "catch-up", catchUpMonths: amount as CatchUpMonths, range: undefined }
+    : { mode: "whats-new", windowDays: amount as NonNullable<ClinicalSettings["windowDays"]>, range: undefined }
 }
 
-export function lookBackOf(settings: Pick<ClinicalSettings, "mode" | "catchUpMonths" | "windowDays">): LookBack {
-  return (settings.mode === "catch-up" ? `${settings.catchUpMonths}m` : `${settings.windowDays ?? 30}d`) as LookBack
+const DAY = /^\d{4}-\d{2}-\d{2}$/
+
+/** The settings for a search over chosen dates, or null when the dates are not two valid days in order. */
+export function settingsForRange(from: string, to: string): Pick<ClinicalSettings, "range"> | null {
+  if (!DAY.test(from) || !DAY.test(to) || from > to) return null
+  if (Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to))) return null
+  return { range: { from, to } }
+}
+
+/** The name of what a list looked at: "7d", "6m", or "2026-09-01..2026-09-15" for chosen dates. */
+export function lookBackOf(settings: Pick<ClinicalSettings, "mode" | "catchUpMonths" | "windowDays" | "range">): string {
+  if (settings.range) return `${settings.range.from}..${settings.range.to}`
+  return settings.mode === "catch-up" ? `${settings.catchUpMonths}m` : `${settings.windowDays ?? 30}d`
+}
+
+/** "1 week", "6 months", or "2026-09-01 to 2026-09-15". */
+export function lookBackName(key: string): string {
+  return (CLINICAL_COPY.feed.lookBackOptions as Record<string, string>)[key] ?? key.replace("..", " to ")
+}
+
+/** As it reads in a sentence: "last 1 week", or the dates themselves. */
+export function lookBackPhrase(key: string): string {
+  return key in CLINICAL_COPY.feed.lookBackOptions ? `last ${lookBackName(key)}` : lookBackName(key)
+}
+
+/** The dates a run searches, and the ranking parameters that go with their length. */
+export function searchWindow(settings: Pick<ClinicalSettings, "mode" | "catchUpMonths" | "windowDays" | "range">, now: Date): { mode: FeedMode; window: DateWindow } {
+  if (!settings.range) return { mode: settings.mode, window: windowFor(settings.mode, now, settings.catchUpMonths, settings.windowDays) }
+  const window = { from: new Date(`${settings.range.from}T00:00:00.000Z`), to: new Date(`${settings.range.to}T23:59:59.000Z`) }
+  const days = (window.to.getTime() - window.from.getTime()) / 86_400_000
+  return { mode: days <= 31 ? "whats-new" : "catch-up", window }
 }

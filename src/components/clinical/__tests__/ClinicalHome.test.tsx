@@ -181,7 +181,7 @@ describe("ClinicalHome", () => {
     await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
     await saveClinicalFeed(storage, feedOf([item(1)]))
     await mount()
-    expect([...lookBack().options].map((option) => option.textContent)).toEqual(["3 days", "1 week", "2 weeks", "30 days", "3 months", "6 months", "12 months"])
+    expect([...lookBack().options].map((option) => option.textContent)).toEqual(["3 days", "1 week", "2 weeks", "30 days", "3 months", "6 months", "12 months", "Custom dates"])
     expect(lookBack().value).toBe("30d")
     expect(container.textContent).not.toContain("Catch up")
     await choose("7d")
@@ -298,5 +298,27 @@ describe("ClinicalHome", () => {
     await act(async () => { source.click() })
     expect(container.querySelectorAll("[data-testid=clinical-feed-card]")).toHaveLength(14)
     expect(container.querySelector("#paper-14")).not.toBeNull()
+  })
+
+  it("offers a search over chosen dates: two date fields appear and the range is saved once both are filled in", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1)]))
+    await mount()
+    expect(container.querySelector('input[aria-label="From"]')).toBeNull()
+    await choose("custom")
+    const field = (label: string) => container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!
+    const set = async (label: string, value: string) => act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field(label), value)
+      field(label).dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await set("From", "2026-09-01")
+    expect((await loadClinicalSettings(storage)).range).toBeUndefined()
+    await set("To", "2026-09-15")
+    expect((await loadClinicalSettings(storage)).range).toEqual({ from: "2026-09-01", to: "2026-09-15" })
+    expect(container.textContent).toContain("Press Refresh to rebuild the list for 2026-09-01 to 2026-09-15")
+    await choose("30d")
+    expect((await loadClinicalSettings(storage)).range).toBeUndefined()
+    expect(container.querySelector('input[aria-label="From"]')).toBeNull()
   })
 })

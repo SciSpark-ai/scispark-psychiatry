@@ -46,6 +46,8 @@ export const ClinicalSettingsSchema = z.object({
   catchUpMonths: z.union([z.literal(3), z.literal(6), z.literal(12)]).default(6),
   /** Days looked back in the "whats-new" mode: 3, 7, 14 or 30. Absent means 30. See LOOK_BACK in modes.ts. */
   windowDays: z.union([z.literal(3), z.literal(7), z.literal(14), z.literal(30)]).optional(),
+  /** A search over chosen dates (YYYY-MM-DD, both included). When present it takes the place of the look-back. */
+  range: z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).optional(),
   defaultPopulation: z.string().min(1).optional(),
 })
 export type ClinicalSettings = z.infer<typeof ClinicalSettingsSchema>

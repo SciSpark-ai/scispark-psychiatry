@@ -9,7 +9,7 @@ import { paperKey } from "@/lib/papers/types"
 import { paperRecordFromFrontmatter } from "@/lib/papers/resolve"
 import { LlmErrorMessage } from "@/components/papers/LlmErrorMessage"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
-import { LOOK_BACK, lookBackOf, settingsForLookBack, type LookBack } from "@/lib/clinical/modes"
+import { LOOK_BACK, lookBackName, lookBackOf, lookBackPhrase, settingsForLookBack, settingsForRange, type LookBack } from "@/lib/clinical/modes"
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
 import { recordSeen } from "@/lib/clinical/seen/store"
 import { loadReadLater } from "@/lib/clinical/readlater/store"
@@ -32,6 +32,8 @@ export function ClinicalHome() {
   const [pages, setPages] = useState(1)
   /** The topic tab on screen: a watch entry's id, or null for all topics. */
   const [topic, setTopic] = useState<string | null>(null)
+  /** Whether "Custom dates" is chosen, and the two dates as typed so far. */
+  const [customDates, setCustomDates] = useState<{ from: string; to: string } | null>(null)
   const [stage, setStage] = useState<ClinicalStage | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -47,6 +49,7 @@ export function ClinicalHome() {
         const saved = new Set([...bundle.pages.values()].filter((page) => page.frontmatter.type === "paper").map((page) => paperKey(paperRecordFromFrontmatter(page.frontmatter))))
         if (cancelled) return
         setStorage(vault)
+        if (settings.range) setCustomDates(settings.range)
         setData({ entries, settings, feed, saved, votes: new Map(feedback.map((event) => [event.paperKey, event.kind])), later: new Set(laterItems.map((entry) => entry.key)) })
       } catch (failure) {
         if (!cancelled) setError(failure instanceof Error ? failure.message : String(failure))
@@ -89,6 +92,13 @@ export function ClinicalHome() {
   const displayedKeys = inTab.slice(0, pages * PAGE_SIZE).map((item) => item.key).join("\n")
   // Recorded under the time range of the list on screen: only a new search of the same range leaves these papers out.
   const shownLookBack = data?.feed ? (data.feed.lookBack ?? lookBackOf({ mode: data.feed.mode, catchUpMonths: 6, windowDays: 30 })) : "30d"
+  // A date typed into "Custom dates": saved as the search range as soon as both dates are valid and in order.
+  const changeDate = (patch: Partial<{ from: string; to: string }>) => {
+    const next = { from: "", to: "", ...customDates, ...patch }
+    setCustomDates(next)
+    const range = settingsForRange(next.from, next.to)
+    if (range) void changeSettings(range)
+  }
   useEffect(() => {
     if (storage && displayedKeys) void recordSeen(storage, displayedKeys.split("\n"), new Date(), shownLookBack).catch(() => {})
   }, [storage, displayedKeys, shownLookBack])
@@ -104,8 +114,7 @@ export function ClinicalHome() {
   const { topicOf, toneOf } = topicLookup(listTopics)
   const shown = inTab.slice(0, pages * PAGE_SIZE)
   const current = lookBackOf(settings)
-  const feedLookBack = feed ? ((feed.lookBack ?? lookBackOf({ mode: feed.mode, catchUpMonths: 6, windowDays: 30 })) as LookBack) : current
-  const optionLabel = (key: LookBack) => CLINICAL_COPY.feed.lookBackOptions[key]
+  const feedLookBack = feed ? shownLookBack : current
   const tabs = [
     { id: null as string | null, label: CLINICAL_COPY.feed.allTopics, count: feed?.items.length ?? 0 },
     ...listTopics.map((entry) => ({ id: entry.id as string | null, label: entryLabel(entry), count: (feed?.items ?? []).filter((item) => item.entryId === entry.id).length })),
@@ -142,11 +151,24 @@ export function ClinicalHome() {
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <h1 className="font-heading text-[26px] font-semibold tracking-heading text-espresso">{CLINICAL_COPY.feed.heading}</h1>
           <div className="flex shrink-0 items-center gap-2">
-            <select aria-label={CLINICAL_COPY.feed.lookBack} title={CLINICAL_COPY.feed.lookBack} value={current}
-              onChange={(event) => void changeSettings(settingsForLookBack(event.target.value as LookBack))}
+              <select aria-label={CLINICAL_COPY.feed.lookBack} title={CLINICAL_COPY.feed.lookBack} value={customDates ? "custom" : current}
+              onChange={(event) => {
+                if (event.target.value === "custom") { setCustomDates(settings.range ?? { from: "", to: "" }); return }
+                setCustomDates(null)
+                void changeSettings(settingsForLookBack(event.target.value as LookBack))
+              }}
               className="rounded-pill border border-border-warm bg-transparent px-3 py-1.5 text-[13px] text-espresso">
-              {LOOK_BACK.map((key) => <option key={key} value={key}>{optionLabel(key)}</option>)}
+              {LOOK_BACK.map((key) => <option key={key} value={key}>{lookBackName(key)}</option>)}
+              <option value="custom">{CLINICAL_COPY.feed.customDates}</option>
             </select>
+            {customDates && (
+              <>
+                <input type="date" aria-label={CLINICAL_COPY.feed.dateFrom} title={CLINICAL_COPY.feed.dateFrom} value={customDates.from} max={customDates.to || undefined}
+                  onChange={(event) => changeDate({ from: event.target.value })} className="rounded-pill border border-border-warm bg-transparent px-3 py-1.5 text-[13px] text-espresso" />
+                <input type="date" aria-label={CLINICAL_COPY.feed.dateTo} title={CLINICAL_COPY.feed.dateTo} value={customDates.to} min={customDates.from || undefined}
+                  onChange={(event) => changeDate({ to: event.target.value })} className="rounded-pill border border-border-warm bg-transparent px-3 py-1.5 text-[13px] text-espresso" />
+              </>
+            )}
             <button type="button" onClick={() => void refresh()} disabled={running || entries.length === 0}
               className="rounded-pill bg-orange px-4 py-1.5 text-[13px] font-medium text-on-accent hover:bg-orange/90 disabled:opacity-50">
               {running ? CLINICAL_COPY.feed.refreshing : CLINICAL_COPY.feed.refresh}
@@ -155,7 +177,7 @@ export function ClinicalHome() {
         </div>
         {feed && entries.length > 0 && (
           <p data-testid="clinical-feed-status" className="mt-1 text-[14px] text-secondary-dark">
-            {CLINICAL_COPY.feed.status(feed.stats.listed, feed.stats.retrieved, optionLabel(feedLookBack), new Date(feed.generatedAt).toLocaleString())}
+            {CLINICAL_COPY.feed.status(feed.stats.listed, feed.stats.retrieved, lookBackPhrase(feedLookBack), new Date(feed.generatedAt).toLocaleString())}
           </p>
         )}
       </div>
@@ -172,7 +194,7 @@ export function ClinicalHome() {
         <p className="text-[14px] text-muted-text">{CLINICAL_COPY.feed.emptyNoFeed}</p>
       ) : (
         <>
-          {feedLookBack !== current && <p className="mb-4 text-[14px] text-accent-ink">{CLINICAL_COPY.feed.modeChanged(optionLabel(current))}</p>}
+          {feedLookBack !== current && <p className="mb-4 text-[14px] text-accent-ink">{CLINICAL_COPY.feed.modeChanged(lookBackPhrase(current))}</p>}
           <div role="tablist" aria-label={CLINICAL_COPY.feed.topicsLabel} className="mb-3 flex flex-wrap gap-2">
             {tabs.map((tab) => (
               <button key={tab.id ?? "all"} type="button" role="tab" aria-selected={topic === tab.id}

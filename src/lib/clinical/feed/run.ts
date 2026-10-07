@@ -7,7 +7,7 @@ import { resolveFacet } from "../plan/queries"
 import { domainFilter } from "../filter/prefilter"
 import { gradeStageA } from "../grade/stage-a"
 import { verifyMatchedParts } from "../grade/verify-parts"
-import { MODES, lookBackOf, windowFor } from "../modes"
+import { MODES, lookBackOf, searchWindow } from "../modes"
 import type { SpecialtyPack } from "../pack/schema"
 import { planQueries } from "../plan/skill"
 import { retrieve, type EnumerateFn } from "../retrieve/pool"
@@ -111,8 +111,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
 
   deps.onStage?.("context")
   const context = await assembleContext(storage)
-  const mode = context.settings.mode
-  const window = windowFor(mode, now(), context.settings.catchUpMonths, context.settings.windowDays)
+  const { mode, window } = searchWindow(context.settings, now())
 
   deps.onStage?.("plan")
   const planned = await planQueries(deps.pack, context.entries, window, runOpts)
