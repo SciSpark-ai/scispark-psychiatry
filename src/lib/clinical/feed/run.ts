@@ -164,6 +164,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
       listed: selected.items.map((item) => ref(item.candidate)),
     },
     grades: [...graded.grades.values()],
+    ...(summaries ? { digestDrops: summaries.dropped } : {}),
   }
   await saveRunLog(storage, log)
 

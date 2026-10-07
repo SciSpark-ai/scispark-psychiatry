@@ -7,6 +7,7 @@ import type { LLMSettings } from "../../llm/settings"
 import type { VaultStorage } from "../../vault/storage"
 import type { GatedCandidate, StageAGrade, WatchEntry } from "../types"
 import { CLINICAL_COPY } from "../copy"
+import { quoteInText } from "../text/quote"
 
 export const STAGE_A_BATCH = 20
 const ABSTRACT_LIMIT = 1800
@@ -66,18 +67,9 @@ export const stageASkill = defineSkill<StageAInput, z.infer<typeof AssessmentsSc
     ),
 })
 
-/** Lower case, one kind of space, dash and quote mark: differences a model introduces when it copies text. */
-const squash = (text: string) => text.toLowerCase()
-  .replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u2010-\u2015\u2212]/g, "-")
-  .replace(/[\s\u00a0]+/g, " ").trim()
-
 /** A quote counts only if it appears in the cleaned title or abstract that grading saw. */
 export function verifyQuote(quote: string, candidate: GatedCandidate): boolean {
-  // Surrounding quote marks and closing punctuation are the model's framing, not part of the passage
-  // (the cleaned title, for one, has no final full stop).
-  const wanted = squash(quote).replace(/^["']+|["']+$/g, "").replace(/(?:\.\.\.|\u2026)$/, "").replace(/[.,;:!?]+$/, "").trim()
-  if (wanted.length < 8) return false
-  return squash(`${candidate.paper.title}\n${candidate.paper.abstract ?? ""}`).includes(wanted)
+  return quoteInText(quote, `${candidate.paper.title}\n${candidate.paper.abstract ?? ""}`)
 }
 
 const ungraded = (key: string): StageAGrade => ({ key, entryId: null, grade: 0, topicGrade: 0, quote: "", quoteVerified: false, ungraded: true })

@@ -7,6 +7,7 @@ import type { LLMSettings } from "../../llm/settings"
 import type { PaperRecord } from "../../papers/types"
 import type { VaultStorage } from "../../vault/storage"
 import type { Design } from "../types"
+import { quoteInText, squash } from "../text/quote"
 
 /**
  * A short headline and a one-sentence takeaway for a listed paper, written by the `fast` model from
@@ -58,22 +59,22 @@ export const cardDigestSkill = defineSkill<DigestInput, z.infer<typeof DigestsSc
     ),
 })
 
-const squash = (text: string) => text.toLowerCase().replace(/[\s ]+/g, " ").trim()
 const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length
 const numbers = (text: string) => text.match(/\d+(?:[.,]\d+)*/g) ?? []
 
-/** The code checks a digest must pass before it is shown. */
-export function acceptDigest(digest: CardDigest, paper: PaperRecord): boolean {
+/** The code checks a digest must pass before it is shown. Returns the reason it fails, or null when it passes. */
+export function digestProblem(digest: CardDigest, paper: PaperRecord): string | null {
   const headline = digest.headline.trim()
   const takeaway = digest.takeaway.trim()
-  if (!headline || !takeaway) return false
-  if (wordCount(headline) > HEADLINE_MAX_WORDS || wordCount(takeaway) > TAKEAWAY_MAX_WORDS) return false
-  const abstract = squash(paper.abstract ?? "")
-  const quote = squash(digest.quote).replace(/^["'“”]+|["'“”]+$/g, "").trim()
-  if (quote.length < 8 || !abstract.includes(quote)) return false
+  if (!headline || !takeaway) return "empty"
+  if (wordCount(headline) > HEADLINE_MAX_WORDS || wordCount(takeaway) > TAKEAWAY_MAX_WORDS) return "too-long"
+  if (!quoteInText(digest.quote, paper.abstract ?? "")) return "quote-not-in-abstract"
   const source = squash(`${paper.title} ${paper.abstract ?? ""}`)
-  return numbers(`${headline} ${takeaway}`).every((value) => source.includes(value))
+  const invented = numbers(`${headline} ${takeaway}`).find((value) => !source.includes(value))
+  return invented ? `number-not-in-text:${invented}` : null
 }
+
+export const acceptDigest = (digest: CardDigest, paper: PaperRecord): boolean => digestProblem(digest, paper) === null
 
 export interface DigestRunOpts {
   storage: VaultStorage
@@ -85,8 +86,9 @@ export interface DigestRunOpts {
 /** Digests for the listed papers, keyed like the papers. Never throws: a failed call means fewer digests. */
 export async function digestCards(
   items: Array<{ key: string; paper: PaperRecord; design: Design }>, opts: DigestRunOpts,
-): Promise<{ digests: Map<string, CardDigest>; costUsd: number | null; failed: boolean }> {
+): Promise<{ digests: Map<string, CardDigest>; costUsd: number | null; failed: boolean; dropped: Array<{ key: string; reason: string }> }> {
   const digests = new Map<string, CardDigest>()
+  const dropped: Array<{ key: string; reason: string }> = []
   const withAbstract = items.filter((item) => (item.paper.abstract ?? "").trim().length > 0)
   let costUsd: number | null = 0
   let failed = false
@@ -99,16 +101,24 @@ export async function digestCards(
         ...opts,
       })
       costUsd = addCosts(costUsd, run.costUsd)
-      if (run.status !== "ok" || !run.output) { failed = true; continue }
-      for (const entry of run.output.digests) {
-        const item = batch[entry.index]
-        if (!item) continue
-        const digest = { headline: entry.headline.trim(), takeaway: entry.takeaway.trim(), quote: entry.quote.trim() }
-        if (acceptDigest(digest, item.paper)) digests.set(item.key, digest)
+      if (run.status !== "ok" || !run.output) {
+        failed = true
+        for (const item of batch) dropped.push({ key: item.key, reason: "call-failed" })
+        continue
       }
+      const byIndex = new Map(run.output.digests.map((entry) => [entry.index, entry]))
+      batch.forEach((item, index) => {
+        const entry = byIndex.get(index)
+        if (!entry) { dropped.push({ key: item.key, reason: "not-returned" }); return }
+        const digest = { headline: entry.headline.trim(), takeaway: entry.takeaway.trim(), quote: entry.quote.trim() }
+        const problem = digestProblem(digest, item.paper)
+        if (problem) dropped.push({ key: item.key, reason: problem })
+        else digests.set(item.key, digest)
+      })
     } catch {
       failed = true
+      for (const item of batch) dropped.push({ key: item.key, reason: "call-failed" })
     }
   }
-  return { digests, costUsd, failed }
+  return { digests, costUsd, failed, dropped }
 }

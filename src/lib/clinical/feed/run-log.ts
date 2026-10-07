@@ -20,6 +20,8 @@ export interface RunLog {
   drops: DropRecord[]
   pool: { retrieved: PoolRef[]; domain: PoolRef[]; gated: PoolRef[]; shortlisted: PoolRef[]; listed: PoolRef[] }
   grades: StageAGrade[]
+  /** Listed papers whose AI summary was not shown, and the check it failed. */
+  digestDrops?: Array<{ key: string; reason: string }>
 }
 
 export async function saveRunLog(storage: VaultStorage, log: RunLog): Promise<void> {
