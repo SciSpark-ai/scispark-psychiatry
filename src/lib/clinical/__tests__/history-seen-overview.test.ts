@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { MemoryVaultStorage } from "../../vault/memory-storage"
 import { MockProvider } from "../../llm/mock-provider"
 import { loadPsychiatryPack } from "../pack/load"
-import { checkOverview, overviewTopics } from "../digest/topic"
+import { checkOverview, overviewTopics, tidyOverviewSentence } from "../digest/topic"
 import { runClinicalFeed, type ClinicalFeedDeps } from "../feed/run"
 import { FEED_PATH, loadClinicalFeed } from "../feed/stored"
 import { deleteHistory, listHistory, loadHistory, restoreHistory } from "../history/store"
@@ -134,6 +134,20 @@ describe("the AI overview of a topic", () => {
       { text: "Remission was 27% with esketamine, while ketamine raised response.", sources: ["k1", "k2"] },
       { text: "Both trials reported benefit.", sources: ["k1", "k2"] },
     ])
+  })
+
+  // Owner report 2026-10-07: "(1)" and the like still turned up inside overviews.
+  it("reads as plain prose: no source markers of any kind, tidy spacing, a closing full stop", () => {
+    for (const [written, clean] of [
+      ["Remission was 27% with esketamine（1）, and ketamine raised response (papers 1 and 2)", "Remission was 27% with esketamine, and ketamine raised response."],
+      ["Both trials reported benefit [1-2] .", "Both trials reported benefit."],
+      ["In study 2, response was 55% with ketamine (Paper 2).", "In study 2, response was 55% with ketamine."],
+      ["Both trials reported benefit ¹ ².", "Both trials reported benefit."],
+    ] as const) {
+      expect(tidyOverviewSentence(written)).toBe(clean)
+    }
+    // A stored overview written before this rule is tidied when it is shown, too.
+    expect(tidyOverviewSentence("Adults with ADHD had a higher mortality risk (HR, 2.42) (1), while adherence was unchanged (2).")).toBe("Adults with ADHD had a higher mortality risk (HR, 2.42), while adherence was unchanged.")
   })
 
   it("drops a sentence with no valid source, with a number its sources do not contain, or that is too long", () => {

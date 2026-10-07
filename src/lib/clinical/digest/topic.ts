@@ -4,6 +4,9 @@ import { runSkill } from "../../skills/runner"
 import { addCosts } from "../../llm/pricing"
 import type { CardDigest, DigestRunOpts } from "./card"
 import { numbers } from "./card"
+import { tidyOverviewSentence } from "../text/overview-text"
+
+export { tidyOverviewSentence }
 
 /**
  * A short AI overview of the papers listed under one topic (owner request 2026-10-07). A statement
@@ -38,12 +41,12 @@ Rules:
 - Each sentence has "sources": the numbers of the papers it rests on. Every sentence needs at least one.
 - Use a number only if it appears in the headline or takeaway of a paper you list as a source for that sentence. Copy it exactly; never calculate or round.
 - Do not rank the papers, do not say which is best, and do not tell the reader what to do with a patient. Keep each paper's own level of certainty; a single small study is not "evidence shows".
-- Do not write the paper numbers inside the sentence; they go only in "sources".
+- Write plain, natural prose. Do not write paper numbers, brackets with numbers, or phrases like "paper 2" or "study 1" inside the sentence; the numbers go only in "sources".
 - Each sentence at most 35 words, plain language.`
 
 export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof OverviewSchema>>({
   name: "clinical-topic-overview",
-  version: "1",
+  version: "2",
   run: (ctx, input) =>
     ctx.llmStructured(
       "fast",
@@ -67,8 +70,7 @@ export function overviewTopics(items: Array<{ key: string; entryId: string | nul
 /** Keeps the sentences that pass the checks; `sources` become the keys of the papers. */
 export function checkOverview(sentences: Array<{ text: string; sources: number[] }>, papers: OverviewPaper[]): OverviewSentence[] {
   return sentences.flatMap((sentence) => {
-    // The sources are shown beside the sentence; markers the model also wrote into it ("(1)", "[2, 3]") are removed.
-    const text = sentence.text.replace(/\s*[([]\s*\d{1,2}(?:\s*[,;]\s*\d{1,2})*\s*[)\]]/g, "").replace(/\s+([.,;:])/g, "$1").trim()
+    const text = tidyOverviewSentence(sentence.text)
     const cited = [...new Set(sentence.sources)].map((n) => papers[n - 1]).filter((paper): paper is OverviewPaper => paper !== undefined)
     if (!text || cited.length === 0) return []
     if (text.split(/\s+/).length > SENTENCE_MAX_WORDS) return []

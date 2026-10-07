@@ -13,6 +13,7 @@ import { LOOK_BACK, lookBackName, lookBackOf, lookBackPhrase, settingsForLookBac
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
 import { recordSeen } from "@/lib/clinical/seen/store"
 import { loadReadLater } from "@/lib/clinical/readlater/store"
+import { tidyOverviewSentence } from "@/lib/clinical/text/overview-text"
 import { entryLabel, topicLookup } from "./topic"
 import { refreshClinicalFeed } from "@/lib/clinical/feed/client"
 import { loadClinicalFeed, type StoredFeed } from "@/lib/clinical/feed/stored"
@@ -34,6 +35,8 @@ export function ClinicalHome() {
   const [topic, setTopic] = useState<string | null>(null)
   /** Whether "Custom dates" is chosen, and the two dates as typed so far. */
   const [customDates, setCustomDates] = useState<{ from: string; to: string } | null>(null)
+  /** The card just jumped to from the AI overview; it is marked for a moment. */
+  const [jumped, setJumped] = useState<number | null>(null)
   const [stage, setStage] = useState<ClinicalStage | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -138,9 +141,15 @@ export function ClinicalHome() {
     ].filter((entry) => entry.count > 0).map((entry) => ({ key: entry.key, text: `${entry.label} ${entry.count}` })),
   ]
   // Jump to a card by its place in the tab, opening as much of the list as it takes to reach it.
+  // The card is marked for a moment so the eye finds it. The scroll waits for the list to be drawn
+  // (it may have just grown) and is not animated: an animated scroll was being cancelled by the redraw.
   const jumpTo = (position: number) => {
     setPages((current) => Math.max(current, Math.ceil((position + 1) / PAGE_SIZE)))
-    setTimeout(() => document.getElementById(`paper-${position + 1}`)?.scrollIntoView?.({ behavior: "smooth", block: "center" }), 0)
+    setJumped(position + 1)
+    const scroll = () => document.getElementById(`paper-${position + 1}`)?.scrollIntoView?.({ block: "center" })
+    setTimeout(scroll, 60)
+    setTimeout(scroll, 300)
+    setTimeout(() => setJumped((current) => (current === position + 1 ? null : current)), 2200)
   }
   const markSaved = (key: string) => setData((current) => (current ? { ...current, saved: new Set(current.saved).add(key) } : current))
 
@@ -213,14 +222,14 @@ export function ClinicalHome() {
               <p className="text-[15px] leading-relaxed text-espresso">
                 {overview.map((sentence) => (
                   <span key={sentence.text}>
-                    {sentence.text}
+                    {tidyOverviewSentence(sentence.text)}
                     {sentence.sources.map((key, index) => {
                       // A source is always a paper of this list: the overview is written from the listed papers only.
                       const position = inTab.findIndex((item) => item.key === key)
                       if (position < 0) return null
                       // Separate markers, so that papers 1 and 4 do not read as "14".
                       return (
-                        <button key={key} type="button" data-source="true" title={headlineOf.get(key) ?? key} onClick={() => jumpTo(position)}
+                        <button key={key} type="button" data-source="true" title={headlineOf.get(key) ?? key} onMouseDown={(event) => event.preventDefault()} onClick={() => jumpTo(position)}
                           className={`align-super text-[11px] font-medium text-accent-ink underline decoration-dotted hover:text-accent-ink-hover ${index === 0 ? "ml-0.5" : "ml-1.5"}`}>{position + 1}</button>
                       )
                     })}{" "}
@@ -233,7 +242,7 @@ export function ClinicalHome() {
           {feed.warnings.length > 0 && <ul className="mb-4 list-disc pl-5 text-[12px] text-muted-text">{feed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           <div className="grid gap-4 lg:grid-cols-2">
             {shown.map((item, index) => (
-              <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved} position={index + 1}
+              <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved} position={index + 1} highlighted={jumped === index + 1}
                 entryLabel={topicOf(item)} tone={toneOf(item)} vote={votes.get(item.key)} readLater={data.later.has(item.key)} />
             ))}
           </div>

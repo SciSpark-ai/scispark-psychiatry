@@ -29,7 +29,7 @@ export const CARD_TONES = [
   "var(--band-trending)", "var(--band-application)", "var(--band-dataset)", "var(--band-review)",
 ] as const
 
-export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vote, tone, readLater = false, onReadLater, position }: {
+export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vote, tone, readLater = false, onReadLater, position, highlighted = false }: {
   item: StoredFeedItem; storage: VaultStorage; saved: boolean; onSave: (key: string) => void
   /** Human label of the matched watch entry, when there is one. */
   entryLabel?: string
@@ -41,6 +41,8 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   onReadLater?: (key: string, on: boolean) => void
   /** The card's place in the list on screen (1, 2, ...); the AI overview refers to papers by it. */
   position?: number
+  /** Marked for a moment after a jump from the AI overview. */
+  highlighted?: boolean
 }) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
@@ -91,7 +93,7 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
         backgroundColor: "color-mix(in srgb, var(--card-tone) 2%, var(--surface-light))",
         borderColor: "color-mix(in srgb, var(--card-tone) 14%, var(--border))",
       } as CSSProperties })}
-      className="flex flex-col gap-2.5 p-4"
+      className={`flex flex-col gap-2.5 p-4 transition-shadow ${highlighted ? "ring-2 ring-orange ring-offset-2" : ""}`}
     >
       {/* Tags are plain text, not pills: a pill's own background fights with the card's tint. */}
       <p className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-snug">
