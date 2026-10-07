@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { MemoryVaultStorage } from "../../vault/memory-storage"
 import { loadPsychiatryPack } from "../pack/load"
 import { capCandidates } from "../feed/run"
-import { gradeStageA } from "../grade/stage-a"
+import { gradeStageA, verifyQuote } from "../grade/stage-a"
 import { conclusionOf } from "../text/takeaway"
 import { CLINICAL_COPY } from "../copy"
 import type { GatedCandidate } from "../types"
@@ -95,5 +95,19 @@ describe("match wording", () => {
       expect(CLINICAL_COPY.feed.matchLabels[grade].length).toBeGreaterThan(0)
       expect(CLINICAL_COPY.feed.matchNotes[grade].length).toBeGreaterThan(20)
     }
+  })
+})
+
+describe("the quote check tolerates punctuation the model adds (second real run: 37 of 75 positive grades were zeroed)", () => {
+  const candidate = gated({ title: "Machine learning methods and schizophrenia spectrum disorders: a scoping review", abstract: "We reviewed 40 studies – most were small. Patients' outcomes were rarely reported." }, "systematic-review", "k")
+  it("accepts the title quoted with a full stop the cleaned title does not have", () => {
+    expect(verifyQuote("Machine learning methods and schizophrenia spectrum disorders: a scoping review.", candidate)).toBe(true)
+  })
+  it("accepts a quote that differs only in the kind of dash or apostrophe", () => {
+    expect(verifyQuote("We reviewed 40 studies - most were small", candidate)).toBe(true)
+    expect(verifyQuote("Patients’ outcomes were rarely reported.", candidate)).toBe(true)
+  })
+  it("still rejects a sentence that is not in the text", () => {
+    expect(verifyQuote("Machine learning methods reliably diagnose schizophrenia.", candidate)).toBe(false)
   })
 })
