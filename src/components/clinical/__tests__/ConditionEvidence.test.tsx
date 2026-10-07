@@ -24,7 +24,7 @@ const EVIDENCE: Evidence = {
     { key: "none", treatment: null, modality: null, studies: 1, kinds: { benefit: 0, "no-benefit": 0, mixed: 0, safety: 0, other: 1, unsorted: 0 }, designs: [], latest: "2026-08-02", papers: ["pmid:4"] },
   ],
   timeline: { months: ["2026-08", "2026-09", "2026-10"], series: [{ key: "ketamine", label: "Ketamine", counts: [0, 3, 0] }, { key: "other", label: null, counts: [1, 0, 0] }] },
-  recent: [item(1)],
+  recent: [item(1)], recentTotal: 1,
   items: [item(1), item(2, { kind: "no-benefit", saved: true }), item(3, { comparator: null, outcome: null, designNamed: false }), item(4, { rowKey: "none", treatment: null, kind: "other", population: null, comparator: null, outcome: null })],
 }
 
