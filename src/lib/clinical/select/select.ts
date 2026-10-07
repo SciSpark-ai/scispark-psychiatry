@@ -44,14 +44,23 @@ function suppressDuplicates(sorted: ScoredItem[]): { kept: ScoredItem[]; drops: 
 const reservedSlots = (entry: WatchEntry) => (entry.priority === "high" ? 2 : 1)
 
 /**
- * The layer a paper is listed in: 1 matches the whole watch entry, 2 only its condition, 3 only its
- * treatment; null is not a match. A grade made before the model said which part matches has no
- * layer of its own and counts as layer 1 when its grade reaches the shortlist.
+ * The layer a paper is listed in: 1 matches a condition and a treatment together, 2 matches a
+ * condition, 3 matches only a treatment; null is not a match. A watch entry that names only a
+ * condition therefore sits in layer 2 with the other condition matches, and one that names only a
+ * treatment in layer 3. A grade made before the model said which part matches has no layer of its
+ * own and counts as layer 1 when its grade reaches the shortlist.
  */
-export function layerOf(item: ScoredItem): 1 | 2 | 3 | null {
+export function layerOf(item: ScoredItem, entries: WatchEntry[] = []): 1 | 2 | 3 | null {
   const grade = item.grade
   if (grade.ungraded || grade.entryId === null) return null
-  if (grade.matched) return grade.matched === "full" ? 1 : grade.matched === "condition" ? 2 : 3
+  if (grade.matched === "condition") return 2
+  if (grade.matched === "treatment") return 3
+  if (grade.matched === "full") {
+    const entry = entries.find((candidate) => candidate.id === grade.entryId)
+    if (entry && !entry.treatment) return 2
+    if (entry && !entry.condition) return 3
+    return 1
+  }
   return grade.grade >= SHORTLIST_GRADE ? 1 : null
 }
 
@@ -111,12 +120,12 @@ export function selectFeed(
   const cut = (item: ScoredItem, reason: string) =>
     drops.push({ key: item.candidate.key, title: item.candidate.paper.title, step: "select", reason })
 
-  const shortlist = kept.filter((item) => layerOf(item) !== null)
+  const shortlist = kept.filter((item) => layerOf(item, entries) !== null)
   // A paper graded 1 with no word on which part matches ("loosely related") is not shown anywhere.
   const loose = (item: ScoredItem) => !item.grade.ungraded && !item.grade.matched && item.grade.entryId !== null && item.grade.grade > 0 && item.grade.grade < SHORTLIST_GRADE
   // Graded non-matches are capped; a paper the grader failed on or skipped is always kept (spec 6.9 step 5).
   const lowerCap = opts.lowerCap ?? LOWER_CONFIDENCE_CAP
-  const rest = kept.filter((item) => layerOf(item) === null && !loose(item))
+  const rest = kept.filter((item) => layerOf(item, entries) === null && !loose(item))
   const gradedRest = rest.filter((item) => !item.grade.ungraded)
   const lowerConfidence = [...gradedRest.slice(0, lowerCap), ...rest.filter((item) => item.grade.ungraded)]
   for (const item of gradedRest.slice(lowerCap)) cut(item, "lower-confidence-cap")
@@ -127,7 +136,7 @@ export function selectFeed(
     .sort((a, b) => Number(b.priority === "high") - Number(a.priority === "high"))
   const items: ScoredItem[] = []
   for (const layer of [1, 2, 3] as const) {
-    items.push(...arrange(shortlist.filter((item) => layerOf(item) === layer), active, listCap - items.length, pageSize))
+    items.push(...arrange(shortlist.filter((item) => layerOf(item, entries) === layer), active, listCap - items.length, pageSize))
   }
   for (const item of shortlist.filter((entry) => !items.includes(entry))) cut(item, "list-cap")
   return { items, lowerConfidence, drops }

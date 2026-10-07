@@ -25,10 +25,10 @@ const html = () => renderToStaticMarkup(<Sidebar collapsed={false} />)
 describe("Sidebar nav map (SP1)", () => {
   it("shows the grouped real-surface map", () => {
     const out = html()
-    for (const label of ["Discover", "Knowledge", "Home", "Sparky", "Watch list", "Wiki", "Graph"]) {
+    for (const label of ["Discover", "Knowledge", "Home", "Sparky", "Read later", "My topics", "Wiki", "Graph", "Psychiatry"]) {
       expect(out, label).toContain(label)
     }
-    for (const href of ["/", "/watch", "/wiki", "/viz", "/chat"]) {
+    for (const href of ["/", "/watch", "/read-later", "/wiki", "/viz", "/chat"]) {
       expect(out, href).toContain(`href="${href}"`)
     }
     // Clinical edition (D32): Trending, Idea Spark and the fork-mock pages are hidden.

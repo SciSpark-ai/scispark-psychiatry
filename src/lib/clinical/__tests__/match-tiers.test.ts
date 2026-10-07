@@ -105,4 +105,12 @@ describe("grades given before the layers existed are not reused", () => {
     expect(Object.keys(cache.digests)).toEqual(["k"])
     expect(entriesKey([BOTH])).not.toBe(oldKey)
   })
+
+describe("a watch entry that names only a condition", () => {
+  it("ranks its papers with the other condition matches, after papers that match a condition and a treatment", () => {
+    const sczPaper = item("s1", "full", 4, 99, "scz")
+    const result = selectFeed([sczPaper, item("f1", "full", 4, 40), item("c1", "condition", 2, 60)], [BOTH, CONDITION_ONLY])
+    expect(result.items.map((i) => i.candidate.key)).toEqual(["f1", "s1", "c1"])
+  })
+})
 })

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, type CSSProperties } from "react"
+import { Clock } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { VaultStorage } from "@/lib/vault/storage"
 import { paperSlug } from "@/lib/wiki/authoring"
@@ -13,6 +14,7 @@ import type { FeedbackKind } from "@/lib/clinical/feedback/store"
 import type { StoredFeedItem } from "@/lib/clinical/feed/stored"
 import { conclusionOf } from "@/lib/clinical/text/takeaway"
 import { writeReaderHandoff } from "@/lib/reader/handoff"
+import { toggleReadLater } from "@/lib/clinical/readlater/store"
 import { ClinicalFeedback } from "./ClinicalFeedback"
 
 const F = CLINICAL_COPY.feed
@@ -27,18 +29,31 @@ export const CARD_TONES = [
   "var(--band-trending)", "var(--band-application)", "var(--band-dataset)", "var(--band-review)",
 ] as const
 
-export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vote, tone }: {
+export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vote, tone, readLater = false, onReadLater }: {
   item: StoredFeedItem; storage: VaultStorage; saved: boolean; onSave: (key: string) => void
   /** Human label of the matched watch entry, when there is one. */
   entryLabel?: string
   vote?: FeedbackKind
   /** Position of the matched watch entry in the watch list; picks the card's tint. */
   tone?: number
+  /** Whether the paper is on the Read later list when the card is drawn. */
+  readLater?: boolean
+  onReadLater?: (key: string, on: boolean) => void
 }) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [later, setLater] = useState(readLater)
   const { paper } = item
+
+  async function toggleLater() {
+    setError(null)
+    try {
+      const on = await toggleReadLater(storage, item)
+      setLater(on)
+      onReadLater?.(item.key, on)
+    } catch (failure) { setError(failure instanceof Error ? failure.message : F.readLaterFailed) }
+  }
   // Journal and the publication date as precisely as the record gives it (day, month or year).
   const source = [paper.venue, paper.date?.slice(0, 10) ?? (paper.year ? String(paper.year) : undefined)].filter(Boolean).join(" · ")
   const inferredDesign = (item.designSource === "model" || item.designSource === "text-rule") && item.design !== "other" && item.design !== "unknown"
@@ -99,7 +114,14 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
         : conclusion && <p className="line-clamp-4 text-[15px] leading-relaxed text-espresso" title={F.conclusionLabel}>{conclusion}</p>}
       <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
         <ClinicalFeedback storage={storage} paperKey={item.key} title={displayTitle(paper.title)} initial={vote} />
-        <PaperSaveButton saved={saved} busy={saving} onSave={() => void handleSave()} />
+        <div className="flex items-center gap-1">
+          <button type="button" aria-label={later ? F.readLaterRemove : F.readLater} title={later ? F.readLaterRemove : F.readLater} aria-pressed={later}
+            onClick={(event) => { event.stopPropagation(); void toggleLater() }}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-orange ${later ? "bg-orange/15 text-accent-ink" : "text-muted-text hover:bg-card-surface hover:text-espresso"}`}>
+            <Clock size={17} strokeWidth={later ? 2.6 : 2} aria-hidden="true" />
+          </button>
+          <PaperSaveButton saved={saved} busy={saving} onSave={() => void handleSave()} />
+        </div>
       </div>
       {error && <p role="alert" className="text-[12px] text-espresso">{error}</p>}
     </Card>

@@ -7,9 +7,8 @@ import { Card } from "@/components/ui/Card"
 import { PageHeader } from "@/components/ui/PageHeader"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import {
-  CATCH_UP_MONTHS, FEED_MODES, GATE_STRICTNESS, PRIORITIES, type CatchUpMonths, type ClinicalSettings, type Priority, type WatchEntry,
+  GATE_STRICTNESS, PRIORITIES, type ClinicalSettings, type Priority, type WatchEntry,
 } from "@/lib/clinical/types"
-import { MODE_LABELS } from "@/lib/clinical/modes"
 import { loadClinicalSettings, loadWatchEntries, newEntryId, saveClinicalSettings, saveWatchEntries } from "@/lib/clinical/watch/store"
 
 export interface WatchSuggestions {
@@ -134,26 +133,8 @@ export function WatchListEditor({ suggestions }: { suggestions: WatchSuggestions
       </Card>
 
       <Card className="space-y-4 p-4">
-        <fieldset>
-          <legend className="text-[13px] text-espresso">{W.mode}</legend>
-          <div className="mt-2 flex flex-wrap gap-4">
-            {FEED_MODES.map((mode) => (
-              <label key={mode} className="flex items-center gap-1.5 text-[13px] text-espresso">
-                <input type="radio" name="mode" checked={settings.mode === mode} onChange={() => void persistSettings({ ...settings, mode })} />
-                {mode === "whats-new" ? W.whatsNew : W.catchUp}
-              </label>
-            ))}
-          </div>
-          <p className="mt-1 text-[11px] text-muted-text">{MODE_LABELS[settings.mode]}</p>
-        </fieldset>
-        <label className="block text-[13px] text-espresso">{W.catchUpWindow}
-          <select className={`${field} mt-1 block`} value={settings.catchUpMonths}
-            onChange={(event) => void persistSettings({ ...settings, catchUpMonths: Number(event.target.value) as CatchUpMonths })}>
-            {CATCH_UP_MONTHS.map((months) => <option key={months} value={months}>{W.months[months]}</option>)}
-          </select>
-        </label>
         <label className="block text-[13px] text-espresso">{W.strictness}
-          <select className={`${field} mt-1 block`} value={settings.strictness} onChange={(event) => void persistSettings({ ...settings, strictness: event.target.value as ClinicalSettings["strictness"] })}>
+          <select aria-label={W.strictness} className={`${field} mt-1 block`} value={settings.strictness} onChange={(event) => void persistSettings({ ...settings, strictness: event.target.value as ClinicalSettings["strictness"] })}>
             {GATE_STRICTNESS.map((strictness) => <option key={strictness} value={strictness}>{STRICTNESS_LABEL[strictness]}</option>)}
           </select>
         </label>

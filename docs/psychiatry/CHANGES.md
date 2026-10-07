@@ -23,3 +23,5 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/lib/papers/pubmed.ts | `enumeratePubmed`: a deadline per request instead of one for the whole enumeration; batches already read are kept when a later batch fails (reported as truncated); `PubmedDeps.timeoutMs` | review of Slices 0–1, finding 1 | review |
 | src/components/layout/Sidebar.tsx | the Watch list label comes from the copy file | §8.1, review finding 5 | review |
 | src/app/globals.css | typeface: system sans-serif for headings and body, letter-spacing relaxed (colours and layout unchanged from upstream) | owner request 2026-10-06 (readability) | after first runs |
+| src/components/layout/Sidebar.tsx | the edition name "Psychiatry" as plain text under the unchanged SciSpark wordmark; Read later added to the navigation; the watch list is named "My topics" | owner request 2026-10-06 (D5 sub-brand) | after first runs |
+| src/components/layout/__tests__/Sidebar.test.tsx | follows the above | owner request 2026-10-06 | after first runs |

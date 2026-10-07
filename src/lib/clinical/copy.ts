@@ -1,6 +1,8 @@
 /** All clinical-edition wording lives here, so a later language layer and legal review touch one file. */
 export const CLINICAL_COPY = {
   appName: "SciSpark Psychiatry",
+  /** The small word under the SciSpark wordmark. */
+  edition: "Psychiatry",
   metaDescription: "A literature radar and knowledge base for psychiatry: new papers matched to your watch list, with study design shown.",
   disclaimerShort:
     "For literature awareness only. Designs and grades describe the papers, not whether a treatment is right for a patient.",
@@ -19,7 +21,11 @@ export const CLINICAL_COPY = {
     safetySignals: "Safety signals",
     savedToKnowledgeBase: "Saved",
     saveToKnowledgeBase: "Save to knowledge base",
-    openWatchList: "Open the watch list",
+    openWatchList: "Choose your topics",
+    modeChanged: (mode: string) => `Press Refresh to rebuild the list for ${mode}.`,
+    readLater: "Read later",
+    readLaterRemove: "Remove from Read later",
+    readLaterFailed: "The Read later list could not be saved.",
     /** The one line under the heading. */
     status: (listed: number, found: number, mode: string, when: string) => `${listed} ${listed === 1 ? "paper" : "papers"} from ${found} found · ${mode} · updated ${when}`,
     saveFailed: "This paper could not be saved.",
@@ -49,6 +55,11 @@ export const CLINICAL_COPY = {
     notGraded: "Not graded",
     published: (date: string) => `Published ${date}`,
     noDate: "Publication date unavailable",
+  },
+  readLater: {
+    heading: "Read later",
+    intro: "Papers you put aside from your feed.",
+    empty: "Nothing put aside yet. Use the clock on a paper to keep it here.",
   },
   /** Errors and warnings of a feed run; shown on Home. */
   run: {
@@ -87,8 +98,8 @@ export const CLINICAL_COPY = {
   designNote: "The publication type PubMed assigned to this record. It is not a judgement of study quality.",
   designInferredNote: "Read from the title and abstract, not assigned by PubMed, so it may be wrong. It is not a judgement of study quality.",
   watch: {
-    heading: "Watch list",
-    intro: "The conditions and treatments you follow. Each entry needs a condition, a treatment, or both.",
+    heading: "My topics",
+    intro: "The conditions and treatments you want papers about. Your feed is built from these. Each topic needs a condition, a treatment, or both.",
     condition: "Condition", treatment: "Treatment", population: "Population (optional)", outcome: "Outcome (optional)",
     priority: "Priority", high: "High", normal: "Normal", paused: "Paused",
     safetySignal: "Show case reports for this topic as safety signals",

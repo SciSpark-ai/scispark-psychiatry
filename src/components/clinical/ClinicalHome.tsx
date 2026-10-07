@@ -12,16 +12,20 @@ import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { MODE_LABELS } from "@/lib/clinical/modes"
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
 import { loadSeenTimes, recordSeen, seenRecently } from "@/lib/clinical/seen/store"
+import { loadReadLater } from "@/lib/clinical/readlater/store"
+import { topicLookup } from "./topic"
 import { refreshClinicalFeed } from "@/lib/clinical/feed/client"
-import { feedPage, loadClinicalFeed, pageCount, type StoredFeed, type StoredFeedItem } from "@/lib/clinical/feed/stored"
+import { feedPage, loadClinicalFeed, pageCount, type StoredFeed } from "@/lib/clinical/feed/stored"
 import { loadClinicalSettings, loadWatchEntries, saveClinicalSettings } from "@/lib/clinical/watch/store"
-import { FEED_MODES, type ClinicalSettings, type ClinicalStage, type WatchEntry } from "@/lib/clinical/types"
+import { CATCH_UP_MONTHS, FEED_MODES, type CatchUpMonths, type ClinicalSettings, type ClinicalStage, type WatchEntry } from "@/lib/clinical/types"
 import { ClinicalFeedCard } from "./ClinicalFeedCard"
 
 type Loaded = {
   entries: WatchEntry[]; settings: ClinicalSettings; feed: StoredFeed | null; saved: Set<string>; votes: Map<string, FeedbackKind>
   /** Papers first displayed within the last day; only these are shown under "Seen earlier today". */
   seenToday: Set<string>
+  /** Papers on the Read later list. */
+  later: Set<string>
 }
 
 async function loadSeenToday(vault: VaultStorage): Promise<Set<string>> {
@@ -29,7 +33,6 @@ async function loadSeenToday(vault: VaultStorage): Promise<Set<string>> {
   return new Set([...(await loadSeenTimes(vault))].filter(([, at]) => seenRecently(at, now)).map(([key]) => key))
 }
 
-const entryLabel = (entry: WatchEntry) => [entry.condition, entry.treatment].filter(Boolean).join(" × ")
 
 export function ClinicalHome() {
   const [storage, setStorage] = useState<VaultStorage | null>(null)
@@ -44,13 +47,13 @@ export function ClinicalHome() {
     ;(async () => {
       try {
         const vault = await getOpenVault()
-        const [entries, settings, feed, bundle, feedback, seenKeys] = await Promise.all([
-          loadWatchEntries(vault), loadClinicalSettings(vault), loadClinicalFeed(vault), loadBundle(vault), loadFeedback(vault), loadSeenToday(vault),
+        const [entries, settings, feed, bundle, feedback, seenKeys, laterItems] = await Promise.all([
+          loadWatchEntries(vault), loadClinicalSettings(vault), loadClinicalFeed(vault), loadBundle(vault), loadFeedback(vault), loadSeenToday(vault), loadReadLater(vault),
         ])
         const saved = new Set([...bundle.pages.values()].filter((page) => page.frontmatter.type === "paper").map((page) => paperKey(paperRecordFromFrontmatter(page.frontmatter))))
         if (cancelled) return
         setStorage(vault)
-        setData({ entries, settings, feed, saved, votes: new Map(feedback.map((event) => [event.paperKey, event.kind])), seenToday: seenKeys })
+        setData({ entries, settings, feed, saved, votes: new Map(feedback.map((event) => [event.paperKey, event.kind])), seenToday: seenKeys, later: new Set(laterItems.map((entry) => entry.key)) })
       } catch (failure) {
         if (!cancelled) setError(failure instanceof Error ? failure.message : String(failure))
       }
@@ -75,11 +78,16 @@ export function ClinicalHome() {
     }
   }, [running, storage])
 
-  async function changeMode(mode: ClinicalSettings["mode"]) {
+  // The mode and the Catch up window are chosen here, on Home (owner decision 2026-10-06). They take effect on the next Refresh.
+  async function changeSettings(patch: Partial<ClinicalSettings>) {
     if (!storage || !data) return
-    const settings = { ...data.settings, mode }
-    await saveClinicalSettings(storage, settings)
-    setData({ ...data, settings })
+    const settings = { ...data.settings, ...patch }
+    try {
+      await saveClinicalSettings(storage, settings)
+      setData({ ...data, settings })
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : String(failure))
+    }
   }
 
   // Every paper put on screen is remembered as seen, so that a later refresh does not recommend it again.
@@ -94,16 +102,7 @@ export function ClinicalHome() {
   }
 
   const { entries, settings, feed, saved, votes } = data
-  const byId = new Map(entries.map((entry) => [entry.id, entry]))
-  // The card names only the part of the watch entry the paper matches: both, the condition, or the treatment.
-  const topicOf = (item: StoredFeedItem): string | undefined => {
-    const entry = item.entryId ? byId.get(item.entryId) : undefined
-    if (!entry) return undefined
-    if (item.matched === "condition" && entry.condition) return entry.condition
-    if (item.matched === "treatment" && entry.treatment) return entry.treatment
-    return entryLabel(entry)
-  }
-  const tones = new Map(entries.map((entry, index) => [entry.id, index]))
+  const { topicOf, toneOf } = topicLookup(entries)
   const seenToday = (feed?.seenEarlier ?? []).filter((item) => data.seenToday.has(item.key))
   const shown = feed ? Array.from({ length: pages }, (_, page) => feedPage(feed, page)).flat() : []
   const markSaved = (key: string) => setData((current) => (current ? { ...current, saved: new Set(current.saved).add(key) } : current))
@@ -122,12 +121,19 @@ export function ClinicalHome() {
         <div className="flex shrink-0 items-center gap-2">
           <div role="group" aria-label={CLINICAL_COPY.watch.mode} className="flex overflow-hidden rounded-pill border border-border-warm text-[13px]">
             {FEED_MODES.map((mode) => (
-              <button key={mode} type="button" aria-pressed={settings.mode === mode} onClick={() => void changeMode(mode)}
+              <button key={mode} type="button" aria-pressed={settings.mode === mode} onClick={() => void changeSettings({ mode })}
                 className={`px-3 py-1.5 ${settings.mode === mode ? "bg-orange text-on-accent" : "text-muted-text hover:bg-card-surface/60"}`}>
                 {MODE_LABELS[mode]}
               </button>
             ))}
           </div>
+          {settings.mode === "catch-up" && (
+            <select aria-label={CLINICAL_COPY.watch.catchUpWindow} title={CLINICAL_COPY.watch.catchUpWindow} value={settings.catchUpMonths}
+              onChange={(event) => void changeSettings({ catchUpMonths: Number(event.target.value) as CatchUpMonths })}
+              className="rounded-pill border border-border-warm bg-transparent px-3 py-1.5 text-[13px] text-espresso">
+              {CATCH_UP_MONTHS.map((months) => <option key={months} value={months}>{CLINICAL_COPY.watch.months[months]}</option>)}
+            </select>
+          )}
           <button type="button" onClick={() => void refresh()} disabled={running || entries.length === 0}
             className="rounded-pill bg-orange px-4 py-1.5 text-[13px] font-medium text-on-accent hover:bg-orange/90 disabled:opacity-50">
             {running ? CLINICAL_COPY.feed.refreshing : CLINICAL_COPY.feed.refresh}
@@ -147,12 +153,13 @@ export function ClinicalHome() {
         <p className="text-[14px] text-muted-text">{CLINICAL_COPY.feed.emptyNoFeed}</p>
       ) : (
         <>
+          {feed.mode !== settings.mode && <p className="mb-4 text-[14px] text-accent-ink">{CLINICAL_COPY.feed.modeChanged(MODE_LABELS[settings.mode])}</p>}
           {feed.items.length === 0 && <p className="mb-4 text-[14px] text-espresso">{CLINICAL_COPY.feed.nothingNew}</p>}
           {feed.warnings.length > 0 && <ul className="mb-4 list-disc pl-5 text-[12px] text-muted-text">{feed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           <div className="grid gap-4 lg:grid-cols-2">
             {shown.map((item) => (
               <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
-                entryLabel={topicOf(item)} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
+                entryLabel={topicOf(item)} tone={toneOf(item)} vote={votes.get(item.key)} readLater={data.later.has(item.key)} />
             ))}
           </div>
           {pages < pageCount(feed) && (
@@ -166,7 +173,7 @@ export function ClinicalHome() {
               <div className="mt-3 grid gap-4 lg:grid-cols-2">
                 {seenToday.map((item) => (
                   <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
-                    entryLabel={topicOf(item)} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
+                    entryLabel={topicOf(item)} tone={toneOf(item)} vote={votes.get(item.key)} readLater={data.later.has(item.key)} />
                 ))}
               </div>
             </details>

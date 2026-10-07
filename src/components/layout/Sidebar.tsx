@@ -8,6 +8,7 @@ import {
   BookOpen,
   Network,
   ListChecks,
+  Clock,
   MessageSquarePlus,
   PanelLeftClose,
   X,
@@ -61,6 +62,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: "home", label: "Home", href: "/", icon: Home },
       { key: "chat", label: "Sparky", href: "/chat", icon: MessageSquarePlus },
+      { key: "read-later", label: CLINICAL_COPY.readLater.heading, href: "/read-later", icon: Clock },
       { key: "watch", label: CLINICAL_COPY.watch.heading, href: "/watch", icon: ListChecks },
     ],
   },
@@ -198,7 +200,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         >
           <PanelLeftClose size={18} strokeWidth={1.8} />
         </button>}
-        <BrandLogo className={fadeLabel} />
+        {/* The SciSpark wordmark is upstream's artwork, unchanged; the edition is plain text beneath it. */}
+        <div className={`flex flex-col items-start ${fadeLabel}`}>
+          <BrandLogo />
+          <span className="-mt-0.5 pl-0.5 text-[10.5px] font-semibold uppercase tracking-[0.2em] text-accent-ink">{CLINICAL_COPY.edition}</span>
+        </div>
         {onNavigate ? <button type="button" onClick={onNavigate} aria-label="Close menu" className="ml-auto flex h-11 w-11 items-center justify-center rounded-btn text-muted-text hover:bg-card-surface hover:text-espresso"><X size={20} /></button>
           : <ThemeToggle className={collapsed ? "invisible" : "ml-auto"} />}
       </div>

@@ -12,7 +12,7 @@ const PaperSchema = z.custom<PaperRecord>(
   "not a paper record",
 )
 
-const StoredItemSchema = z.object({
+export const StoredItemSchema = z.object({
   paper: PaperSchema,
   key: z.string(),
   design: z.enum(DESIGNS),

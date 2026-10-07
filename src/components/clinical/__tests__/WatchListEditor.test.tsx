@@ -59,12 +59,12 @@ describe("WatchListEditor", () => {
     expect(await loadWatchEntries(vault.current as MemoryVaultStorage)).toEqual([])
   })
 
-  it("saves the mode, the catch up window and the design filter", async () => {
+  // Owner decision 2026-10-06: What's new / Catch up and its window are chosen on Home, not here.
+  it("saves the design filter, and no longer offers the feed mode", async () => {
     await mount()
-    await act(async () => { (container.querySelectorAll('input[name="mode"]')[1] as HTMLInputElement).click() })
-    const [months, strictness] = [...container.querySelectorAll("fieldset ~ label select")] as HTMLSelectElement[]
-    await act(async () => { type(months, "3") })
+    expect(container.querySelector('input[name="mode"]')).toBeNull()
+    const strictness = container.querySelector<HTMLSelectElement>('select[aria-label="Study design filter"]')!
     await act(async () => { type(strictness, "strict") })
-    expect(await loadClinicalSettings(vault.current as MemoryVaultStorage)).toMatchObject({ mode: "catch-up", strictness: "strict", catchUpMonths: 3 })
+    expect(await loadClinicalSettings(vault.current as MemoryVaultStorage)).toMatchObject({ strictness: "strict" })
   })
 })

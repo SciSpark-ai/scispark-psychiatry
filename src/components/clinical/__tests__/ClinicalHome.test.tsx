@@ -6,6 +6,7 @@ import { MemoryVaultStorage } from "@/lib/vault/memory-storage"
 import { saveWatchEntries, loadClinicalSettings } from "@/lib/clinical/watch/store"
 import { saveClinicalFeed, type StoredFeed, type StoredFeedItem } from "@/lib/clinical/feed/stored"
 import { loadFeedback } from "@/lib/clinical/feedback/store"
+import { loadReadLater } from "@/lib/clinical/readlater/store"
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -163,5 +164,34 @@ describe("ClinicalHome", () => {
     await mount()
     const topics = [...container.querySelectorAll("[data-testid=clinical-feed-card] [data-topic]")].map((el) => el.textContent)
     expect(topics).toEqual(["Depression × Esketamine", "Depression", "Esketamine"])
+  })
+
+  it("lets the Catch up window be chosen on Home, and says when the list on screen is from the other mode", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1)]))
+    await mount()
+    expect(container.querySelector('select[aria-label="Catch up looks back"]')).toBeNull()
+    await act(async () => { byText("Catch up").click() })
+    const months = container.querySelector<HTMLSelectElement>('select[aria-label="Catch up looks back"]')!
+    await act(async () => {
+      months.value = "12"
+      months.dispatchEvent(new Event("change", { bubbles: true }))
+    })
+    expect(await loadClinicalSettings(storage)).toMatchObject({ mode: "catch-up", catchUpMonths: 12 })
+    expect(container.textContent).toContain("Press Refresh to rebuild the list")
+  })
+
+  it("puts a paper on the Read later list from its card, and takes it off again", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1)]))
+    await mount()
+    const later = () => container.querySelector<HTMLButtonElement>('button[aria-label="Read later"], button[aria-label="Remove from Read later"]')!
+    await act(async () => { later().click() })
+    expect(later().getAttribute("aria-pressed")).toBe("true")
+    expect((await loadReadLater(storage)).map((entry) => entry.key)).toEqual(["pmid:1"])
+    await act(async () => { later().click() })
+    expect(await loadReadLater(storage)).toEqual([])
   })
 })
