@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
-import type { ConditionEvidence as Evidence } from "@/lib/clinical/evidence/build"
+import type { Evidence } from "../ConditionEvidence"
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

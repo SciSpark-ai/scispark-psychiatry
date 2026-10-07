@@ -4,11 +4,32 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { loadConditionEvidenceRemote } from "@/lib/clinical/evidence/client"
-import type { ConditionEvidence as Evidence, EvidenceItem, EvidenceRow } from "@/lib/clinical/evidence/build"
-import { FOLDED_ROW, NO_TREATMENT_ROW, OTHER_SERIES } from "@/lib/clinical/evidence/keys"
+import type { Design } from "@/lib/clinical/types"
+import type { FindingKind } from "@/lib/clinical/evidence/schema"
 import { parseEvidenceQuery } from "@/lib/clinical/records/query"
 
 const E = CLINICAL_COPY.evidence
+
+// Rewritten in the next task. Until then this component keeps drawing the flat rows the builder used to
+// give; the builder now gives classes, treatments and studies, so these are the old shapes, kept here only.
+const NO_TREATMENT_ROW = "none"
+const FOLDED_ROW = "folded"
+const OTHER_SERIES = "other"
+export interface EvidenceRow {
+  key: string; treatment: string | null; modality: string | null; studies: number
+  kinds: Record<FindingKind | "unsorted", number>; designs: Array<{ design: Design; count: number }>
+  latest: string | null; papers: string[]
+}
+export interface EvidenceItem {
+  key: string; slug: string; headline: string; takeaway: string; kind: FindingKind | null; treatment: string | null; rowKey: string
+  population: string | null; comparator: string | null; outcome: string | null
+  design: Design; designNamed: boolean; venue: string | null; date: string | null; listedAt: string; saved: boolean
+}
+export interface Evidence {
+  condition: { code: string; name: string }; total: number; rows: EvidenceRow[]
+  timeline: { months: string[]; series: Array<{ key: string; label: string | null; counts: number[] }> }
+  recent: EvidenceItem[]; recentTotal: number; items: EvidenceItem[]
+}
 const KIND_ORDER = ["benefit", "no-benefit", "mixed", "safety", "other", "unsorted"] as const
 const KIND_COLOUR: Record<(typeof KIND_ORDER)[number], string> = {
   benefit: "var(--clinical-benefit)", "no-benefit": "var(--clinical-no-benefit)", mixed: "var(--viz-cat-6)", safety: "var(--viz-cat-3)", other: "var(--border)", unsorted: "var(--border)",
@@ -124,7 +145,8 @@ export function ConditionEvidence({ body }: { body: string }) {
   useEffect(() => {
     if (!condition) return
     let cancelled = false
-    loadConditionEvidenceRemote(condition)
+    const request = loadConditionEvidenceRemote(condition) as unknown as Promise<Evidence>
+    request
       .then((next) => { if (!cancelled) setLoaded({ condition, evidence: next, error: null }) })
       .catch((failure) => { if (!cancelled) setLoaded({ condition, evidence: null, error: failure instanceof Error ? failure.message : String(failure) }) })
     return () => { cancelled = true }

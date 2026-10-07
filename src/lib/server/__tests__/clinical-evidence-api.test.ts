@@ -9,7 +9,7 @@ import { paper, watch } from "../../clinical/__tests__/helpers"
 const finding = (n: number, conditionCodes: string[]) => ({
   key: `pmid:${n}`, slug: `paper-${n}`, paper: paper({ title: `Paper ${n}`, ids: { pmid: String(n) }, date: "2026-09-20" }),
   headline: `Headline ${n}`, takeaway: `Takeaway ${n}.`, design: "randomized-trial", designSource: "publication-type", journalBand: null,
-  conditionCodes, kind: "benefit", treatment: "esketamine", treatmentCode: "esketamine", text: "reduced symptoms", population: null, comparator: null, outcome: null,
+  conditionCodes, kind: "benefit", treatment: "esketamine", treatmentCode: "esketamine", treatmentClass: null, researchType: null, sampleSize: null, text: "reduced symptoms", population: null, comparator: null, outcome: null,
   firstListedAt: new Date().toISOString(), lastListedAt: new Date().toISOString(),
 })
 const get = (query = "") => route.GET(new Request(`http://x/api/clinical/evidence${query}`))
@@ -28,8 +28,16 @@ describe("/api/clinical/evidence", () => {
     const { result } = await (await get("?condition=depression")).json()
     expect(result.condition.code).toBe("depression")
     expect(result.total).toBe(1)
-    expect(result.rows.map((row: { key: string; studies: number }) => [row.key, row.studies])).toEqual([["esketamine", 1]])
-    expect(result.items[0]).toMatchObject({ key: "pmid:1", saved: true })
+    expect(result.period).toBe("all")
+    expect(result.classes.map((entry: { key: string; papers: number }) => [entry.key, entry.papers])).toEqual([["antidepressant", 1]])
+    expect(result.classes[0].treatments[0].studies[0]).toMatchObject({ key: "pmid:1", saved: true })
+  })
+  it("passes the period through, and answers 400 for one it does not know", async () => {
+    const { result } = await (await get("?condition=depression&period=3m")).json()
+    expect(result.period).toBe("3m")
+    expect(result.total).toBe(1)
+    expect((await get("?condition=depression&period=2y")).status).toBe(400)
+    expect((await get("?period=2y")).status).toBe(400)
   })
   it("answers 404 for a condition the pack lacks and 400 for a malformed id", async () => {
     expect((await get("?condition=no-such-condition")).status).toBe(404)
