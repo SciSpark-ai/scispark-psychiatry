@@ -119,6 +119,11 @@ export interface PubmedDeps {
   signal?: AbortSignal
   /** Deadline for one request of an enumeration (clinical fork); the default is the shared source deadline. */
   timeoutMs?: number
+  /**
+   * Records already held (clinical fork). An enumeration still asks PubMed which papers match, but
+   * fetches the record only of a paper `get` does not return, and gives each fetched record to `put`.
+   */
+  records?: { get(pmid: string): PaperRecord | undefined; put(record: PaperRecord): void }
 }
 
 /**
@@ -365,6 +370,31 @@ export async function enumeratePubmed(q: PubmedEnumerateQuery, deps: PubmedDeps 
     const count = Number(body.esearchresult?.count ?? idlist.length)
     return { pmids: idlist, total: Number.isFinite(count) ? count : idlist.length }
   }, deps.timeoutMs)
+
+  if (deps.records) {
+    // Fetch only what is not held, then give back every match in PubMed's order.
+    const held = deps.records
+    const fetched = new Map<string, PaperRecord>()
+    const missing = pmids.filter((pmid) => held.get(pmid) === undefined)
+    let cutShort = false
+    for (let i = 0; i < missing.length; i += ENUMERATE_FETCH_BATCH) {
+      const batch = missing.slice(i, i + ENUMERATE_FETCH_BATCH)
+      try {
+        for (const record of await withSourceDeadline(deps.signal, (signal) => fetchPubmedRecords(batch, { ...deps, signal }), deps.timeoutMs)) {
+          if (record.ids.pmid) fetched.set(record.ids.pmid, record)
+          held.put(record)
+        }
+      } catch (err) {
+        deps.signal?.throwIfAborted()
+        // Nothing to show for this query at all: it failed. Otherwise keep what there is.
+        if (fetched.size === 0 && missing.length === pmids.length) throw err
+        cutShort = true
+        break
+      }
+    }
+    const found = pmids.flatMap((pmid) => fetched.get(pmid) ?? held.get(pmid) ?? [])
+    return { records: found, total, truncated: cutShort || total > pmids.length }
+  }
 
   const records: PaperRecord[] = []
   let stoppedEarly = false
