@@ -103,6 +103,14 @@ function checkedTags(tags: string[], paper: PaperRecord): string[] {
   return kept
 }
 
+const contentWords = (text: string) => new Set((text.toLowerCase().match(/[a-z][a-z-]{3,}/g) ?? []).map((word) => word.slice(0, 6)))
+/** Whether at least half of the content words of `summary` (four letters or more, compared by their first six) are in `source`. */
+export function sharesWords(summary: string, source: string): boolean {
+  const wanted = [...contentWords(summary)]
+  const have = contentWords(source)
+  return wanted.length === 0 || wanted.filter((word) => have.has(word)).length / wanted.length >= 0.5
+}
+
 /** Checks one answer. Returns the digest, or the reason it is rejected. */
 export function checkDigest(answer: Pick<DigestAnswer, "headline" | "takeaway" | "source"> & { tags?: string[] }, paper: PaperRecord): { digest: CardDigest } | { reason: string } {
   const headline = answer.headline.trim()
@@ -111,6 +119,9 @@ export function checkDigest(answer: Pick<DigestAnswer, "headline" | "takeaway" |
   if (wordCount(headline) > HEADLINE_MAX_WORDS || wordCount(takeaway) > TAKEAWAY_MAX_WORDS) return { reason: "too-long" }
   const quote = abstractSentences(paper.abstract)[answer.source - 1]
   if (!quote) return { reason: `no-such-sentence:${answer.source}` }
+  // The summary must be about this paper: most of its content words are words of the title or abstract.
+  // (Answers come back by position; one given the wrong position would otherwise be shown on another paper's card.)
+  if (!sharesWords(`${headline} ${takeaway}`, `${paper.title} ${paper.abstract ?? ""}`)) return { reason: "not-about-this-paper" }
   const printed = new Set(numbers(`${paper.title} ${paper.abstract ?? ""}`))
   const invented = numbers(`${headline} ${takeaway}`).find((value) => !printed.has(value))
   if (invented) return { reason: `number-not-in-text:${invented}` }
@@ -124,6 +135,7 @@ function problemText(reason: string): string | undefined {
   if (kind === "no-such-sentence") return `There is no sentence number ${detail}. Give the number of an existing sentence.`
   if (kind === "too-long") return "The headline must be at most 12 words and the takeaway at most 35 words."
   if (kind === "empty") return "The headline and the takeaway must both be filled in."
+  if (kind === "not-about-this-paper") return "The headline and takeaway were not about this paper: they used words its title and abstract do not have. Check the index of each answer and write about that paper only."
   return undefined
 }
 

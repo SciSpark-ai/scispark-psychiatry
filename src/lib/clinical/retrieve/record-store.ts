@@ -14,6 +14,7 @@ import type { VaultStorage } from "../../vault/storage"
 export const RECORDS_PATH = ".scispark/clinical/papers.json"
 const RECHECK_AFTER_DAYS = 7
 const GIVE_UP_AFTER_DAYS = 120
+const REFRESH_AFTER_DAYS = 30
 const KEEP_DAYS = 400
 const DAY_MS = 86_400_000
 
@@ -44,7 +45,8 @@ export async function loadRecordStore(storage: VaultStorage, now: Date): Promise
       const entry = held[pmid]
       if (!entry) return undefined
       const stale = !indexed(entry.record) && age(entry.at) > RECHECK_AFTER_DAYS && age(entry.first) <= GIVE_UP_AFTER_DAYS
-      return stale ? undefined : entry.record
+      // An indexed record can still change: a retraction, a correction, a late abstract. It is read again once a month.
+      return stale || age(entry.at) > REFRESH_AFTER_DAYS ? undefined : entry.record
     },
     put(record) {
       const pmid = record.ids.pmid

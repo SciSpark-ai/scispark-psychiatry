@@ -4,7 +4,8 @@ import { runSkill } from "../../skills/runner"
 import { headAndTail } from "../../text"
 import { paperSlug, slugifyTitle } from "../../wiki/authoring"
 import { PaperTextInfoSchema, type PaperTextInfo } from "../../papers/text-contract"
-import type { PaperRecord } from "../../papers/types"
+import { paperKey, type PaperRecord } from "../../papers/types"
+import { CLINICAL_COPY } from "../copy"
 import type { VaultStorage } from "../../vault/storage"
 import type { LLMProvider, Tier } from "../../llm/types"
 import type { LLMSettings } from "../../llm/settings"
@@ -41,6 +42,8 @@ type PaperDigestOutput = z.infer<typeof PaperDigestOutputSchema>
 
 const StoredPaperDigestSchema = z.object({
   version: z.literal(1),
+  /** The paper the digest was written for. Two papers can share a file name (same title, no DOI); a digest is used only for its own paper. */
+  paperKey: z.string().optional(),
   // An item added later is empty in a digest stored before it existed.
   items: z.object(Object.fromEntries(PAPER_DIGEST_ITEMS.map((key) => [key, item])) as Record<PaperDigestItem, typeof item>),
   /** The sentence of the paper each item rests on, where the model gave one that is in the text word for word. */
@@ -136,7 +139,8 @@ export async function generatePaperDigest(
 ): Promise<{ digest: StoredPaperDigest; fromCache: boolean; costUsd?: number | null }> {
   const slug = paperSlug(paper)
   const hasFullText = Boolean(opts.fullText?.trim())
-  const cached = await loadCachedPaperDigest(storage, slug)
+  const stored = await loadCachedPaperDigest(storage, slug)
+  const cached = stored && (stored.paperKey === undefined || stored.paperKey === paperKey(paper)) ? stored : null
   if (cached && (cached.source.access === "full-text" || !hasFullText)) return { digest: cached, fromCache: true }
 
   const truncated = hasFullText && (opts.fullText as string).length > MAX_FULL_TEXT_CHARS
@@ -146,17 +150,19 @@ export async function generatePaperDigest(
   let costUsd: number | null | undefined
   const ask = async (problems?: string[]) => {
     const run = await runSkill({ skill: paperDigestSkill, input: { ...input, ...(problems ? { problems } : {}) }, storage, settings: opts.settings, providerOverride: opts.providerOverride, now: opts.now })
-    if (run.status !== "ok" || run.output === undefined) throw new Error(run.error ?? `The digest could not be written (${run.status}).`)
+    if (run.status !== "ok" || run.output === undefined) throw new Error(run.error ?? CLINICAL_COPY.paper.digest.failed(run.status))
     costUsd = costUsd === undefined ? run.costUsd : costUsd === null || run.costUsd === null ? null : costUsd + (run.costUsd ?? 0)
     return checkPaperDigest(run.output, sourceText)
   }
   let best = await ask()
   if (best.unverified.length > 0) {
     const again = await ask(best.problems).catch(() => null)
-    if (again && again.unverified.length <= best.unverified.length) best = again
+    // The second answer wins only if it fails fewer checks without having emptied items to get there.
+    const filled = (answer: typeof best) => PAPER_DIGEST_ITEMS.filter((key) => answer.items[key]).length
+    if (again && again.unverified.length <= best.unverified.length && filled(again) >= filled(best)) best = again
   }
   const digest: StoredPaperDigest = {
-    version: 1, items: best.items, quotes: best.quotes, unverified: best.unverified,
+    version: 1, paperKey: paperKey(paper), items: best.items, quotes: best.quotes, unverified: best.unverified,
     source: {
       ...(opts.source ?? { locator: hasFullText ? "Supplied full text" : "Abstract", checkedAt: (opts.now?.() ?? new Date()).toISOString(), notes: [] }),
       access: hasFullText ? "full-text" : "abstract", truncated: Boolean(opts.source?.truncated) || truncated,

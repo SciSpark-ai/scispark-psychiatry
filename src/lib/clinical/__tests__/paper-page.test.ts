@@ -44,8 +44,11 @@ describe("findCardDigest", () => {
   })
   it("falls back to the stored summaries, for a paper opened from an earlier list or from Read later", async () => {
     const storage = new MemoryVaultStorage()
-    await storage.write(CACHE_PATH, JSON.stringify({ version: 1, entriesKey: "x", grades: {}, digests: { "pmid:77": { hash: textHash(record), at: "2026-10-07T00:00:00.000Z", value: digest } } }))
+    await storage.write(CACHE_PATH, JSON.stringify({ version: 1, entriesKey: "x", grades: {}, digests: { "pmid:77": { hash: textHash(record), at: "2026-10-07T00:00:00.000Z", value: digest, scheme: 2 } } }))
     expect(await findCardDigest(storage, record)).toEqual(digest)
+    // A summary kept under earlier checks is not shown.
+    await storage.write(CACHE_PATH, JSON.stringify({ version: 1, entriesKey: "x", grades: {}, digests: { "pmid:77": { hash: textHash(record), at: "2026-10-07T00:00:00.000Z", value: digest } } }))
+    expect(await findCardDigest(storage, record)).toBeNull()
   })
   it("returns nothing when the paper has no summary, or the files cannot be read", async () => {
     const storage = new MemoryVaultStorage()
@@ -86,7 +89,7 @@ describe("the card summary looked up for the paper page", () => {
     const { findCardDigest } = await import("../digest/lookup")
     const storage = new MemoryVaultStorage()
     const record = paper({ title: "T", ids: { pmid: "5" } })
-    await storage.write(".scispark/clinical/cache.json", JSON.stringify({ digests: { "pmid:5": { value: { headline: "H", takeaway: "S", quote: "Q", tags: ["Depression", "Esketamine"] } } } }))
+    await storage.write(".scispark/clinical/cache.json", JSON.stringify({ digests: { "pmid:5": { scheme: 2, value: { headline: "H", takeaway: "S", quote: "Q", tags: ["Depression", "Esketamine"] } } } }))
     expect((await findCardDigest(storage, record))?.tags).toEqual(["Depression", "Esketamine"])
   })
 })

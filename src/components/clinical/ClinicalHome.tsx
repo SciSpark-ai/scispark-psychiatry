@@ -318,7 +318,7 @@ export function ClinicalHome() {
                           {cluster.points.map((point, index) => {
                             const phrase = tidyOverviewSentence(point.text).replace(/\.$/, "")
                             return (
-                              <span key={point.text}>
+                              <span key={`${point.sources[0] ?? ""}-${index}`}>
                                 {index > 0 && <span>{JOIN}</span>}
                                 {row.kind === "other" ? <span>{cluster.treatment ? phrase : capital(phrase)}</span> : marked(cluster.treatment ? phrase : capital(phrase), cluster.treatment ? undefined : point.emphasis?.[0], row.kind)}
                                 {sourcesOf(point)}

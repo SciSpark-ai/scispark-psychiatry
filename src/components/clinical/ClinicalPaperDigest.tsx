@@ -51,6 +51,7 @@ export function ClinicalPaperDigest({ state }: { state: PaperDigestState }) {
                     <div>
                       <dd className={main ? "text-[16px] font-medium leading-relaxed text-espresso" : "text-[15px] leading-relaxed text-espresso"}>{digest.items[item]}</dd>
                       {digest.unverified.includes(item) && <p className="mt-0.5 text-[12px] text-accent-ink">{D.unverified}</p>}
+                      {!digest.quotes?.[item] && <p className="mt-1 text-[12px] text-muted-text">{D.noSourceSentence}</p>}
                       {digest.quotes?.[item] && (
                         <details className="mt-1 text-[13px] text-muted-text">
                           <summary className="cursor-pointer select-none text-[12px] hover:text-accent-ink">{D.sourceSentence}</summary>

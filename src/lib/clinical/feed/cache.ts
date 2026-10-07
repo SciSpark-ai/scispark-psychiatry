@@ -18,7 +18,9 @@ import type { StageAGrade, WatchEntry } from "../types"
 export const CACHE_PATH = ".scispark/clinical/cache.json"
 const KEEP_DAYS = 400
 
-interface Kept<T> { hash: string; at: string; value: T }
+interface Kept<T> { hash: string; at: string; value: T; /** The checks the value passed (card summaries only). */ scheme?: number }
+/** Raised when the checks on a card summary change, so that one accepted under earlier checks is written again. 2: the summary must share its words with the paper. */
+export const DIGEST_SCHEME = 2
 export interface FeedCache {
   version: 1
   /** The watch list the grades belong to. */
@@ -81,7 +83,7 @@ export function cachedGrade(cache: FeedCache, key: string, paper: PaperRecord): 
 
 export function cachedDigest(cache: FeedCache, key: string, paper: PaperRecord): CardDigest | undefined {
   const kept = cache.digests[key]
-  return kept && kept.hash === textHash(paper) ? kept.value : undefined
+  return kept && kept.scheme === DIGEST_SCHEME && kept.hash === textHash(paper) ? kept.value : undefined
 }
 
 /** A grade worth keeping: the model answered, and its answer was not thrown out by the quote check. */

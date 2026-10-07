@@ -35,6 +35,9 @@ export const CLINICAL_COPY = {
     dateFrom: "From",
     dateTo: "To",
     lookBack: "Look back",
+    /** A look-back in a sentence, and a custom range. */
+    lastRange: (name: string) => `last ${name}`,
+    dateRange: (from: string, to: string) => `${from} to ${to}`,
     lookBackOptions: { "3d": "3 days", "7d": "1 week", "14d": "2 weeks", "30d": "30 days", "3m": "3 months", "6m": "6 months", "12m": "12 months" },
     allTopics: "All",
     aiOverview: "AI overview",
@@ -116,6 +119,9 @@ export const CLINICAL_COPY = {
       notStated: (fromFullText: boolean, labels: string[]) => `Not stated in the ${fromFullText ? "paper" : "abstract"}: ${labels.map((label) => label.toLowerCase()).join(", ")}.`,
       unverified: "Check this against the paper: a number or the source sentence given for it was not found in the text.",
       sourceSentence: "Source sentence",
+      noSourceSentence: "No source sentence was given for this item.",
+      failed: (status: string) => `The digest could not be written (${status}).`,
+      lookupFailed: (status: number) => `The saved digest could not be read (${status}).`,
       /** The side navigation of the paper page. */
       nav: { label: "On this page", summary: "AI summary", digest: "Digest", abstract: "Abstract" },
     },
@@ -143,9 +149,13 @@ export const CLINICAL_COPY = {
     tooManyQueriesFailed: (failed: number, total: number) =>
       `${failed} of ${total} PubMed searches failed, so this run would be incomplete. Your previous feed is still shown. Try again in a few minutes.`,
     queryFailed: (reason: string) => `A PubMed query failed: ${reason}`,
+    /** What a search was for, as named in a warning. */
+    journalBatch: (tier: string, first: number, last: number) => `tier ${tier} journals ${first}-${last}`,
+    caseReports: (topic: string) => `${topic} (case reports)`,
     truncated: (total: number, returned: number, rationale: string) => `A query matched ${total} records and only ${returned} were read (${rationale}).`,
     gradingFailed: "AI grading did not complete. Check your AI connection in Settings, then try again.",
-    gradingBatchesFailed: (count: number) => `${count} grading batch(es) failed; those papers are shown ungraded.`,
+    gradingBatchesFailed: (count: number) => `${count} grading batch(es) failed; the papers in them are not in this list. Refresh to try them again.`,
+    overCap: (count: number, cap: number) => `${count} more papers were found than the ${cap} that one search grades; they were not looked at. A shorter time range leaves fewer out.`,
     summariesFailed: "Some AI summaries could not be written; those cards show the authors' conclusions instead.",
     nothingMatched: "No papers matched your watch entries well enough. Your previous feed is still shown.",
   },

@@ -1,6 +1,6 @@
 import { paperKey, type PaperRecord } from "../../papers/types"
 import type { VaultStorage } from "../../vault/storage"
-import { CACHE_PATH } from "../feed/cache"
+import { CACHE_PATH, DIGEST_SCHEME, textHash } from "../feed/cache"
 import { FEED_PATH } from "../feed/stored"
 import type { CardDigest } from "./card"
 import { classifyDesign } from "../filter/gate"
@@ -26,8 +26,10 @@ export async function findCardDigest(storage: VaultStorage, paper: PaperRecord):
     return { headline: digest.headline, takeaway: digest.takeaway, quote: typeof digest.quote === "string" ? digest.quote : "", ...(tags.length > 0 ? { tags } : {}) }
   }
   if (isDigest(listed)) return tidy(listed)
-  const cache = (await read(CACHE_PATH)) as { digests?: Record<string, { value?: unknown }> } | null
-  const kept = cache?.digests?.[key]?.value
+  // From the kept summaries only when it was written for this text and passed today's checks.
+  const cache = (await read(CACHE_PATH)) as { digests?: Record<string, { value?: unknown; hash?: unknown; scheme?: unknown }> } | null
+  const entry = cache?.digests?.[key]
+  const kept = entry && entry.scheme === DIGEST_SCHEME && (!paper.abstract || entry.hash === textHash(paper)) ? entry.value : undefined
   return isDigest(kept) ? tidy(kept) : null
 }
 

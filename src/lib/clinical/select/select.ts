@@ -7,7 +7,6 @@ export const SHORTLIST_GRADE = 2
 /** Grade needed to take a reserved coverage slot (spec 6.8). */
 export const COVERAGE_GRADE = 3
 export const LOWER_CONFIDENCE_CAP = 24
-const NEAR_DUPLICATE = 0.8
 
 export interface SelectedFeed {
   items: ScoredItem[]
@@ -15,28 +14,23 @@ export interface SelectedFeed {
   drops: DropRecord[]
 }
 
-const words = (title: string) => new Set(title.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3))
-
-function similarity(a: Set<string>, b: Set<string>): number {
-  if (a.size === 0 || b.size === 0) return 0
-  let shared = 0
-  for (const word of a) if (b.has(word)) shared += 1
-  return shared / (a.size + b.size - shared)
-}
-
-/** Keeps the higher-scored of any pair of near-identical titles (preprint and journal version, for example). */
+/**
+ * Keeps the higher-scored of two records with the same title (a preprint and its journal version,
+ * for example). Titles that differ by a word are different papers: "in adults" and "in adolescents"
+ * were once taken for one (review finding, 2026-10-07).
+ */
 function suppressDuplicates(sorted: ScoredItem[]): { kept: ScoredItem[]; drops: DropRecord[] } {
   const kept: ScoredItem[] = []
-  const keptWords: Array<Set<string>> = []
+  const titles = new Set<string>()
   const drops: DropRecord[] = []
   for (const item of sorted) {
-    const itemWords = words(item.candidate.paper.title)
-    if (keptWords.some((existing) => similarity(existing, itemWords) >= NEAR_DUPLICATE)) {
-      drops.push({ key: item.candidate.key, title: item.candidate.paper.title, step: "select", reason: "near-duplicate" })
+    const title = (item.candidate.paper.title.toLowerCase().match(/[a-z0-9]+/g) ?? []).join(" ")
+    if (title && titles.has(title)) {
+      drops.push({ key: item.candidate.key, title: item.candidate.paper.title, step: "select", reason: "same-title" })
       continue
     }
     kept.push(item)
-    keptWords.push(itemWords)
+    titles.add(title)
   }
   return { kept, drops }
 }
@@ -104,9 +98,13 @@ function arrange(layer: ScoredItem[], active: WatchEntry[], limit: number, pageS
       if (page.length >= size) break
       take(item)
     }
-    items.push(...page.sort(byBandThenScore))
+    items.push(...page)
   }
-  return items
+  // The places each topic was given stay; inside a topic the papers go in order of journal band, then
+  // score, so that a topic's own tab reads in that order from first to last.
+  const queues = new Map<string | null, ScoredItem[]>()
+  for (const item of [...items].sort(byBandThenScore)) queues.set(item.grade.entryId, [...(queues.get(item.grade.entryId) ?? []), item])
+  return items.map((item) => (queues.get(item.grade.entryId) as ScoredItem[]).shift() as ScoredItem)
 }
 
 /**

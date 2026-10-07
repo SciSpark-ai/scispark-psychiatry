@@ -1,3 +1,4 @@
+import { CLINICAL_COPY } from "../copy"
 import type { WatchEntry } from "../types"
 import type { Journal, SpecialtyPack, TaxonomyNode } from "../pack/schema"
 import { findNode, nodeTerms, withDescendants } from "../pack/taxonomy"
@@ -101,7 +102,7 @@ export function journalQueries(pack: SpecialtyPack, tier: "A" | "B", window: Dat
       query: clauses.join(" AND "),
       entryId: null,
       tier,
-      rationale: `tier ${tier} journals ${i + 1}-${i + batch.length}`,
+      rationale: CLINICAL_COPY.run.journalBatch(tier, i + 1, i + batch.length),
     })
   }
   return queries
@@ -143,7 +144,7 @@ export function safetyQuery(pack: SpecialtyPack, entry: WatchEntry, window: Date
     query: [facetClause(facet), windowClause(window), CASE_REPORT_HINT].join(" AND "),
     entryId: entry.id,
     tier: "entry",
-    rationale: `${entry.treatment ?? entry.condition} (case reports)`,
+    rationale: CLINICAL_COPY.run.caseReports(entry.treatment ?? entry.condition ?? ""),
   }
 }
 

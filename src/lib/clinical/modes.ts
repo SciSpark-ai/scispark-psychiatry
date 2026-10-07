@@ -60,12 +60,12 @@ export function lookBackOf(settings: Pick<ClinicalSettings, "mode" | "catchUpMon
 
 /** "1 week", "6 months", or "2026-09-01 to 2026-09-15". */
 export function lookBackName(key: string): string {
-  return (CLINICAL_COPY.feed.lookBackOptions as Record<string, string>)[key] ?? key.replace("..", " to ")
+  return (CLINICAL_COPY.feed.lookBackOptions as Record<string, string>)[key] ?? ((([from, to]) => (to ? CLINICAL_COPY.feed.dateRange(from, to) : key))(key.split("..")))
 }
 
 /** As it reads in a sentence: "last 1 week", or the dates themselves. */
 export function lookBackPhrase(key: string): string {
-  return key in CLINICAL_COPY.feed.lookBackOptions ? `last ${lookBackName(key)}` : lookBackName(key)
+  return key in CLINICAL_COPY.feed.lookBackOptions ? CLINICAL_COPY.feed.lastRange(lookBackName(key)) : lookBackName(key)
 }
 
 /** The dates a run searches, and the ranking parameters that go with their length. */

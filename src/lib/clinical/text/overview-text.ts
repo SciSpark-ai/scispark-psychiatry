@@ -7,10 +7,17 @@
  * tidied and the sentence ends with a full stop. Also applied when a stored overview is shown.
  */
 export function tidyOverviewSentence(text: string): string {
-  const numberList = String.raw`\d{1,2}(?:\s*(?:[,;&-]|\band\b|\bto\b)\s*\d{1,2})*`
+  const numberList = String.raw`\d{1,2}(?:\s*(?:[,;&]|\band\b)\s*\d{1,2})*`
   const tidy = text
-    .replace(new RegExp(String.raw`\s*[(\[（【]\s*(?:(?:papers?|stud(?:y|ies)|refs?|sources?)\s*)?${numberList}\s*[)\]）】]`, "gi"), "")
-    .replace(/\s*[\u00b9\u00b2\u00b3\u2070-\u2079]+/g, "")
+    // "(papers 1 and 2)", "[refs 3]": always a source marker.
+    .replace(new RegExp(String.raw`\s*[(\[（【]\s*(?:papers?|stud(?:y|ies)|refs?|sources?)\s*${numberList}\s*[)\]）】]`, "gi"), "")
+    // A bare "(1)" or "[2, 3]" is a source marker only where one is put: at the end of a clause.
+    // "(12-17)" is an age range and "(8) weeks" a count: both stay.
+    .replace(new RegExp(String.raw`\s*[(\[（【]\s*${numberList}\s*[)\]）】](?=\s*(?:[.,;:]|$))`, "g"), "")
+    // In square brackets a range is a source marker too: "[1-2]".
+    .replace(/\s*[\[【]\s*\d{1,2}(?:\s*(?:[,;&-]|\band\b|\bto\b)\s*\d{1,2})*\s*[\]】](?=\s*(?:[.,;:]|$))/g, "")
+    // Superscript digits are source markers, except in a unit such as m² or cm³.
+    .replace(/(?<![mM])\s*[\u00b9\u00b2\u00b3\u2070-\u2079]+/g, "")
     .replace(/\s+([.,;:])/g, "$1")
     .replace(/([.,;:])\1+/g, "$1")
     .replace(/\s{2,}/g, " ")

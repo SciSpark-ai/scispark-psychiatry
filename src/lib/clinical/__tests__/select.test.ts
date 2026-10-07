@@ -49,11 +49,11 @@ describe("selectFeed", () => {
     expect(selectFeed(many("a", 100, 200), entries).items).toHaveLength(48)
   })
 
-  it("suppresses a near-duplicate title and logs it", () => {
+  it("suppresses a record with the same title and logs it", () => {
     const first = scored("p1", "Esketamine versus quetiapine augmentation in treatment-resistant depression", "a", 4, 90)
     const twin = scored("p2", "Esketamine versus quetiapine augmentation in treatment-resistant depression.", "a", 4, 80)
     const result = selectFeed([first, twin], entries)
     expect(result.items.map((i) => i.candidate.key)).toEqual(["p1"])
-    expect(result.drops).toEqual([{ key: "p2", title: twin.candidate.paper.title, step: "select", reason: "near-duplicate" }])
+    expect(result.drops).toEqual([{ key: "p2", title: twin.candidate.paper.title, step: "select", reason: "same-title" }])
   })
 })

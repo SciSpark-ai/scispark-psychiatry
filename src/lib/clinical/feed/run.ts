@@ -14,12 +14,12 @@ import { retrieve, type EnumerateFn } from "../retrieve/pool"
 import { scoreCandidate, type ScoredItem } from "../score/score"
 import { JOURNAL_TIER_BOOST, journalTierOf, loadJournalTiers, type JournalTier } from "../score/journal-tiers"
 import { digestCards } from "../digest/card"
-import { overviewTopics, writeTopicOverviews, type OverviewSentence } from "../digest/topic"
+import { OVERVIEW_VERSION, overviewTopics, writeTopicOverviews, type OverviewSentence } from "../digest/topic"
 import { saveHistory } from "../history/store"
 import { topicLabel } from "../topic-label"
 import { displayVenue } from "../text/venue"
 import { seenRecently } from "../seen/store"
-import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
+import { cachedDigest, cachedGrade, DIGEST_SCHEME, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
 import { layerOf, selectFeed } from "../select/select"
 import type { Candidate, ClinicalStage, DropRecord, GatedCandidate, StageAGrade, WatchEntry } from "../types"
 import { LIST_CAP } from "../types"
@@ -154,6 +154,9 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   }
   const capped = capCandidates(gate.gated.filter((candidate) => !reused.has(candidate.key)), MODES[mode].candidateCap, { entries: context.entries, pack: deps.pack })
 
+  // Papers over the cap are not looked at; the reader is told, not only the run log.
+  if (capped.drops.length > 0) warnings.push(CLINICAL_COPY.run.overCap(capped.drops.length, MODES[mode].candidateCap))
+
   deps.onStage?.("grade")
   const graded = await gradeStageA(capped.kept, context.entries, context.exemplars, runOpts)
   costUsd = addCosts(costUsd, graded.costUsd)
@@ -201,7 +204,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     .sort((a, b) => (layerOf(a, context.entries) as number) - (layerOf(b, context.entries) as number) || b.score - a.score).slice(0, LIST_CAP)
 
   const toDigest = selected.items.map((item) => ({ key: item.candidate.key, paper: item.candidate.paper, design: item.candidate.design }))
-  const knownDigests = new Map(cache ? toDigest.flatMap((item) => { const digest = cachedDigest(cache, item.key, item.paper); return digest && digest.tags !== undefined ? [[item.key, digest] as const] : [] }) : [])
+  const knownDigests = new Map(cache ? toDigest.flatMap((item) => { const digest = cachedDigest(cache, item.key, item.paper); return digest ? [[item.key, digest] as const] : [] }) : [])
   const summaries = deps.summarise ? await digestCards(toDigest, { ...runOpts, known: knownDigests }) : null
   if (summaries) {
     costUsd = addCosts(costUsd, summaries.costUsd)
@@ -217,11 +220,12 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     }
     for (const item of toDigest) {
       const digest = summaries?.digests.get(item.key)
-      if (digest && !knownDigests.has(item.key)) cache.digests[item.key] = { hash: textHash(item.paper), at, value: digest }
+      if (digest && !knownDigests.has(item.key)) cache.digests[item.key] = { hash: textHash(item.paper), at, value: digest, scheme: DIGEST_SCHEME }
     }
     await saveFeedCache(storage, cache, now())
   }
   const withDigest = (item: ScoredItem): StoredFeedItem => {
+    // A summary that failed its checks in this run is not replaced by an older one: only one kept under today's checks is used.
     const digest = summaries?.digests.get(item.candidate.key) ?? (cache ? cachedDigest(cache, item.candidate.key, item.candidate.paper) : undefined)
     const journalBand = bandOf.get(item.candidate.key)
     return { ...toStoredItem(item), ...(journalBand ? { journalBand } : {}), ...(digest ? { digest } : {}) }
@@ -236,7 +240,8 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     const pending = []
     // The abstract goes with each paper: the model sorts a paper by what its abstract reports, not by the summary alone.
     for (const topic of overviewTopics(listedItems.map((item) => ({ ...item, abstract: item.paper.abstract })))) {
-      const hash = `v10|${topic.papers.map((paper) => paper.part[0]).join("")}|${topic.papers.map((paper) => paper.key).join("|")}`
+      // The overview is written from the papers' summaries, so it is kept only while those are the same.
+      const hash = `v${OVERVIEW_VERSION}|${topic.papers.map((paper) => `${paper.part[0]}${paper.key}:${paper.headline.length}.${paper.takeaway.length}`).join("|")}`
       const kept = cache?.overviews?.[topic.entryId]
       if (kept && kept.hash === hash) topicOverviews[topic.entryId] = kept.value
       else pending.push({ ...topic, label: entryLabel(topic.entryId), hash })
@@ -287,7 +292,8 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
 
   // An earlier empty feed is not worth protecting; only a feed with papers in it is.
   // A list that is empty only because every match has been seen is a real result ("nothing new"), not a failed run.
-  if (feed.items.length === 0 && seenEarlier.length === 0 && previous && previous.items.length > 0) {
+  const matchesAlreadySeen = scored.filter((item) => context.seen.has(item.candidate.key) && layerOf(item, context.entries) !== null).length
+  if (emptyListIsFailure({ listed: feed.items.length, matchesAlreadySeen, previousListed: previous?.items.length ?? 0 })) {
     throw new Error(CLINICAL_COPY.run.nothingMatched)
   }
   await saveClinicalFeed(storage, feed)
@@ -298,6 +304,15 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
 const inFlight = new WeakMap<VaultStorage, Promise<StoredFeed>>()
 
 /** A second refresh while one is running joins it instead of paying for duplicate work. */
+/**
+ * Whether an empty list means the run went wrong. It does when nothing matched at all while the
+ * list before it had papers. It does not when papers matched but have all been shown before, however
+ * long ago: that is "nothing new", and the empty list is saved.
+ */
+export function emptyListIsFailure(run: { listed: number; matchesAlreadySeen: number; previousListed: number }): boolean {
+  return run.listed === 0 && run.matchesAlreadySeen === 0 && run.previousListed > 0
+}
+
 export function runClinicalFeedSingleFlight(storage: VaultStorage, deps: ClinicalFeedDeps): Promise<StoredFeed> {
   const existing = inFlight.get(storage)
   if (existing) return existing

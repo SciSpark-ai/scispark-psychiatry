@@ -45,7 +45,8 @@ function fromText(paper: PaperRecord): Design | null {
   const title = paper.title
   const abstract = paper.abstract ?? ""
   const own = sentencesOf(abstract).filter((sentence) => OWN_WORK.test(sentence) && !OTHERS_WORK.test(sentence)).join(" ")
-  if (/\bprotocol\b/i.test(title)) return "protocol"
+  // A study protocol says so; a trial of a treatment protocol ("theta burst stimulation protocol", "Unified Protocol") does not.
+  if (/\b(?:study|trial|review|research) protocol\b|\bprotocol (?:for|of) (?:a|an|the)\b|:\s*(?:a |the )?protocol\b/i.test(title)) return "protocol"
   if (/\b(?:mice|mouse|rats?|murine|rodents?|zebrafish|in vitro|animal model)\b/i.test(title)) return "preclinical"
   if (/\bmeta-?analy(?:sis|ses|tic)\b/i.test(`${title} ${own}`)) return "meta-analysis"
   if (/\b(?:systematic (?:literature )?|scoping |umbrella |rapid )review\b/i.test(`${title} ${own}`)) return "systematic-review"

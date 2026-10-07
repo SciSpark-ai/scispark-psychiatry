@@ -23,7 +23,13 @@ export function unescapeHtml(text: string): string {
   })
 }
 
-const stripHtml = (text: string) => unescapeHtml(text).replace(/<[^>]+>/g, "")
+/**
+ * Real markup only: a known HTML or JATS element name, as a tag. An abstract also uses "<" and ">"
+ * as signs ("HAM-D <7", "p<0.001", "weight gain >7%"); anything else between the two would be text
+ * taken out and a different statement left behind (review finding, 2026-10-07).
+ */
+const TAG = /<\/?(?:jats:[a-z-]+|i|b|u|em|strong|sub|sup|p|br|span|div|a|ul|ol|li|h[1-6]|sec|title|italic|bold|underline|sc|small|font|abstract|label|mml:[a-z]+|math)(?:\s[^<>]*)?\/?>/gi
+const stripHtml = (text: string) => unescapeHtml(text.replace(TAG, "")).replace(TAG, "")
 const DASHES = /[‐-―−─]/g
 const EXOTIC_SPACE = /[     　]/g
 
@@ -34,10 +40,13 @@ const LABELS = [
 ]
 // The non-capturing group makes the optional plural "s" apply to whichever label matched.
 const LABEL = `(?:${LABELS.join("|")})s?`
+// A label is written "Methods" or "METHODS". These rules must not fire on the same word inside a
+// sentence ("two interventions: CBT"), nor on a sentence that begins with it ("Results showed ...").
+const CASED_LABEL = `(?:${LABELS.flatMap((label) => [label, label.toUpperCase()]).join("|")})(?:s|S)?`
 
 const LABEL_NO_SEPARATOR = new RegExp(`\\b(${LABEL})(?=[A-Z])`, "g")
-const LABEL_SPACE_NO_COLON = new RegExp(`(?:^|(?<=\\. )|(?<=\\n))(${LABEL}) (?=[A-Z])`, "gmi")
-const LABEL_MID_PARAGRAPH = new RegExp(`([^\\n]) (${LABEL})(?=:[ \\t])`, "gi")
+const LABEL_SPACE_NO_COLON = new RegExp(`(?:^|(?<=\\. )|(?<=\\n))(${CASED_LABEL}) (?=[A-Z])`, "gm")
+const LABEL_MID_PARAGRAPH = new RegExp(`([.!?])[ \\t]+(${CASED_LABEL})(?=:[ \\t])`, "g")
 
 /** A label of two or more words in capitals ("STUDY DESIGN:", "BACKGROUND AND HYPOTHESIS:"), at the start or after a sentence. */
 const CAPITALS_LABEL = /(^|[.!?][ \t]+|\n)([A-Z]{2,}(?:[ \t]+(?:[A-Z]{2,}|&))+)(?=:[ \t])/g
@@ -74,7 +83,7 @@ export function cleanTitle(title: string | undefined): string | undefined {
 export function cleanAbstract(abstract: string | undefined): string | undefined {
   if (!abstract) return abstract
   let text = stripHtml(abstract).replace(EXOTIC_SPACE, " ").replace(DASHES, "-")
-  text = text.replace(/^Abstract[:.]?\s*/i, "")
+  text = text.replace(/^Abstract(?:[:.]\s*|\s+(?=[A-Z]))/i, "")
   text = fixSectionLabels(text)
   text = normaliseWhitespace(text)
   return text.length > 0 ? text : undefined

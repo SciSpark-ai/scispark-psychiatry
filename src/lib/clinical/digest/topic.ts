@@ -28,6 +28,9 @@ export { tidyOverviewSentence }
  * What survives is stored with the list as sentences and the keys of their papers.
  */
 
+/** The version of the overview skill; also part of the key its answers are kept under. */
+export const OVERVIEW_VERSION = "11"
+
 export const OVERVIEW_MIN_PAPERS = 2
 // One short answer per paper, so a long list is still one modest call.
 const OVERVIEW_MAX_PAPERS = 40
@@ -37,6 +40,9 @@ const OVERVIEW_MAX_PAPERS = 40
 // findings into one sentence under the wrong kind. See docs/psychiatry/first-run-2026-10-06.md.
 const SENTENCE_MAX_WORDS = 28
 const OVERVIEW_MAX_SENTENCES = OVERVIEW_MAX_PAPERS
+
+const NOT_INFERIOR = /\b(?:not|non)[- ]?inferior|\bnoninferior/i
+const OPENS_WITH_NO = /^(?:did not|does not|do not|was not|were not|not|no|failed to|showed no|had no|made no)\b/i
 
 /** What a finding says: a treatment helped, did not help, did both, raised a safety concern, or something else was found. */
 export const OVERVIEW_KINDS = ["benefit", "no-benefit", "mixed", "safety", "other"] as const
@@ -104,7 +110,7 @@ Rules:
 
 export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof OverviewSchema>>({
   name: "clinical-topic-overview",
-  version: "10",
+  version: OVERVIEW_VERSION,
   run: (ctx, input) =>
     ctx.llmStructured(
       // The stronger model: weighing several papers against each other is where the small one writes filler.
@@ -138,11 +144,15 @@ export function judgeOverview(
 ): { kept: OverviewSentence[]; problems: string[] } {
   const kept: OverviewSentence[] = []
   const problems: string[] = []
+  // One finding per paper: a second answer for a paper already answered for is left out, so a paper
+  // cannot stand under two kinds at once.
+  const answered = new Set<string>()
   for (const sentence of sentences) {
     const text = tidyOverviewSentence(sentence.text)
     const cited = [...new Set(sentence.sources)].flatMap((n) => papers[n - 1] ?? [])
     if (!text) { problems.push("empty"); continue }
     if (cited.length === 0) { problems.push("no-source"); continue }
+    if (cited.length === 1 && answered.has(cited[0].key)) continue
     if (text.split(/\s+/).length > SENTENCE_MAX_WORDS) { problems.push("too-long"); continue }
     const printed = new Set(cited.flatMap((paper) => numbers(`${paper.headline} ${paper.takeaway} ${paper.abstract ?? ""}`)))
     const invented = numbers(text).find((value) => !printed.has(value))
@@ -154,10 +164,15 @@ export function judgeOverview(
     // "No benefit" and "mixed" are strong words: only for a finding that says in words that something did not work.
     let kind = sentence.kind ?? undefined
     if ((kind === "no-benefit" || kind === "mixed") && !negationWords().test(text)) { problems.push(`kind-not-stated:${kind}`); kind = "other" }
+    // "Not inferior" is a comparison of two treatments that both worked, not a finding of no benefit.
+    else if (kind === "no-benefit" && NOT_INFERIOR.test(text)) { problems.push(`kind-contradicted:${kind}`); kind = "other" }
+    // A finding that opens by saying the treatment did not do something is not a benefit.
+    else if (kind === "benefit" && OPENS_WITH_NO.test(text)) { problems.push(`kind-contradicted:${kind}`); kind = "other" }
     // The treatment must be named in the summaries of the papers the finding rests on.
     const sourceWords = new Set(cited.flatMap((paper) => `${paper.headline} ${paper.takeaway} ${paper.abstract ?? ""}`.toLowerCase().match(/[a-z0-9]+/g) ?? []))
     let treatment = sentence.treatment?.replace(/\s+/g, " ").trim() || undefined
     if (treatment && !(treatment.toLowerCase().match(/[a-z0-9]+/g) ?? []).every((word) => sourceWords.has(word))) { problems.push(`treatment-not-in-source:${treatment}`); treatment = undefined }
+    if (cited.length === 1) answered.add(cited[0].key)
     kept.push({ text, sources: cited.map((paper) => paper.key), ...(group ? { group } : {}), ...(kind ? { kind } : {}), ...(treatment ? { treatment } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
   }
   return { kept, problems }
@@ -173,6 +188,7 @@ function problemText(reason: string): string {
   const [kind, detail] = reason.split(":")
   if (kind === "number-not-in-sources") return `A sentence used the number ${detail}, which is not in the headline or takeaway of the papers it listed as sources. Use only numbers from the sources of that sentence, or no number.`
   if (kind === "no-source") return "A sentence listed no valid paper number in its sources. Every sentence needs at least one."
+  if (kind === "kind-contradicted") return `An entry was filed under "${detail}" but its text says the opposite. A text that starts with "did not" or "no" is not a benefit; "not inferior" is not a finding of no benefit. Use "other" when unsure.`
   if (kind === "kind-not-stated") return `An entry was filed under "${detail}" but its text does not say in words that something did not work. Use "${detail}" only when the paper says so, with "not" or "no" in the text; otherwise use "benefit" or "other".`
   if (kind === "treatment-not-in-source") return `The treatment "${detail}" is not named in the headline or takeaway of its paper. Copy the name from there.`
   if (kind === "too-long") return "A sentence was too long. Keep each sentence to at most 24 words; put a second result in a sentence of its own."
@@ -205,7 +221,8 @@ export async function writeTopicOverviews(
         const missing = leftOut(best)
         const problems = [...new Set(best.problems.map(problemText)), ...(missing.length > 0 ? [`No sentence listed ${missing.length === 1 ? "paper" : "papers"} ${missing.join(", ")} as a source. Every paper must be a source of at least one sentence; join papers that found related things.`] : [])]
         const again = await ask(problems).catch(() => null)
-        if (again && (leftOut(again).length < missing.length || (leftOut(again).length === missing.length && again.kept.length >= best.kept.length))) best = again
+        // The second answer replaces the first only if it is no worse: fewer papers left out, or as many with no more problems.
+        if (again && again.kept.length > 0 && (leftOut(again).length < missing.length || (leftOut(again).length === missing.length && again.problems.length <= best.problems.length))) best = again
       }
       // An overview is a glance, not a second list.
       if (best && best.kept.length > 0) overviews[topic.entryId] = best.kept.slice(0, OVERVIEW_MAX_SENTENCES)
