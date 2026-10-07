@@ -22,7 +22,16 @@ export const CLINICAL_COPY = {
     openWatchList: "Open the watch list",
     updated: (when: string, mode: string, listed: number, found: number) => `Updated ${when} · ${mode} · ${listed} papers listed from ${found} found`,
     saveFailed: "This paper could not be saved.",
-    match: (grade: number) => `match ${grade}/4`,
+    /** How well a paper fits the watch entry it was matched to (the stage-A grade, 1 to 4), in words. */
+    matchLabels: { 4: "Direct match", 3: "Close match", 2: "Related", 1: "Loosely related" },
+    matchNotes: {
+      4: "The paper studies exactly what this watch entry follows: its condition, its treatment, or both.",
+      3: "The paper fits this watch entry, but in a subtype, a related drug class or a different patient group.",
+      2: "One part of this watch entry matches exactly and the other is only related, for example a new use of the treatment.",
+      1: "Only one part of this watch entry appears in the paper.",
+    },
+    matchedOn: (quote: string) => `Matched on this sentence: “${quote}”`,
+    conclusionLabel: "Authors' conclusion",
     noAbstract: "No abstract",
     notGraded: "Not graded",
     published: (date: string) => `Published ${date}`,

@@ -131,7 +131,7 @@ export async function gradeStageA(
       const verified = verifyQuote(assessment.quote, candidate)
       const claimsMatch = assessment.grade > 0 || assessment.topicGrade > 0
       if (claimsMatch && !verified) {
-        grades.set(candidate.key, { key: candidate.key, entryId: null, grade: 0, topicGrade: 0, quote: assessment.quote, quoteVerified: false, ungraded: false })
+        grades.set(candidate.key, { key: candidate.key, entryId: null, grade: 0, topicGrade: 0, quote: assessment.quote, quoteVerified: false, ungraded: false, modelGrade: assessment.grade })
         return
       }
       grades.set(candidate.key, {
@@ -142,6 +142,7 @@ export async function gradeStageA(
         quote: assessment.quote,
         quoteVerified: verified,
         ungraded: false,
+        modelGrade: assessment.grade,
       })
     })
   }

@@ -2,7 +2,8 @@ import type { LLMProvider, Tier } from "../../llm/types"
 import type { LLMSettings } from "../../llm/settings"
 import { addCosts } from "../../llm/pricing"
 import type { VaultStorage } from "../../vault/storage"
-import { DESIGN_TIER, designGate } from "../filter/gate"
+import { DESIGN_TIER, designGate, mentions } from "../filter/gate"
+import { resolveFacet } from "../plan/queries"
 import { domainFilter } from "../filter/prefilter"
 import { gradeStageA } from "../grade/stage-a"
 import { MODES, windowFor } from "../modes"
@@ -11,7 +12,7 @@ import { planQueries } from "../plan/skill"
 import { retrieve, type EnumerateFn } from "../retrieve/pool"
 import { scoreCandidate } from "../score/score"
 import { selectFeed, SHORTLIST_GRADE } from "../select/select"
-import type { ClinicalStage, Candidate, DropRecord, GatedCandidate, StageAGrade } from "../types"
+import type { Candidate, ClinicalStage, DropRecord, GatedCandidate, StageAGrade, WatchEntry } from "../types"
 import { assembleContext } from "./context"
 import { saveRunLog, type PoolRef, type RunLog } from "./run-log"
 import { loadClinicalFeed, saveClinicalFeed, toSafetyRef, toStoredItem, type StoredFeed } from "./stored"
@@ -28,15 +29,55 @@ export interface ClinicalFeedDeps {
 
 const ref = (candidate: Candidate): PoolRef => ({ key: candidate.key, pmid: candidate.paper.ids.pmid, doi: candidate.paper.ids.doi })
 
-/** Step 4 cap: keep the candidates most likely to matter when the pool exceeds the mode's cap. */
-export function capCandidates(candidates: GatedCandidate[], cap: number): { kept: GatedCandidate[]; drops: DropRecord[] } {
+const JOURNALS = "journals"
+const lower = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim()
+
+/** Keys of the candidates whose title or abstract names a condition or treatment of an active watch entry. */
+function namesWatchedTerm(candidates: GatedCandidate[], entries: WatchEntry[], pack: SpecialtyPack): Set<string> {
+  const terms = [...new Set(entries.filter((entry) => entry.priority !== "paused").flatMap((entry) => [
+    ...(entry.condition ? resolveFacet(pack, entry.condition, "condition").words : []),
+    ...(entry.treatment ? resolveFacet(pack, entry.treatment, "treatment").words : []),
+  ]).map(lower))]
+  return new Set(candidates
+    .filter((candidate) => { const text = lower(`${candidate.paper.title} ${candidate.paper.abstract ?? ""}`); return terms.some((term) => mentions(text, term)) })
+    .map((candidate) => candidate.key))
+}
+
+/**
+ * Step 4 cap: when the pool exceeds the mode's cap, places are shared in turns between the watch
+ * entries (two per turn for a High entry, one otherwise) and the journal pool, so that one broad
+ * entry cannot use up the cap. Within a source, stronger designs and newer papers go first; in the
+ * journal pool, papers that name a watched condition or treatment go before the rest.
+ */
+export function capCandidates(
+  candidates: GatedCandidate[], cap: number, opts: { entries?: WatchEntry[]; pack?: SpecialtyPack } = {},
+): { kept: GatedCandidate[]; drops: DropRecord[] } {
   if (candidates.length <= cap) return { kept: candidates, drops: [] }
-  const entryHits = (candidate: GatedCandidate) => candidate.provenance.filter((p) => p.tier === "entry").length
-  const ranked = [...candidates].sort((a, b) =>
-    entryHits(b) - entryHits(a) || DESIGN_TIER[b.design] - DESIGN_TIER[a.design] || (b.paper.date ?? "").localeCompare(a.paper.date ?? ""))
+  const byQuality = (a: GatedCandidate, b: GatedCandidate) =>
+    DESIGN_TIER[b.design] - DESIGN_TIER[a.design] || (b.paper.date ?? "").localeCompare(a.paper.date ?? "")
+  const named = opts.entries && opts.pack ? namesWatchedTerm(candidates, opts.entries, opts.pack) : new Set<string>()
+
+  const sources = new Map<string, GatedCandidate[]>()
+  for (const candidate of candidates) {
+    const hit = candidate.provenance.find((p) => p.tier === "entry")
+    const source = hit ? `entry:${hit.entryId ?? ""}` : JOURNALS
+    sources.set(source, [...(sources.get(source) ?? []), candidate])
+  }
+  const journals = (sources.get(JOURNALS) ?? []).sort((a, b) => Number(named.has(b.key)) - Number(named.has(a.key)) || byQuality(a, b))
+  sources.delete(JOURNALS)
+  const priority = new Map((opts.entries ?? []).map((entry) => [`entry:${entry.id}`, entry.priority]))
+  const turns = [
+    ...[...sources].map(([source, pool]) => ({ pool: pool.sort(byQuality), places: priority.get(source) === "high" ? 2 : 1 })),
+    { pool: journals, places: 1 },
+  ]
+
+  const kept: GatedCandidate[] = []
+  while (kept.length < cap) {
+    for (const turn of turns) kept.push(...turn.pool.splice(0, Math.min(turn.places, cap - kept.length)))
+  }
   return {
-    kept: ranked.slice(0, cap),
-    drops: ranked.slice(cap).map((candidate) => ({ key: candidate.key, title: candidate.paper.title, step: "cap", reason: `over-cap:${cap}` })),
+    kept,
+    drops: turns.flatMap((turn) => turn.pool).map((candidate) => ({ key: candidate.key, title: candidate.paper.title, step: "cap", reason: `over-cap:${cap}` })),
   }
 }
 
@@ -77,7 +118,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   deps.onStage?.("filter")
   const domain = domainFilter(deps.pack, retrieved.candidates)
   const gate = designGate(deps.pack, context.entries, domain.kept, context.settings.strictness)
-  const capped = capCandidates(gate.gated, MODES[mode].candidateCap)
+  const capped = capCandidates(gate.gated, MODES[mode].candidateCap, { entries: context.entries, pack: deps.pack })
 
   deps.onStage?.("grade")
   const graded = await gradeStageA(capped.kept, context.entries, context.exemplars, runOpts)

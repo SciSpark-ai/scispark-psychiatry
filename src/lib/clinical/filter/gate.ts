@@ -74,7 +74,7 @@ export interface GateResult {
  * whose condition is described differently is still a signal about the treatment.
  */
 /** Whole-word match: "ect" must not match inside "effect", nor "mania" inside "Romania". */
-function mentions(text: string, term: string): boolean {
+export function mentions(text: string, term: string): boolean {
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`).test(text)
 }

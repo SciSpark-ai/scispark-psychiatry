@@ -86,6 +86,8 @@ export interface StageAGrade {
   quote: string
   /** False when the model's quote does not appear in the cleaned text; both grades are then 0. */
   quoteVerified: boolean
+  /** The entry grade the model gave, before the quote check or an unknown entry id zeroed it (for the run log). */
+  modelGrade?: number
   /** True when the grading call failed or skipped this candidate; it is kept, ungraded. */
   ungraded: boolean
 }

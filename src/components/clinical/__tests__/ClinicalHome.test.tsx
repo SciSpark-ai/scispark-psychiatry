@@ -60,7 +60,7 @@ describe("ClinicalHome", () => {
     await mount()
     expect(container.querySelectorAll('[data-testid="clinical-feed-card"]')).toHaveLength(12)
     expect(container.textContent).toContain("Randomized trial")
-    expect(container.textContent).toContain("depression × esketamine · match 4/4")
+    expect(container.textContent).toContain("depression × esketamine · Direct match")
     expect(container.textContent).toContain("99 found")
     await act(async () => { byText("Show more").click() })
     expect(container.querySelectorAll('[data-testid="clinical-feed-card"]')).toHaveLength(24)
