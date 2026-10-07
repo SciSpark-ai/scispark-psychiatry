@@ -137,8 +137,9 @@ describe("paper page automatic enrich", () => {
 
     // The merged TL;DR renders under the renamed heading (2026-07-19: "TL;DR"
     // read as "the digest already ran" — see PaperMeta's doc comment).
-    expect(host.textContent).toContain("At a glance")
-    expect(host.textContent).toContain(TLDR)
+    // Clinical edition (owner decision 2026-10-07): the "At a glance" panel is not shown; the feed's AI
+    // summary and tags at the top of the page take its place. The enrich still runs and finishes.
+    expect(host.textContent).not.toContain("At a glance")
     expect(host.textContent).not.toContain("Summarizing…")
 
     act(() => root.unmount())

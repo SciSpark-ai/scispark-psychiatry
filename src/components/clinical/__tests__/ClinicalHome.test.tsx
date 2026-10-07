@@ -321,4 +321,25 @@ describe("ClinicalHome", () => {
     expect((await loadClinicalSettings(storage)).range).toBeUndefined()
     expect(container.querySelector('input[aria-label="From"]')).toBeNull()
   })
+
+  // Owner request 2026-10-07: the overview as short points with the key words marked, in two parts.
+  it("shows the overview as points, marks the key words, and sets papers on the condition alone apart", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "Depression", treatment: "Esketamine", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1, { matched: "full" }), item(2, { matched: "condition" })], { topicOverviews: { w1: [
+      { text: "Esketamine gave more remission than quetiapine.", sources: ["pmid:1"], group: "focus", emphasis: ["Esketamine", "more remission"] },
+      { text: "Exercise lowered symptoms in adolescents.", sources: ["pmid:2"], group: "related", emphasis: ["Exercise"] },
+    ] } }))
+    await mount()
+    await act(async () => { ([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[])[1].click() })
+    const overview = container.querySelector("[data-testid=clinical-topic-overview]")!
+    const groups = [...overview.querySelectorAll("[data-overview-group]")]
+    expect(groups.map((group) => group.getAttribute("data-overview-group"))).toEqual(["focus", "related"])
+    expect(groups[0].querySelector("[data-group-title]")!.textContent).toBe("Depression × Esketamine")
+    expect(groups[1].querySelector("[data-group-title]")!.textContent).toBe("Also on Depression")
+    expect(groups.map((group) => group.querySelectorAll("li").length)).toEqual([1, 1])
+    expect([...groups[0].querySelectorAll("strong")].map((mark) => mark.textContent)).toEqual(["Esketamine", "more remission"])
+    expect(groups[0].querySelector("li")!.textContent).toContain("Esketamine gave more remission than quetiapine.")
+  })
 })
+

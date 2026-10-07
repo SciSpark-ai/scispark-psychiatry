@@ -25,7 +25,7 @@ const opts = (fast: MockProvider) => ({ storage: new MemoryVaultStorage(), setti
 // RCT's sentences: 1 background, 2 methods, 3 results, 4 conclusions.
 const GOOD = { index: 0, headline: "Esketamine beat quetiapine for treatment-resistant depression", takeaway: "Remission at week 8 was 27% with esketamine nasal spray and 18% with quetiapine.", source: 3 }
 const SENTENCE_3 = "RESULTS: Remission at week 8 was 27% with esketamine and 18% with quetiapine."
-const STORED = { headline: GOOD.headline, takeaway: GOOD.takeaway, quote: SENTENCE_3 }
+const STORED = { headline: GOOD.headline, takeaway: GOOD.takeaway, quote: SENTENCE_3, tags: [] as string[] }
 
 describe("abstractSentences", () => {
   it("numbers the sentences of an abstract, keeping section labels", () => {
@@ -179,3 +179,20 @@ describe("why a paper has no AI summary is recorded", () => {
     expect(log.digestDrops).toEqual([{ key: "pmid:111", reason: "no-such-sentence:9" }])
   })
 })
+
+// Owner request 2026-10-07: a few tags under the AI summary, in place of upstream's "At a glance".
+describe("tags of a paper", () => {
+  it("keeps short tags whose words are in the paper, at most four", async () => {
+    const result = await digestCards([item("k1")], opts(digests([{ ...GOOD, tags: ["Treatment-resistant depression", "esketamine", "Remission", "quetiapine", "week 8", "cardiology"] }])))
+    expect(result.digests.get("k1")?.tags).toEqual(["Treatment-resistant depression", "Esketamine", "Remission", "Quetiapine"])
+  })
+  it("drops a tag that is long or names something the paper does not mention", async () => {
+    const result = await digestCards([item("k1")], opts(digests([{ ...GOOD, tags: ["a very long tag that is really a sentence", "psilocybin", "esketamine"] }])))
+    expect(result.digests.get("k1")?.tags).toEqual(["Esketamine"])
+  })
+  it("gives an empty list when the model sends no tags", async () => {
+    const result = await digestCards([item("k1")], opts(digests([GOOD])))
+    expect(result.digests.get("k1")?.tags).toEqual([])
+  })
+})
+

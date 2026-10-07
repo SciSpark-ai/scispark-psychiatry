@@ -32,10 +32,12 @@ export interface CardDigest {
   takeaway: string
   /** The abstract sentence the takeaway rests on, copied by code. */
   quote: string
+  /** Up to four short keywords, each found in the paper's own text. Absent on digests written before tags existed. */
+  tags?: string[]
 }
 
 const DigestsSchema = z.object({
-  digests: z.array(z.object({ index: z.number().int(), headline: z.string(), takeaway: z.string(), source: z.number().int() })),
+  digests: z.array(z.object({ index: z.number().int(), headline: z.string(), takeaway: z.string(), source: z.number().int(), tags: z.array(z.string()).default([]) })),
 })
 type DigestAnswer = z.infer<typeof DigestsSchema>["digests"][number]
 
@@ -48,6 +50,7 @@ const SYSTEM_PROMPT = `You write card text that lets a busy psychiatrist scan ne
 - "headline": at most 12 words, plain language, saying what the study found or, if it reports no result, what it examined. Name the treatment and the condition. Say the finding itself ("X lowered relapse more than Y"), not that something "was evaluated" or "was analysed". No hype, no advice.
 - "takeaway": ONE full sentence, at most 35 words, giving the main result with its key numbers exactly as the abstract prints them, and the comparison group if there is one. If the abstract gives no result, say what was studied and that no result is reported.
 - "source": the number of the ONE abstract sentence your takeaway rests on.
+- "tags": 2 to 4 keywords a psychiatrist would search by, each one to three words copied from the title or abstract: the condition, the treatment, the population or the main outcome. No general words like "study" or "psychiatry".
 
 Rules:
 - Use only the title and the numbered sentences. Add nothing from outside knowledge.
@@ -58,7 +61,7 @@ Rules:
 
 export const cardDigestSkill = defineSkill<DigestInput, z.infer<typeof DigestsSchema>>({
   name: "clinical-card-digest",
-  version: "2",
+  version: "3",
   run: (ctx, input) =>
     ctx.llmStructured(
       "fast",
@@ -84,8 +87,24 @@ const plainNumbers = (text: string) => text
   .replace(/(\d)[,\u00a0\u2009\u202f ](?=\d{3}(?!\d))/g, "$1")
 export const numbers = (text: string) => plainNumbers(text).match(/\d+(?:\.\d+)?/g) ?? []
 
+const TAG_LIMIT = 4
+
+/** Tags are kept only if short and found, as written, in the paper's title or abstract. */
+function checkedTags(tags: string[], paper: PaperRecord): string[] {
+  const text = `${paper.title} ${paper.abstract ?? ""}`.toLowerCase()
+  const kept: string[] = []
+  for (const raw of tags) {
+    const tag = raw.trim().replace(/\s+/g, " ")
+    if (!tag || tag.length > 40 || tag.split(" ").length > 3) continue
+    if (!text.includes(tag.toLowerCase()) || kept.some((other) => other.toLowerCase() === tag.toLowerCase())) continue
+    kept.push(tag.charAt(0).toUpperCase() + tag.slice(1))
+    if (kept.length === TAG_LIMIT) break
+  }
+  return kept
+}
+
 /** Checks one answer. Returns the digest, or the reason it is rejected. */
-export function checkDigest(answer: Pick<DigestAnswer, "headline" | "takeaway" | "source">, paper: PaperRecord): { digest: CardDigest } | { reason: string } {
+export function checkDigest(answer: Pick<DigestAnswer, "headline" | "takeaway" | "source"> & { tags?: string[] }, paper: PaperRecord): { digest: CardDigest } | { reason: string } {
   const headline = answer.headline.trim()
   const takeaway = answer.takeaway.trim()
   if (!headline || !takeaway) return { reason: "empty" }
@@ -95,7 +114,7 @@ export function checkDigest(answer: Pick<DigestAnswer, "headline" | "takeaway" |
   const printed = new Set(numbers(`${paper.title} ${paper.abstract ?? ""}`))
   const invented = numbers(`${headline} ${takeaway}`).find((value) => !printed.has(value))
   if (invented) return { reason: `number-not-in-text:${invented}` }
-  return { digest: { headline, takeaway, quote } }
+  return { digest: { headline, takeaway, quote, tags: checkedTags(answer.tags ?? [], paper) } }
 }
 
 /** What the model is told when it is asked again. */

@@ -28,3 +28,5 @@ Baseline before any change: 275 test files (plus 7 skipped), 2710 tests passing 
 | src/lib/papers/pubmed.ts | `enumeratePubmed` can be given a record store: it then fetches only the records not held and returns every match in PubMed's order (`PubmedDeps.records`) | owner request 2026-10-07 (search locally first) | after first runs |
 | src/components/paper/PaperHeader.tsx | optional `headline`: the AI headline becomes the heading and the paper's own title goes beneath it | owner request 2026-10-07 | after first runs |
 | src/app/paper/[key]/page.tsx | the paper page shows the feed's AI headline and summary, and the abstract by section with readable labels | owner request 2026-10-07 | after first runs |
+| src/app/paper/[key]/page.tsx | upstream's "At a glance" panel (`PaperMeta`) is not shown; the AI summary and its tags take its place | owner decision 2026-10-07 | after first runs |
+| src/components/paper/__tests__/PaperAutoEnrich.test.tsx | follows the above: no "At a glance" heading after the automatic enrich | owner decision 2026-10-07 | after first runs |

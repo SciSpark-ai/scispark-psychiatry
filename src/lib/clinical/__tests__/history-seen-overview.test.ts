@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { MemoryVaultStorage } from "../../vault/memory-storage"
 import { MockProvider } from "../../llm/mock-provider"
 import { loadPsychiatryPack } from "../pack/load"
-import { checkOverview, overviewTopics, tidyOverviewSentence } from "../digest/topic"
+import { checkOverview, judgeOverview, overviewTopics, tidyOverviewSentence } from "../digest/topic"
 import { runClinicalFeed, type ClinicalFeedDeps } from "../feed/run"
 import { FEED_PATH, loadClinicalFeed } from "../feed/stored"
 import { deleteHistory, listHistory, loadHistory, restoreHistory } from "../history/store"
@@ -213,4 +213,23 @@ describe("the AI overview of a topic", () => {
     const item = (key: string, entryId: string, withDigest = true) => ({ key, entryId, digest: withDigest ? { headline: "h", takeaway: "t", quote: "q" } : undefined })
     expect(overviewTopics([item("a", "w1"), item("b", "w1"), item("c", "w2"), item("d", "w3"), item("e", "w3", false)]).map((topic) => topic.entryId)).toEqual(["w1"])
   })
+
+  // Owner request 2026-10-07: the overview as short points, the key words marked, and papers that
+  // match only the condition summarised apart from those that match the whole topic.
+  it("keeps which part of the topic a point is about, and the words to mark in it", () => {
+    const kept = judgeOverview([
+      { text: "Esketamine gave more remission than quetiapine (27% against 18%).", sources: [1], group: "focus", emphasis: ["Esketamine", "more remission", "not in the sentence"] },
+      { text: "Ketamine raised response to 55%.", sources: [2], group: "related", emphasis: ["Ketamine"] },
+    ], papers).kept
+    expect(kept).toEqual([
+      { text: "Esketamine gave more remission than quetiapine (27% against 18%).", sources: ["k1"], group: "focus", emphasis: ["Esketamine", "more remission"] },
+      { text: "Ketamine raised response to 55%.", sources: ["k2"], group: "related", emphasis: ["Ketamine"] },
+    ])
+  })
+  it("tells the model which papers match the whole topic and which only its condition", () => {
+    const item = (key: string, matched: "full" | "condition") => ({ key, entryId: "w1", matched, digest: { headline: "h", takeaway: "t", quote: "q" } })
+    const [topic] = overviewTopics([item("a", "condition"), item("b", "full"), item("c", "condition")])
+    expect(topic.papers.map((paper) => [paper.key, paper.part])).toEqual([["b", "focus"], ["a", "related"], ["c", "related"]])
+  })
 })
+

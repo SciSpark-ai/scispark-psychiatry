@@ -35,6 +35,7 @@ export const CLINICAL_COPY = {
     lookBackOptions: { "3d": "3 days", "7d": "1 week", "14d": "2 weeks", "30d": "30 days", "3m": "3 months", "6m": "6 months", "12m": "12 months" },
     allTopics: "All",
     aiOverview: "AI overview",
+    alsoOn: (condition: string) => `Also on ${condition}`,
     aiOverviewNote: "Written by AI from the summaries of the papers listed under this topic. The numbers after a sentence are the papers it rests on. Read the papers before relying on it.",
     topicsLabel: "Topics",
     /** The count line of a tab. */
@@ -73,8 +74,7 @@ export const CLINICAL_COPY = {
   },
   paper: {
     aiSummary: "AI summary",
-    aiSummaryBasis: "Based on this sentence of the abstract:",
-    aiSummaryNote: "Written by AI from the abstract, not by the authors. Read the abstract before relying on it.",
+    aiSummaryNote: (quote: string) => `Written by AI from the abstract, not by the authors. It rests on this sentence: “${quote}” Read the abstract before relying on it.`,
     originalAbstract: "Abstract",
   },
   readLater: {

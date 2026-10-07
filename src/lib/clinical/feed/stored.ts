@@ -30,7 +30,7 @@ export const StoredItemSchema = z.object({
   score: z.number(),
   flags: z.array(z.string()),
   /** AI-written headline and takeaway, present only when every code check passed (digest/card.ts). */
-  digest: z.object({ headline: z.string(), takeaway: z.string(), quote: z.string() }).optional(),
+  digest: z.object({ headline: z.string(), takeaway: z.string(), quote: z.string(), tags: z.array(z.string()).optional() }).optional(),
 })
 export type StoredFeedItem = z.infer<typeof StoredItemSchema>
 
@@ -50,7 +50,9 @@ const StoredFeedSchema = z.object({
     id: z.string(), condition: z.string().optional(), condition2: z.string().optional(), conditionJoin: z.enum(["and", "or"]).optional(), treatment: z.string().optional(),
   })).optional(),
   /** AI overview of each topic's papers, by watch entry id: checked sentences with the papers they rest on. */
-  topicOverviews: z.record(z.string(), z.array(z.object({ text: z.string(), sources: z.array(z.string()) }))).optional(),
+  topicOverviews: z.record(z.string(), z.array(z.object({
+    text: z.string(), sources: z.array(z.string()), group: z.enum(["focus", "related"]).optional(), emphasis: z.array(z.string()).optional(),
+  }))).optional(),
   safetySignals: z.array(z.object({ paper: PaperSchema, key: z.string() })),
   stats: z.object({ retrieved: z.number(), domain: z.number(), gated: z.number(), graded: z.number(), listed: z.number() }),
   costUsd: z.number().nullable(),

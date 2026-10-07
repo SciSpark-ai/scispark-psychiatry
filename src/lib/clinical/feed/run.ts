@@ -200,7 +200,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
     .sort((a, b) => (layerOf(a, context.entries) as number) - (layerOf(b, context.entries) as number) || b.score - a.score).slice(0, LIST_CAP)
 
   const toDigest = selected.items.map((item) => ({ key: item.candidate.key, paper: item.candidate.paper, design: item.candidate.design }))
-  const knownDigests = new Map(cache ? toDigest.flatMap((item) => { const digest = cachedDigest(cache, item.key, item.paper); return digest ? [[item.key, digest] as const] : [] }) : [])
+  const knownDigests = new Map(cache ? toDigest.flatMap((item) => { const digest = cachedDigest(cache, item.key, item.paper); return digest && digest.tags !== undefined ? [[item.key, digest] as const] : [] }) : [])
   const summaries = deps.summarise ? await digestCards(toDigest, { ...runOpts, known: knownDigests }) : null
   if (summaries) {
     costUsd = addCosts(costUsd, summaries.costUsd)
@@ -234,7 +234,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   if (deps.summarise) {
     const pending = []
     for (const topic of overviewTopics(listedItems)) {
-      const hash = `v3|${topic.papers.map((paper) => paper.key).join("|")}`
+      const hash = `v4|${topic.papers.map((paper) => paper.part[0]).join("")}|${topic.papers.map((paper) => paper.key).join("|")}`
       const kept = cache?.overviews?.[topic.entryId]
       if (kept && kept.hash === hash) topicOverviews[topic.entryId] = kept.value
       else pending.push({ ...topic, label: entryLabel(topic.entryId), hash })

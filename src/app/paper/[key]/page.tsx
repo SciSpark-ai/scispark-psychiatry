@@ -30,7 +30,6 @@ import paperStyles from "@/components/paper/PaperLayout.module.css"
 import { PaperFeedContext } from "@/components/paper/PaperFeedContext"
 import { RecommendationDetails } from "@/components/feed/RecommendationDetails"
 import { PaperFeedback } from "@/components/paper/PaperFeedback"
-import { PaperMeta } from "@/components/paper/PaperMeta"
 import { PaperSynthesis } from "@/components/paper/PaperSynthesis"
 import { RelatedInWiki, resolveRelatedPages, type RelatedPageLink } from "@/components/paper/RelatedInWiki"
 import { requestCompanionCheck as reevaluateCompanion } from "@/components/companion/useCompanion"
@@ -535,7 +534,7 @@ function PaperPageContent() {
                         <ProjectMembershipControl pageId={page.id} />
                         {load.pageState.state === "saved" && (
                           <>
-                            <PaperMeta tldr={load.tldr} tags={load.tags} />
+                            {/* Clinical edition: upstream's "At a glance" panel is not shown; the AI summary and its tags at the top take its place. */}
                             <RelatedInWiki related={load.relatedPages} />
                           </>
                         )}

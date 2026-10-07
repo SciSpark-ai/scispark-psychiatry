@@ -58,11 +58,14 @@ describe("the top of the paper page", () => {
     expect(container.querySelector("h1")!.textContent).toBe(PAPER.title)
     expect(container.querySelector("[data-original-title]")).toBeNull()
   })
-  it("shows the AI summary of the card, marked as AI-written with the sentence it rests on", async () => {
-    await render(<ClinicalPaperSummary digest={ITEM.digest!} />)
+  it("shows the AI summary of the card with its tags, marked as AI-written, and no line about its source", async () => {
+    await render(<ClinicalPaperSummary digest={{ ...ITEM.digest!, tags: ["Depression", "Drug A"] }} />)
     expect(container.textContent).toContain("AI summary")
     expect(container.textContent).toContain("Drug A improved response at week 8.")
-    expect(container.textContent).toContain("Drug A improved response.")
+    expect([...container.querySelectorAll("[data-tag]")].map((tag) => tag.textContent)).toEqual(["Depression", "Drug A"])
+    expect(container.textContent).not.toContain("Based on")
+    // The source sentence is still there for whoever asks: on hover.
+    expect(container.querySelector("[title]")!.getAttribute("title")).toContain("Drug A improved response.")
   })
 })
 
