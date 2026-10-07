@@ -7,7 +7,7 @@ import type { LLMSettings } from "../../llm/settings"
 import type { PaperRecord } from "../../papers/types"
 import type { VaultStorage } from "../../vault/storage"
 import type { Design } from "../types"
-import { quoteInText, squash } from "../text/quote"
+import { quoteInText } from "../text/quote"
 
 /**
  * A short headline and a one-sentence takeaway for a listed paper, written by the `fast` model from
@@ -60,7 +60,14 @@ export const cardDigestSkill = defineSkill<DigestInput, z.infer<typeof DigestsSc
 })
 
 const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).length
-const numbers = (text: string) => text.match(/\d+(?:[.,]\d+)*/g) ?? []
+/**
+ * Numbers as plain digits with a point: journals print 0·74 and 21 025 where a model writes 0.74 and 21,025.
+ * Only separators between digits are touched, so the comparison is still exact on the digits.
+ */
+const plainNumbers = (text: string) => text
+  .replace(/(\d)[\u00b7\u2027\u2219](?=\d)/g, "$1.")
+  .replace(/(\d)[,\u00a0\u2009\u202f ](?=\d{3}(?!\d))/g, "$1")
+const numbers = (text: string) => plainNumbers(text).match(/\d+(?:\.\d+)?/g) ?? []
 
 /** The code checks a digest must pass before it is shown. Returns the reason it fails, or null when it passes. */
 export function digestProblem(digest: CardDigest, paper: PaperRecord): string | null {
@@ -69,8 +76,8 @@ export function digestProblem(digest: CardDigest, paper: PaperRecord): string | 
   if (!headline || !takeaway) return "empty"
   if (wordCount(headline) > HEADLINE_MAX_WORDS || wordCount(takeaway) > TAKEAWAY_MAX_WORDS) return "too-long"
   if (!quoteInText(digest.quote, paper.abstract ?? "")) return "quote-not-in-abstract"
-  const source = squash(`${paper.title} ${paper.abstract ?? ""}`)
-  const invented = numbers(`${headline} ${takeaway}`).find((value) => !source.includes(value))
+  const source = new Set(numbers(`${paper.title} ${paper.abstract ?? ""}`))
+  const invented = numbers(`${headline} ${takeaway}`).find((value) => !source.has(value))
   return invented ? `number-not-in-text:${invented}` : null
 }
 

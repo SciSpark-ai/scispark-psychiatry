@@ -135,3 +135,17 @@ describe("why a paper has no AI summary is recorded (owner question after the se
     expect(log.digestDrops).toEqual([{ key: "pmid:111", reason: "quote-not-in-abstract" }])
   })
 })
+
+describe("the number check reads a number the way journals print it (third real run: 4 summaries dropped for 0.74, 21,025, 8,679, 2.26)", () => {
+  const lancet = paper({ title: "Drug B and relapse", ids: { pmid: "7" }, abstract: "FINDINGS: Among 21 025 patients the hazard ratio was 0·74 (95% CI 0·61–0·90).\nINTERPRETATION: Drug B was associated with fewer relapses." })
+  const digest = (takeaway: string) => digests([{ index: 0, headline: "Drug B linked to fewer relapses", takeaway, quote: "Among 21 025 patients the hazard ratio was 0·74 (95% CI 0·61–0·90)." }])
+  it("accepts a decimal point where the abstract prints a middle dot, and a comma where it prints a space", async () => {
+    const result = await digestCards([item("k", lancet)], opts(digest("Among 21,025 patients, relapse was less likely with Drug B (hazard ratio 0.74).")))
+    expect(result.dropped).toEqual([])
+    expect(result.digests.has("k")).toBe(true)
+  })
+  it("still rejects a number that is not in the abstract in any form", async () => {
+    const result = await digestCards([item("k", lancet)], opts(digest("Among 21,025 patients, relapse was less likely with Drug B (hazard ratio 0.47).")))
+    expect(result.dropped).toEqual([{ key: "k", reason: "number-not-in-text:0.47" }])
+  })
+})
