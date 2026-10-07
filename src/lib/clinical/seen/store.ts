@@ -25,6 +25,22 @@ export async function loadSeen(storage: VaultStorage): Promise<Set<string>> {
   return new Set(Object.keys((await read(storage)).seen))
 }
 
+/** When each paper was first displayed. */
+export async function loadSeenTimes(storage: VaultStorage): Promise<Map<string, string>> {
+  return new Map(Object.entries((await read(storage)).seen))
+}
+
+/**
+ * How long a displayed paper stays under "Seen earlier" (owner decision 2026-10-06: about a day, so
+ * the section does not pile up). After that it is still remembered as seen, and so never recommended
+ * again, but it is no longer shown.
+ */
+export const SEEN_EARLIER_HOURS = 24
+
+export function seenRecently(seenAt: string | undefined, now: Date): boolean {
+  return seenAt !== undefined && now.getTime() - new Date(seenAt).getTime() < SEEN_EARLIER_HOURS * 3_600_000
+}
+
 /** Records the first time each paper was displayed. */
 export async function recordSeen(storage: VaultStorage, keys: string[], at: Date = new Date()): Promise<void> {
   if (keys.length === 0) return

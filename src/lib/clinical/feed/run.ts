@@ -12,6 +12,7 @@ import { planQueries } from "../plan/skill"
 import { retrieve, type EnumerateFn } from "../retrieve/pool"
 import { scoreCandidate, type ScoredItem } from "../score/score"
 import { digestCards } from "../digest/card"
+import { seenRecently } from "../seen/store"
 import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
 import { selectFeed, SHORTLIST_GRADE } from "../select/select"
 import type { Candidate, ClinicalStage, DropRecord, GatedCandidate, StageAGrade, WatchEntry } from "../types"
@@ -165,7 +166,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   // still matches, is kept under "Seen earlier".
   const selected = selectFeed(scored.filter((item) => !context.seen.has(item.candidate.key)), context.entries)
   const seenEarlier = scored
-    .filter((item) => context.seen.has(item.candidate.key) && item.grade.entryId !== null && item.grade.grade >= SHORTLIST_GRADE)
+    .filter((item) => seenRecently(context.seenAt.get(item.candidate.key), now()) && item.grade.entryId !== null && item.grade.grade >= SHORTLIST_GRADE)
     .sort((a, b) => b.score - a.score).slice(0, LIST_CAP)
 
   const toDigest = selected.items.map((item) => ({ key: item.candidate.key, paper: item.candidate.paper, design: item.candidate.design }))

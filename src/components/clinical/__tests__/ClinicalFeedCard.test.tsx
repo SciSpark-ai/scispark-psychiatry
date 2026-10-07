@@ -46,10 +46,14 @@ describe("ClinicalFeedCard", () => {
 
   it("says in words how the paper matches the watch entry, and explains it on hover", async () => {
     await mount(ITEM)
-    expect(container.textContent).toContain("Depression × Drug A · Direct match")
+    // A direct match shows the watch entry alone; a weaker match adds its level in words.
+    expect(container.textContent).not.toContain("Direct match")
     expect(container.textContent).not.toContain("4/4")
-    const chip = [...container.querySelectorAll("[title]")].find((el) => el.textContent?.includes("Direct match"))!
-    expect(chip.getAttribute("title")).toContain("We randomised 200 adults")
+    const tag = [...container.querySelectorAll("[title]")].find((el) => el.textContent === "Depression × Drug A")!
+    expect(tag.getAttribute("title")).toContain("We randomised 200 adults")
+    document.body.innerHTML = ""
+    await mount({ ...ITEM, grade: 3 })
+    expect(container.textContent).toContain("Depression × Drug A · Close match")
   })
 
   it("hands the paper to the reader before opening it, so the paper page has content", async () => {

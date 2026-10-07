@@ -20,7 +20,8 @@ export const CLINICAL_COPY = {
     savedToKnowledgeBase: "Saved",
     saveToKnowledgeBase: "Save to knowledge base",
     openWatchList: "Open the watch list",
-    updated: (when: string, mode: string, listed: number, found: number) => `Updated ${when} · ${mode} · ${listed} papers listed from ${found} found`,
+    /** The one line under the heading. */
+    status: (listed: number, found: number, mode: string, when: string) => `${listed} ${listed === 1 ? "paper" : "papers"} from ${found} found · ${mode} · updated ${when}`,
     saveFailed: "This paper could not be saved.",
     /** How well a paper fits the watch entry it was matched to (the stage-A grade, 1 to 4), in words. */
     matchLabels: { 4: "Direct match", 3: "Close match", 2: "Related", 1: "Loosely related" },
@@ -33,8 +34,8 @@ export const CLINICAL_COPY = {
     matchedOn: (quote: string) => `Matched on this sentence: “${quote}”`,
     conclusionLabel: "Authors' conclusion",
     aiNotice: "Headlines and summaries are written by AI from each abstract. Open a paper for its own title and abstract.",
-    nothingNew: "Nothing new since your last visit. Papers you have already seen are below.",
-    seenEarlier: "Seen earlier",
+    nothingNew: "Nothing new since your last visit.",
+    seenEarlier: "Seen earlier today",
     aiSummaryLabel: "AI summary",
     aiSummaryNote: (quote: string) =>
       `Written by the AI model from the abstract, not by the authors. It rests on this sentence: “${quote}” Read the paper before relying on it.`,

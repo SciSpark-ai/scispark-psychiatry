@@ -60,22 +60,26 @@ describe("ClinicalHome", () => {
     await mount()
     expect(container.querySelectorAll('[data-testid="clinical-feed-card"]')).toHaveLength(12)
     expect(container.textContent).toContain("Randomized trial")
-    expect(container.textContent).toContain("depression × esketamine · Direct match")
+    // Owner decision 2026-10-06: a direct match shows the watch entry alone; only weaker matches are worded.
+    expect(container.textContent).toContain("depression × esketamine")
+    expect(container.textContent).not.toContain("Direct match")
     expect(container.textContent).toContain("99 found")
     await act(async () => { byText("Show more").click() })
     expect(container.querySelectorAll('[data-testid="clinical-feed-card"]')).toHaveLength(24)
     expect(refreshMock).not.toHaveBeenCalled()
   })
 
-  it("keeps lower-confidence matches and safety signals collapsed", async () => {
+  it("keeps safety signals collapsed and does not show lower-confidence matches", async () => {
     const storage = vault.current as MemoryVaultStorage
     await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
     await saveClinicalFeed(storage, feedOf([item(1)], { lowerConfidence: [item(2, { entryId: null, grade: 0 })], safetySignals: [{ key: "pmid:9", paper: item(9).paper }] }))
     await mount()
     const details = [...container.querySelectorAll("details")]
-    expect(details).toHaveLength(2)
+    expect(details).toHaveLength(1)
     expect(details.every((d) => !d.open)).toBe(true)
-    expect(container.textContent).toContain("Lower-confidence matches (1)")
+    // Owner decision 2026-10-06: the lower-confidence section is no longer shown.
+    expect(container.textContent).not.toContain("Lower-confidence")
+    expect(container.textContent).not.toContain("Paper 2")
     expect(container.textContent).toContain("Safety signals (1)")
   })
 
@@ -122,5 +126,33 @@ describe("ClinicalHome", () => {
     await act(async () => { up().click() })
     expect(up().getAttribute("aria-pressed")).toBe("true")
     expect((await loadFeedback(storage)).map((e) => [e.paperKey, e.kind])).toEqual([["pmid:1", "relevant"]])
+  })
+
+  it("shows under Seen earlier only the papers displayed in the last 24 hours", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1)], { seenEarlier: [item(5), item(6)] }))
+    const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString()
+    await storage.write(".scispark/clinical/seen.json", JSON.stringify({ version: 1, seen: { "pmid:5": hoursAgo(2), "pmid:6": hoursAgo(72) } }))
+    await mount()
+    expect(container.textContent).toContain("Seen earlier today (1)")
+    expect(container.textContent).toContain("Paper 5")
+    expect(container.textContent).not.toContain("Paper 6")
+  })
+
+  it("has a bold heading, one status line, and the notes at the foot of the page", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1)]))
+    await mount()
+    expect(container.querySelector("h1")!.className).toContain("font-semibold")
+    const status = container.querySelector("[data-testid=clinical-feed-status]")!
+    expect(status.textContent).toContain("1 paper from 99 found")
+    expect(status.textContent).toContain("What's new")
+    const note = container.querySelector("[data-testid=clinical-feed-note]")!
+    expect(note.textContent).toContain("For literature awareness only")
+    expect(note.textContent).toContain("written by AI")
+    const order = container.textContent ?? ""
+    expect(order.indexOf("Paper 1")).toBeLessThan(order.indexOf("For literature awareness only"))
   })
 })

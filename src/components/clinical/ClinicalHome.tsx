@@ -8,18 +8,26 @@ import { loadBundle } from "@/lib/vault/bundle"
 import { paperKey } from "@/lib/papers/types"
 import { paperRecordFromFrontmatter } from "@/lib/papers/resolve"
 import { LlmErrorMessage } from "@/components/papers/LlmErrorMessage"
-import { PageHeader } from "@/components/ui/PageHeader"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { MODE_LABELS } from "@/lib/clinical/modes"
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
-import { recordSeen } from "@/lib/clinical/seen/store"
+import { loadSeenTimes, recordSeen, seenRecently } from "@/lib/clinical/seen/store"
 import { refreshClinicalFeed } from "@/lib/clinical/feed/client"
 import { feedPage, loadClinicalFeed, pageCount, type StoredFeed } from "@/lib/clinical/feed/stored"
 import { loadClinicalSettings, loadWatchEntries, saveClinicalSettings } from "@/lib/clinical/watch/store"
 import { FEED_MODES, type ClinicalSettings, type ClinicalStage, type WatchEntry } from "@/lib/clinical/types"
 import { ClinicalFeedCard } from "./ClinicalFeedCard"
 
-type Loaded = { entries: WatchEntry[]; settings: ClinicalSettings; feed: StoredFeed | null; saved: Set<string>; votes: Map<string, FeedbackKind> }
+type Loaded = {
+  entries: WatchEntry[]; settings: ClinicalSettings; feed: StoredFeed | null; saved: Set<string>; votes: Map<string, FeedbackKind>
+  /** Papers first displayed within the last day; only these are shown under "Seen earlier today". */
+  seenToday: Set<string>
+}
+
+async function loadSeenToday(vault: VaultStorage): Promise<Set<string>> {
+  const now = new Date()
+  return new Set([...(await loadSeenTimes(vault))].filter(([, at]) => seenRecently(at, now)).map(([key]) => key))
+}
 
 const entryLabel = (entry: WatchEntry) => [entry.condition, entry.treatment].filter(Boolean).join(" × ")
 
@@ -36,13 +44,13 @@ export function ClinicalHome() {
     ;(async () => {
       try {
         const vault = await getOpenVault()
-        const [entries, settings, feed, bundle, feedback] = await Promise.all([
-          loadWatchEntries(vault), loadClinicalSettings(vault), loadClinicalFeed(vault), loadBundle(vault), loadFeedback(vault),
+        const [entries, settings, feed, bundle, feedback, seenKeys] = await Promise.all([
+          loadWatchEntries(vault), loadClinicalSettings(vault), loadClinicalFeed(vault), loadBundle(vault), loadFeedback(vault), loadSeenToday(vault),
         ])
         const saved = new Set([...bundle.pages.values()].filter((page) => page.frontmatter.type === "paper").map((page) => paperKey(paperRecordFromFrontmatter(page.frontmatter))))
         if (cancelled) return
         setStorage(vault)
-        setData({ entries, settings, feed, saved, votes: new Map(feedback.map((event) => [event.paperKey, event.kind])) })
+        setData({ entries, settings, feed, saved, votes: new Map(feedback.map((event) => [event.paperKey, event.kind])), seenToday: seenKeys })
       } catch (failure) {
         if (!cancelled) setError(failure instanceof Error ? failure.message : String(failure))
       }
@@ -56,7 +64,8 @@ export function ClinicalHome() {
     setError(null)
     try {
       const feed = await refreshClinicalFeed((next) => setStage(next))
-      setData((current) => (current ? { ...current, feed } : current))
+      const seenKeys = storage ? await loadSeenToday(storage) : new Set<string>()
+      setData((current) => (current ? { ...current, feed, seenToday: seenKeys } : current))
       setPages(1)
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure))
@@ -64,7 +73,7 @@ export function ClinicalHome() {
       setRunning(false)
       setStage(null)
     }
-  }, [running])
+  }, [running, storage])
 
   async function changeMode(mode: ClinicalSettings["mode"]) {
     if (!storage || !data) return
@@ -87,31 +96,36 @@ export function ClinicalHome() {
   const { entries, settings, feed, saved, votes } = data
   const labels = new Map(entries.map((entry) => [entry.id, entryLabel(entry)]))
   const tones = new Map(entries.map((entry, index) => [entry.id, index]))
+  const seenToday = (feed?.seenEarlier ?? []).filter((item) => data.seenToday.has(item.key))
   const shown = feed ? Array.from({ length: pages }, (_, page) => feedPage(feed, page)).flat() : []
   const markSaved = (key: string) => setData((current) => (current ? { ...current, saved: new Set(current.saved).add(key) } : current))
 
   return (
     <div className="p-7">
-      <PageHeader
-        title={CLINICAL_COPY.feed.heading}
-        description={CLINICAL_COPY.disclaimerShort}
-        actions={
-          <>
-            <div role="group" aria-label={CLINICAL_COPY.watch.mode} className="flex overflow-hidden rounded-pill border border-border-warm text-[13px]">
-              {FEED_MODES.map((mode) => (
-                <button key={mode} type="button" aria-pressed={settings.mode === mode} onClick={() => void changeMode(mode)}
-                  className={`px-3 py-1.5 ${settings.mode === mode ? "bg-orange text-on-accent" : "text-muted-text hover:bg-card-surface/60"}`}>
-                  {MODE_LABELS[mode]}
-                </button>
-              ))}
-            </div>
-            <button type="button" onClick={() => void refresh()} disabled={running || entries.length === 0}
-              className="rounded-pill bg-orange px-4 py-1.5 text-[13px] font-medium text-on-accent hover:bg-orange/90 disabled:opacity-50">
-              {running ? CLINICAL_COPY.feed.refreshing : CLINICAL_COPY.feed.refresh}
-            </button>
-          </>
-        }
-      />
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-heading text-[26px] font-semibold tracking-heading text-espresso">{CLINICAL_COPY.feed.heading}</h1>
+          {feed && entries.length > 0 && (
+            <p data-testid="clinical-feed-status" className="mt-1 text-[14px] text-secondary-dark">
+              {CLINICAL_COPY.feed.status(feed.stats.listed, feed.stats.retrieved, MODE_LABELS[feed.mode], new Date(feed.generatedAt).toLocaleString())}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <div role="group" aria-label={CLINICAL_COPY.watch.mode} className="flex overflow-hidden rounded-pill border border-border-warm text-[13px]">
+            {FEED_MODES.map((mode) => (
+              <button key={mode} type="button" aria-pressed={settings.mode === mode} onClick={() => void changeMode(mode)}
+                className={`px-3 py-1.5 ${settings.mode === mode ? "bg-orange text-on-accent" : "text-muted-text hover:bg-card-surface/60"}`}>
+                {MODE_LABELS[mode]}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => void refresh()} disabled={running || entries.length === 0}
+            className="rounded-pill bg-orange px-4 py-1.5 text-[13px] font-medium text-on-accent hover:bg-orange/90 disabled:opacity-50">
+            {running ? CLINICAL_COPY.feed.refreshing : CLINICAL_COPY.feed.refresh}
+          </button>
+        </div>
+      </div>
 
       {running && stage && <p role="status" aria-live="polite" className="mb-4 text-[13px] text-muted-text">{CLINICAL_COPY.stages[stage]}…</p>}
       {error && <div role="alert" className="mb-4"><LlmErrorMessage message={error} /></div>}
@@ -125,10 +139,6 @@ export function ClinicalHome() {
         <p className="text-[14px] text-muted-text">{CLINICAL_COPY.feed.emptyNoFeed}</p>
       ) : (
         <>
-          <p className="mb-4 text-[13px] text-muted-text">
-            {CLINICAL_COPY.feed.updated(new Date(feed.generatedAt).toLocaleString(), MODE_LABELS[feed.mode], feed.stats.listed, feed.stats.retrieved)}
-          </p>
-          <p className="mb-4 text-[12px] text-muted-text">{CLINICAL_COPY.feed.aiNotice}</p>
           {feed.items.length === 0 && <p className="mb-4 text-[14px] text-espresso">{CLINICAL_COPY.feed.nothingNew}</p>}
           {feed.warnings.length > 0 && <ul className="mb-4 list-disc pl-5 text-[12px] text-muted-text">{feed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           <div className="grid gap-4 lg:grid-cols-2">
@@ -142,22 +152,11 @@ export function ClinicalHome() {
               {CLINICAL_COPY.feed.morePapers}
             </button>
           )}
-          {feed.lowerConfidence.length > 0 && (
-            <details className="mt-8" onToggle={(event) => { if (event.currentTarget.open) void recordSeen(storage, feed.lowerConfidence.map((item) => item.key)).catch(() => {}) }}>
-              <summary className="cursor-pointer text-[14px] text-espresso">{CLINICAL_COPY.feed.lowerConfidence} ({feed.lowerConfidence.length})</summary>
+          {seenToday.length > 0 && (
+            <details className="mt-8">
+              <summary className="cursor-pointer text-[14px] text-espresso">{CLINICAL_COPY.feed.seenEarlier} ({seenToday.length})</summary>
               <div className="mt-3 grid gap-4 lg:grid-cols-2">
-                {feed.lowerConfidence.map((item) => (
-                  <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
-                    entryLabel={item.entryId ? labels.get(item.entryId) : undefined} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
-                ))}
-              </div>
-            </details>
-          )}
-          {(feed.seenEarlier ?? []).length > 0 && (
-            <details className="mt-6">
-              <summary className="cursor-pointer text-[14px] text-espresso">{CLINICAL_COPY.feed.seenEarlier} ({(feed.seenEarlier ?? []).length})</summary>
-              <div className="mt-3 grid gap-4 lg:grid-cols-2">
-                {(feed.seenEarlier ?? []).map((item) => (
+                {seenToday.map((item) => (
                   <ClinicalFeedCard key={item.key} item={item} storage={storage} saved={saved.has(item.key)} onSave={markSaved}
                     entryLabel={item.entryId ? labels.get(item.entryId) : undefined} tone={item.entryId ? tones.get(item.entryId) : undefined} vote={votes.get(item.key)} />
                 ))}
@@ -174,6 +173,10 @@ export function ClinicalHome() {
           )}
         </>
       )}
+      {/* What the feed is and is not, once per page and out of the way of the papers. */}
+      <p data-testid="clinical-feed-note" className="mt-10 border-t border-border-warm/60 pt-4 text-[13px] leading-relaxed text-muted-text">
+        {CLINICAL_COPY.disclaimerShort} {CLINICAL_COPY.feed.aiNotice}
+      </p>
     </div>
   )
 }

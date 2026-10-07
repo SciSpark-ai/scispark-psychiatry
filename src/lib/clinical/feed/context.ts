@@ -6,7 +6,7 @@ import { dismissedKeys, exemplarTitles, loadFeedback } from "../feedback/store"
 import { loadClinicalSettings, loadWatchEntries } from "../watch/store"
 import type { ClinicalSettings, WatchEntry } from "../types"
 import { CLINICAL_COPY } from "../copy"
-import { loadSeen } from "../seen/store"
+import { loadSeenTimes } from "../seen/store"
 
 export interface RunContext {
   entries: WatchEntry[]
@@ -15,6 +15,8 @@ export interface RunContext {
   exclude: Set<string>
   /** Papers already displayed to the user (seen/store.ts). */
   seen: Set<string>
+  /** When each seen paper was first displayed. */
+  seenAt: Map<string, string>
   exemplars: string[]
 }
 
@@ -23,6 +25,7 @@ export async function assembleContext(storage: VaultStorage): Promise<RunContext
   const entries = (await loadWatchEntries(storage)).filter((entry) => entry.priority !== "paused")
   if (entries.length === 0) throw new Error(CLINICAL_COPY.run.noEntries)
   const feedback = await loadFeedback(storage)
+  const seenAt = await loadSeenTimes(storage)
   const bundle = await loadBundle(storage)
   const saved = [...bundle.pages.values()]
     .filter((page) => page.frontmatter.type === "paper")
@@ -31,7 +34,8 @@ export async function assembleContext(storage: VaultStorage): Promise<RunContext
     entries,
     settings: await loadClinicalSettings(storage),
     exclude: new Set([...saved, ...dismissedKeys(feedback)]),
-    seen: await loadSeen(storage),
+    seen: new Set(seenAt.keys()),
+    seenAt,
     exemplars: exemplarTitles(feedback),
   }
 }

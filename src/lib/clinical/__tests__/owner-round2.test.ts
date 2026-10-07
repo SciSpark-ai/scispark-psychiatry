@@ -145,4 +145,12 @@ describe("papers already displayed are not recommended again", () => {
     expect(second.items).toEqual([])
     expect(second.seenEarlier).toHaveLength(2)
   })
+  it("keeps a paper under Seen earlier for a day only; after that it is neither listed nor shown, and still not recommended", async () => {
+    const { storage, run } = await setup()
+    await run(new MockProvider([assess(A0, A1)]))
+    await recordSeen(storage, ["pmid:111"], new Date(NOW().getTime() - 3 * 86_400_000))
+    const second = await run(new MockProvider([assess(A0, A1)]))
+    expect(second.items.map((item) => item.paper.ids.pmid)).toEqual(["112"])
+    expect(second.seenEarlier ?? []).toEqual([])
+  })
 })

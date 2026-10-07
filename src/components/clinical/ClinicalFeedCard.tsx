@@ -7,7 +7,6 @@ import { paperSlug } from "@/lib/wiki/authoring"
 import { displayTitle } from "@/lib/papers/title"
 import { savePaper } from "@/lib/papers/save-client"
 import { Card } from "@/components/ui/Card"
-import { Chip } from "@/components/ui/Chip"
 import { PaperSaveButton } from "@/components/paper/PaperSaveButton"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import type { FeedbackKind } from "@/lib/clinical/feedback/store"
@@ -43,6 +42,7 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
   // Journal and the publication date as precisely as the record gives it (day, month or year).
   const source = [paper.venue, paper.date?.slice(0, 10) ?? (paper.year ? String(paper.year) : undefined)].filter(Boolean).join(" · ")
   const inferredDesign = (item.designSource === "model" || item.designSource === "text-rule") && item.design !== "other" && item.design !== "unknown"
+  const designNote = item.designSource === "publication-type" ? CLINICAL_COPY.designNote : inferredDesign ? CLINICAL_COPY.designInferredNote : undefined
   const conclusion = conclusionOf(paper.abstract)
   const matched = item.entryId !== null && isMatchGrade(item.grade) ? item.grade : null
   const matchNote = matched === null ? undefined
@@ -69,24 +69,23 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
       // Inline, not utility classes: the tint has to win over the card's own background class.
       {...(tone === undefined ? {} : { "data-tone": String(tone), style: {
         "--card-tone": CARD_TONES[tone % CARD_TONES.length],
-        backgroundColor: "color-mix(in srgb, var(--card-tone) 10%, var(--surface-light))",
-        borderColor: "color-mix(in srgb, var(--card-tone) 30%, var(--border))",
+        backgroundColor: "color-mix(in srgb, var(--card-tone) 4%, var(--surface-light))",
+        borderColor: "color-mix(in srgb, var(--card-tone) 22%, var(--border))",
       } as CSSProperties })}
       className="flex flex-col gap-2.5 p-4"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        {item.designSource === "publication-type"
-          ? <Chip tone="accent" title={CLINICAL_COPY.designNote}>{CLINICAL_COPY.designLabels[item.design]}</Chip>
-          : inferredDesign && <Chip tone="accent" data-inferred="true" title={CLINICAL_COPY.designInferredNote}>{CLINICAL_COPY.designLabels[item.design]}</Chip>}
-        {entryLabel && <Chip title={matchNote}>{entryLabel}{matched !== null ? ` · ${F.matchLabels[matched]}` : ""}</Chip>}
-        {item.flags.includes("title-only") && <Chip>{CLINICAL_COPY.feed.noAbstract}</Chip>}
-        {item.ungraded && <Chip>{CLINICAL_COPY.feed.notGraded}</Chip>}
-      </div>
+      {/* Tags are plain text, not pills: a pill's own background fights with the card's tint. */}
+      <p className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-snug">
+        {designNote && <span title={designNote} {...(inferredDesign ? { "data-inferred": "true" } : {})} className="font-semibold uppercase tracking-wide text-accent-ink">{CLINICAL_COPY.designLabels[item.design]}</span>}
+        {entryLabel && <span title={matchNote} className="font-medium text-secondary-dark">{entryLabel}{matched !== null && matched < 4 ? ` · ${F.matchLabels[matched]}` : ""}</span>}
+        {item.flags.includes("title-only") && <span className="text-muted-text">{CLINICAL_COPY.feed.noAbstract}</span>}
+        {item.ungraded && <span className="text-muted-text">{CLINICAL_COPY.feed.notGraded}</span>}
+      </p>
       {/* With an AI headline the card shows only headline, source and summary; the paper's own title is on its page. */}
       <button type="button" onClick={() => void open()} className="text-left" title={displayTitle(paper.title)}>
         <h3 className="line-clamp-3 font-heading text-[18px] font-semibold leading-snug tracking-heading-card text-espresso">{item.digest ? item.digest.headline : displayTitle(paper.title)}</h3>
       </button>
-      {source && <p className="truncate text-[13px] text-muted-text" title={source}>{source}</p>}
+      {source && <p className="truncate text-[13px] font-medium text-secondary-dark" title={source}>{source}</p>}
       {item.digest
         ? <p className="text-[15px] leading-relaxed text-espresso" title={F.aiSummaryNote(item.digest.quote)}>{item.digest.takeaway}</p>
         : conclusion && <p className="line-clamp-4 text-[15px] leading-relaxed text-espresso" title={F.conclusionLabel}>{conclusion}</p>}
