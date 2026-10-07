@@ -6,7 +6,7 @@ const article = (pmid: string) =>
   `<Abstract><AbstractText>Abstract ${pmid}.</AbstractText></Abstract></Article></MedlineCitation></PubmedArticle>`
 
 /** A PubMed stand-in whose every response takes `delayMs`, and whose efetch calls listed in `failOn` (1-based) fail. */
-function slowPubmed(returned: number, opts: { delayMs?: number; failOn?: number[] } = {}) {
+function slowPubmed(returned: number, opts: { delayMs?: number; failOn?: number[]; omit?: string[] } = {}) {
   const ids = Array.from({ length: returned }, (_, i) => String(1000 + i))
   let efetchCalls = 0
   const fetchFn = (async (input: RequestInfo | URL) => {
@@ -17,7 +17,7 @@ function slowPubmed(returned: number, opts: { delayMs?: number; failOn?: number[
     }
     efetchCalls += 1
     if (opts.failOn?.includes(efetchCalls)) return { ok: false, status: 429, text: async () => "" } as unknown as Response
-    const asked = new URL(url).searchParams.get("id")!.split(",")
+    const asked = new URL(url).searchParams.get("id")!.split(",").filter((id) => !opts.omit?.includes(id))
     return { ok: true, status: 200, text: async () => `<PubmedArticleSet>${asked.map(article).join("")}</PubmedArticleSet>` } as unknown as Response
   }) as unknown as typeof fetch
   return fetchFn
@@ -40,5 +40,12 @@ describe("enumeratePubmed deadlines and partial reads", () => {
 
   it("still fails when not even the first batch could be read", async () => {
     await expect(enumeratePubmed({ query: "q", maxRecords: 500 }, { fetchFn: slowPubmed(250, { failOn: [1] }) })).rejects.toThrow(/efetch/)
+  })
+
+  it("does not call a read truncated because PubMed returned no article for one of the ids", async () => {
+    // Seen on the first real run: 189 ids, 188 articles (efetch omits records that are not journal articles).
+    const result = await enumeratePubmed({ query: "q", maxRecords: 500 }, { fetchFn: slowPubmed(150, { omit: ["1003"] }) })
+    expect(result.records).toHaveLength(149)
+    expect(result.truncated).toBe(false)
   })
 })

@@ -367,6 +367,7 @@ export async function enumeratePubmed(q: PubmedEnumerateQuery, deps: PubmedDeps 
   }, deps.timeoutMs)
 
   const records: PaperRecord[] = []
+  let stoppedEarly = false
   for (let i = 0; i < pmids.length; i += ENUMERATE_FETCH_BATCH) {
     const batch = pmids.slice(i, i + ENUMERATE_FETCH_BATCH)
     try {
@@ -375,8 +376,9 @@ export async function enumeratePubmed(q: PubmedEnumerateQuery, deps: PubmedDeps 
       deps.signal?.throwIfAborted()
       // Nothing read yet: the query failed. Otherwise keep what was read; the rest counts as truncated.
       if (records.length === 0) throw err
+      stoppedEarly = true
       break
     }
   }
-  return { records, total, truncated: total > records.length }
+  return { records, total, truncated: stoppedEarly || total > pmids.length }
 }
