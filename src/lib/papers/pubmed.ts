@@ -13,7 +13,7 @@ const EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 const MAX_FIELDS = 5
 // Repeated metadata stays uniform even when only one element is present.
 // Abstract/title mixed content is handled separately in reading order.
-const ARRAY_TAGS = new Set(["PubmedArticle", "Author", "ArticleId", "MeshHeading", "PublicationType"])
+const ARRAY_TAGS = new Set(["PubmedArticle", "Author", "ArticleId", "MeshHeading", "PublicationType", "PubMedPubDate"])
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -95,7 +95,7 @@ interface PubmedMedlineCitation {
 
 interface PubmedArticleEntry {
   MedlineCitation?: PubmedMedlineCitation
-  PubmedData?: { ArticleIdList?: { ArticleId?: PubmedArticleId[] } }
+  PubmedData?: { ArticleIdList?: { ArticleId?: PubmedArticleId[] }; History?: { PubMedPubDate?: Array<PubmedDate & { "@_PubStatus"?: string }> } }
 }
 
 interface PubmedArticleSetResponse {
@@ -218,6 +218,13 @@ function mapFields(headings: PubmedMeshHeading[] | null | undefined): string[] {
   return [...major, ...minor].slice(0, MAX_FIELDS).map((d) => d.name)
 }
 
+/** The day the record entered PubMed: the "entrez" date of its history, which the [edat] search field goes by; else the "pubmed" date. */
+function addedDateOf(entry: PubmedArticleEntry): string | undefined {
+  const history = entry.PubmedData?.History?.PubMedPubDate ?? []
+  const stamp = history.find((date) => date["@_PubStatus"] === "entrez") ?? history.find((date) => date["@_PubStatus"] === "pubmed")
+  return mapDateParts(stamp).date
+}
+
 function mapArticle(entry: PubmedArticleEntry, readable: { title: string; abstract?: string }): PaperRecord {
   const citation = entry.MedlineCitation
   const article = citation?.Article
@@ -238,6 +245,7 @@ function mapArticle(entry: PubmedArticleEntry, readable: { title: string; abstra
     authors: mapAuthors(article?.AuthorList?.Author),
     year: dateParts.year,
     date: dateParts.date,
+    addedDate: addedDateOf(entry),
     venue: nonEmpty(textOf(article?.Journal?.Title)),
     citationCount: undefined,
     fields: mapFields(citation?.MeshHeadingList?.MeshHeading),

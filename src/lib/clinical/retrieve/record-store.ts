@@ -34,7 +34,7 @@ export async function loadRecordStore(storage: VaultStorage, now: Date): Promise
   try {
     const raw = await storage.read(RECORDS_PATH)
     const parsed = raw === null ? null : (JSON.parse(raw) as { version?: unknown; papers?: unknown })
-    if (parsed && parsed.version === 1 && parsed.papers && typeof parsed.papers === "object") held = parsed.papers as Record<string, Held>
+    if (parsed && parsed.version === 2 && parsed.papers && typeof parsed.papers === "object") held = parsed.papers as Record<string, Held>
   } catch {
     // An unreadable store is an empty one: everything is fetched again.
   }
@@ -53,7 +53,7 @@ export async function loadRecordStore(storage: VaultStorage, now: Date): Promise
     },
     async save() {
       const kept = Object.fromEntries(Object.entries(held).filter(([, entry]) => age(entry.at) <= KEEP_DAYS))
-      await storage.write(RECORDS_PATH, JSON.stringify({ version: 1, papers: kept }))
+      await storage.write(RECORDS_PATH, JSON.stringify({ version: 2, papers: kept }))
     },
   }
 }

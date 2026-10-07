@@ -124,6 +124,36 @@ describe("searchPubmed", () => {
     })
   })
 
+  // Clinical edition: the feed searches by the date a record entered PubMed, so the card needs that date too.
+  it("reads the date the record entered PubMed", async () => {
+    const xml = `<?xml version="1.0"?>
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation Status="Publisher" Owner="NLM">
+      <PMID Version="1">33333333</PMID>
+      <Article>
+        <Journal><JournalIssue><PubDate><Year>2026</Year></PubDate></JournalIssue><Title>Some Journal</Title></Journal>
+        <ArticleTitle>A paper published in August and indexed in October.</ArticleTitle>
+        <ArticleDate DateType="Electronic"><Year>2026</Year><Month>08</Month><Day>20</Day></ArticleDate>
+      </Article>
+    </MedlineCitation>
+    <PubmedData>
+      <History>
+        <PubMedPubDate PubStatus="received"><Year>2026</Year><Month>3</Month><Day>2</Day></PubMedPubDate>
+        <PubMedPubDate PubStatus="pubmed"><Year>2026</Year><Month>10</Month><Day>1</Day><Hour>6</Hour><Minute>0</Minute></PubMedPubDate>
+        <PubMedPubDate PubStatus="entrez"><Year>2026</Year><Month>9</Month><Day>30</Day></PubMedPubDate>
+      </History>
+      <ArticleIdList><ArticleId IdType="pubmed">33333333</ArticleId></ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+</PubmedArticleSet>`
+    const fetchFn = sequencedFetch([fakeEsearch(["33333333"]), fakeEfetch(xml)])
+    const [record] = await searchPubmed({ query: "x", limit: 1 }, { fetchFn })
+    expect(record.date).toBe("2026-08-20")
+    // "entrez" is the date the search's [edat] field uses.
+    expect(record.addedDate).toBe("2026-09-30")
+  })
+
   it("parses a MedlineDate range string down to just the leading year, with date left undefined", async () => {
     const xml = `<?xml version="1.0"?>
 <PubmedArticleSet>

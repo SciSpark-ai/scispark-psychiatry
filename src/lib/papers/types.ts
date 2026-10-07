@@ -20,6 +20,8 @@ export interface PaperRecord {
   authors: PaperAuthor[]
   year?: number
   date?: string // YYYY-MM-DD when known
+  /** Clinical edition: the day the record entered PubMed (YYYY-MM-DD), which is what a search by look-back goes by. */
+  addedDate?: string
   venue?: string
   citationCount?: number
   oaUrl?: string // best open-access landing/HTML url
@@ -126,6 +128,7 @@ export function mergeRecords(a: PaperRecord, b: PaperRecord): PaperRecord {
     authors: a.authors.length >= b.authors.length ? a.authors : b.authors,
     year: preferDefined(a.year, b.year),
     date: preferDefined(a.date, b.date),
+    addedDate: preferDefined(a.addedDate, b.addedDate),
     venue: preferDefined(a.venue, b.venue),
     citationCount: maxDefined(a.citationCount, b.citationCount),
     oaUrl: preferDefined(a.oaUrl, b.oaUrl),

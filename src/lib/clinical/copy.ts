@@ -28,6 +28,9 @@ export const CLINICAL_COPY = {
     readLaterFailed: "The Read later list could not be saved.",
     /** The one line under the heading. */
     status: (listed: number, found: number, lookBack: string, when: string) => `${listed} ${listed === 1 ? "paper" : "papers"} from ${found} found · ${lookBack} · updated ${when}`,
+    /** The two dates of a card, when they differ. The list is searched by the second. */
+    publishedOn: (date: string) => `published ${date}`,
+    inPubmed: (date: string) => `in PubMed ${date}`,
     customDates: "Custom dates",
     dateFrom: "From",
     dateTo: "To",

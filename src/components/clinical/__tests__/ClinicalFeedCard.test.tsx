@@ -163,4 +163,13 @@ describe("ClinicalFeedCard", () => {
     expect(plain.hasAttribute("data-toned")).toBe(false)
     expect(plain.className).toContain("text-accent-ink")
   })
+
+  // Owner decision 2026-10-07: a paper found in a two-week search may have been published months before.
+  it("says when the paper was published and when it entered PubMed, if the two differ", async () => {
+    await mount({ ...ITEM, paper: { ...ITEM.paper, venue: "Some Journal", date: "2026-08-20", addedDate: "2026-09-30" } })
+    expect(container.querySelector("[data-testid=card-source]")!.textContent).toBe("Some Journal · published 2026-08-20 · in PubMed 2026-09-30")
+    document.body.innerHTML = ""
+    await mount({ ...ITEM, paper: { ...ITEM.paper, venue: "Some Journal", date: "2026-09-30", addedDate: "2026-09-30" } })
+    expect(container.querySelector("[data-testid=card-source]")!.textContent).toBe("Some Journal · 2026-09-30")
+  })
 })

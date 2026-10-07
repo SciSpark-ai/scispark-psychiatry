@@ -60,7 +60,10 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
     } catch (failure) { setError(failure instanceof Error ? failure.message : F.readLaterFailed) }
   }
   // Journal and the publication date as precisely as the record gives it (day, month or year).
-  const source = [paper.venue, paper.date?.slice(0, 10) ?? (paper.year ? String(paper.year) : undefined)].filter(Boolean).join(" · ")
+  // When the record entered PubMed on another day, both dates are given: the search goes by the second.
+  const published = paper.date?.slice(0, 10) ?? (paper.year ? String(paper.year) : undefined)
+  const added = paper.addedDate?.slice(0, 10)
+  const source = [paper.venue, ...(added && published && added !== published ? [F.publishedOn(published), F.inPubmed(added)] : [published])].filter(Boolean).join(" · ")
   const inferredDesign = (item.designSource === "model" || item.designSource === "text-rule") && item.design !== "other" && item.design !== "unknown"
   const designNote = item.designSource === "publication-type" ? CLINICAL_COPY.designNote : inferredDesign ? CLINICAL_COPY.designInferredNote : undefined
   const conclusion = conclusionOf(paper.abstract)
@@ -123,7 +126,7 @@ export function ClinicalFeedCard({ item, storage, saved, onSave, entryLabel, vot
       <button type="button" onClick={(event) => { event.stopPropagation(); void open() }} className="text-left" title={displayTitle(paper.title)}>
         <h3 className="line-clamp-3 font-heading text-[18px] font-semibold leading-snug tracking-heading-card text-espresso">{item.digest ? item.digest.headline : displayTitle(paper.title)}</h3>
       </button>
-      {source && <p className="truncate text-[13px] font-medium text-secondary-dark" title={source}>{source}</p>}
+      {source && <p data-testid="card-source" className="truncate text-[13px] font-medium text-secondary-dark" title={source}>{source}</p>}
       {item.digest
         ? <p className="text-[15px] leading-relaxed text-espresso" title={F.aiSummaryNote(item.digest.quote)}>{item.digest.takeaway}</p>
         : conclusion && <p className="line-clamp-4 text-[15px] leading-relaxed text-espresso" title={F.conclusionLabel}>{conclusion}</p>}
