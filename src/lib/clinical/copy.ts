@@ -47,6 +47,7 @@ export const CLINICAL_COPY = {
       `${papers} ${papers === 1 ? "paper" : "papers"}${kinds.length > 0 ? `: ${kinds.map((kind) => `${kind.count} ${kind.label.toLowerCase()}`).join(", ")}` : ""}`,
     /** Opens the rest of a long line of other findings. */
     moreFindings: (count: number) => `${count} more`,
+    fewerFindings: "Show less",
     showSeenAgain: "Show seen papers again",
     showSeenAgainNote: "Papers you have already been shown are left out of a new list. This forgets them for the chosen time range, so the next refresh can list them again.",
     seenForgotten: (count: number) => (count > 0 ? `${count} seen ${count === 1 ? "paper" : "papers"} can be listed again. Press Refresh to list them.` : "No seen papers were being held back for this time range."),
@@ -88,6 +89,17 @@ export const CLINICAL_COPY = {
     aiSummary: "AI summary",
     aiSummaryNote: (quote: string) => `Written by AI from the abstract, not by the authors. It rests on this sentence: “${quote}” Read the abstract before relying on it.`,
     originalAbstract: "Abstract",
+    /** The top of the paper page. */
+    header: {
+      originalTitle: "Original title",
+      published: (date: string) => `Published ${date}`,
+      inPubmed: (date: string) => `In PubMed ${date}`,
+      separator: " · ",
+      authorJoin: ", ",
+      moreAuthors: (count: number) => ` and ${count} more`,
+      doi: (doi: string) => `DOI ${doi}`,
+      pmid: (pmid: string) => `PMID ${pmid}`,
+    },
     /** The nine-item digest on the paper page. */
     digest: {
       heading: "Digest",
@@ -102,7 +114,8 @@ export const CLINICAL_COPY = {
       fromFullText: "Written by AI from the full text", fromExcerpt: "Written by AI from the full text, without its middle part",
       fromAbstract: "Written by AI from the abstract only. The full text could not be read.",
       notStated: (fromFullText: boolean, labels: string[]) => `Not stated in the ${fromFullText ? "paper" : "abstract"}: ${labels.map((label) => label.toLowerCase()).join(", ")}.`,
-      unverified: "Check this against the paper: a number here was not found in the text.",
+      unverified: "Check this against the paper: a number or the source sentence given for it was not found in the text.",
+      sourceSentence: "Source sentence",
       /** The side navigation of the paper page. */
       nav: { label: "On this page", summary: "AI summary", digest: "Digest", abstract: "Abstract" },
     },

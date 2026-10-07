@@ -90,3 +90,23 @@ describe("the card summary looked up for the paper page", () => {
     expect((await findCardDigest(storage, record))?.tags).toEqual(["Depression", "Esketamine"])
   })
 })
+
+describe("what the paper page knows about a paper from the list", () => {
+  it("gives the kind of study and the topic the paper was listed under", async () => {
+    const { MemoryVaultStorage } = await import("../../vault/memory-storage")
+    const { findPaperCardInfo } = await import("../digest/lookup")
+    const storage = new MemoryVaultStorage()
+    const record = paper({ title: "T", ids: { pmid: "5" } })
+    await storage.write(".scispark/clinical/feed.json", JSON.stringify({
+      topics: [{ id: "w1", condition: "Depression", treatment: "Esketamine" }],
+      items: [{ key: "pmid:5", design: "meta-analysis", designSource: "publication-type", entryId: "w1", digest: { headline: "H", takeaway: "S", quote: "Q" } }],
+    }))
+    expect(await findPaperCardInfo(storage, record)).toEqual({ digest: { headline: "H", takeaway: "S", quote: "Q" }, design: "meta-analysis", designSource: "publication-type", topic: "Depression × Esketamine" })
+  })
+  it("reads the kind of study from the record when the paper is not on the list", async () => {
+    const { MemoryVaultStorage } = await import("../../vault/memory-storage")
+    const { findPaperCardInfo } = await import("../digest/lookup")
+    const record = paper({ title: "A trial", ids: { pmid: "6" }, publicationTypes: ["Randomized Controlled Trial"] })
+    expect(await findPaperCardInfo(new MemoryVaultStorage(), record)).toEqual({ digest: null, design: "randomized-trial", designSource: "publication-type" })
+  })
+})

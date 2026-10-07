@@ -19,10 +19,10 @@ import type { VaultStorage } from "@/lib/vault/storage"
 import { rangeToOffsets, plainTextOf } from "@/lib/reader/dom-offsets"
 import type { SurfaceSelection } from "@/components/reader/HtmlSurface"
 import AskableSurface from "@/components/reader/AskableSurface"
-import { PaperHeader } from "@/components/paper/PaperHeader"
 import { ClinicalAbstract } from "@/components/clinical/ClinicalAbstract"
 import { ClinicalPaperSummary } from "@/components/clinical/ClinicalPaperSummary"
-import { useCardDigest } from "@/components/clinical/useCardDigest"
+import { usePaperCardInfo } from "@/components/clinical/useCardDigest"
+import { ClinicalPaperHeader } from "@/components/clinical/ClinicalPaperHeader"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { PaperActions, type DigestState, type EnrichState, type IngestState, type SaveState } from "@/components/paper/PaperActions"
 import { ClinicalDigestButton, ClinicalPaperDigest, ClinicalPaperNav } from "@/components/clinical/ClinicalPaperDigest"
@@ -115,7 +115,8 @@ function PaperPageContent() {
 
   const [load, setLoad] = useState<LoadState>({ status: "loading" })
   // Clinical edition: the AI headline and summary the feed wrote for this paper, if any.
-  const cardDigest = useCardDigest(load.status === "ready" ? load.paper : null)
+  const cardInfo = usePaperCardInfo(load.status === "ready" ? load.paper : null)
+  const cardDigest = cardInfo?.digest ?? null
   const clinicalDigest = usePaperDigest(load.status === "ready" ? load.paper : null)
   const [digestState, setDigestState] = useState<DigestState>({ status: "idle" })
   const [ingestState, setIngestState] = useState<IngestState>({ phase: "idle" })
@@ -474,7 +475,8 @@ function PaperPageContent() {
               <div className="border-b border-border-warm pb-6">
                 <BackLink className="mb-6" />
 
-                <PaperHeader paper={load.paper} headline={cardDigest?.headline} />
+                {/* Clinical edition: its own header, with the kind of study and the topic, in place of PaperHeader. */}
+                <ClinicalPaperHeader paper={load.paper} headline={cardDigest?.headline} design={cardInfo?.design} designSource={cardInfo?.designSource} topic={cardInfo?.topic} />
                 {cardDigest && <ClinicalPaperSummary digest={cardDigest} />}
 
                 <PaperActions

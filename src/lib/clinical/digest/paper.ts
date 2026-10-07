@@ -9,6 +9,7 @@ import type { VaultStorage } from "../../vault/storage"
 import type { LLMProvider, Tier } from "../../llm/types"
 import type { LLMSettings } from "../../llm/settings"
 import { numbers } from "./card"
+import { quoteInText } from "../text/quote"
 
 /**
  * The digest on the paper page (owner decision 2026-10-07): short items in a fixed order (nine, and
@@ -19,6 +20,8 @@ import { numbers } from "./card"
  *
  * - An item the paper does not state is empty. The model is told to return null, and an answer such
  *   as "Not reported" is read as empty too.
+ * - Each item names the one sentence of the paper it rests on; the sentence is kept only if it is in
+ *   the text word for word (spec 5.4), and a quote that is not is treated like a wrong number.
  * - A number in an item must be printed in the text the model was given. If one is not, the model is
  *   asked once more; an item that still fails is kept but listed in `unverified`, so the page can say so.
  */
@@ -27,8 +30,12 @@ export const PAPER_DIGEST_ITEMS = ["question", "design", "population", "interven
 export type PaperDigestItem = (typeof PAPER_DIGEST_ITEMS)[number]
 
 const item = z.string().nullable().default(null)
+const ITEM_SHAPE = { question: item, design: item, population: item, intervention: item, mainResult: item, secondaryOutcomes: item, safety: item, limitations: item, conclusion: item, funding: item }
+const NO_QUOTES = Object.fromEntries(PAPER_DIGEST_ITEMS.map((key) => [key, null])) as Record<PaperDigestItem, string | null>
 const PaperDigestOutputSchema = z.object({
-  question: item, design: item, population: item, intervention: item, mainResult: item, secondaryOutcomes: item, safety: item, limitations: item, conclusion: item, funding: item,
+  ...ITEM_SHAPE,
+  /** For each item, the one sentence of the text it rests on, copied word for word. */
+  quotes: z.object(ITEM_SHAPE).default(NO_QUOTES),
 })
 type PaperDigestOutput = z.infer<typeof PaperDigestOutputSchema>
 
@@ -36,6 +43,8 @@ const StoredPaperDigestSchema = z.object({
   version: z.literal(1),
   // An item added later is empty in a digest stored before it existed.
   items: z.object(Object.fromEntries(PAPER_DIGEST_ITEMS.map((key) => [key, item])) as Record<PaperDigestItem, typeof item>),
+  /** The sentence of the paper each item rests on, where the model gave one that is in the text word for word. */
+  quotes: z.object(Object.fromEntries(PAPER_DIGEST_ITEMS.map((key) => [key, item])) as Record<PaperDigestItem, typeof item>).default(NO_QUOTES),
   unverified: z.array(z.enum(PAPER_DIGEST_ITEMS)),
   source: PaperTextInfoSchema,
 })
@@ -60,6 +69,8 @@ Return these ten items. Each is one or two plain sentences, at most 45 words (at
 - "conclusion": the authors' conclusion, in their level of certainty.
 - "funding": the funder and any conflicts of interest declared.
 
+Also return "quotes": for every item you filled, the ONE sentence of the text that the item rests on most, copied word for word, without changing a character; null for an item you left null. A quote that is not in the text word for word is rejected.
+
 Rules:
 - Use only the text given. Add nothing from outside knowledge. A mark "[...]" in the full text shows where the middle of a long paper was left out.
 - Copy numbers exactly as printed. Never calculate a new number (no differences, ratios or rounding) and never state a number that is not printed in the text.
@@ -68,29 +79,36 @@ Rules:
 
 export const paperDigestSkill = defineSkill<PaperDigestInput, PaperDigestOutput>({
   name: "clinical-paper-digest",
-  version: "3",
+  version: "4",
   run: (ctx, input) =>
-    ctx.llmStructured("strong", { maxTokens: 3072, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] }, PaperDigestOutputSchema),
+    ctx.llmStructured("strong", { maxTokens: 4096, messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: JSON.stringify(input) }] }, PaperDigestOutputSchema),
 })
 
 const EMPTY_ANSWER = /^(?:n\/?a|none|null|not (?:reported|stated|mentioned|described|available|applicable|specified|provided)|no (?:information|data)[^.]*|unknown)\.?$/i
 
-/** Each item tidied, with the items whose numbers are not printed in `sourceText`. */
-export function checkPaperDigest(output: PaperDigestOutput, sourceText: string): { items: StoredPaperDigest["items"]; unverified: PaperDigestItem[]; problems: string[] } {
+/**
+ * Each item tidied, with the sentence it rests on when that sentence is in `sourceText` word for word,
+ * and the items that failed a check: a number the text does not print, or a quote that is not in it.
+ */
+export function checkPaperDigest(output: PaperDigestOutput, sourceText: string): { items: StoredPaperDigest["items"]; quotes: StoredPaperDigest["quotes"]; unverified: PaperDigestItem[]; problems: string[] } {
   const printed = new Set(numbers(sourceText))
   const items = {} as StoredPaperDigest["items"]
+  const quotes = { ...NO_QUOTES }
   const unverified: PaperDigestItem[] = []
   const problems: string[] = []
   for (const key of PAPER_DIGEST_ITEMS) {
     const text = output[key]?.replace(/\s+/g, " ").trim() ?? ""
     items[key] = text && !EMPTY_ANSWER.test(text) ? text : null
-    const invented = items[key] ? numbers(items[key]).find((value) => !printed.has(value)) : undefined
-    if (invented) {
-      unverified.push(key)
-      problems.push(`"${key}" used the number ${invented}, which is not printed in the text. Use only numbers printed in the text, or none.`)
-    }
+    if (!items[key]) continue
+    const invented = numbers(items[key]).find((value) => !printed.has(value))
+    if (invented) problems.push(`"${key}" used the number ${invented}, which is not printed in the text. Use only numbers printed in the text, or none.`)
+    const quote = output.quotes?.[key]?.replace(/\s+/g, " ").trim() ?? ""
+    const quoted = quote.length > 0 && quoteInText(quote, sourceText)
+    if (quoted) quotes[key] = quote
+    else if (quote.length > 0) problems.push(`The quote given for "${key}" is not in the text word for word. Copy one sentence exactly as it is printed.`)
+    if (invented || (quote.length > 0 && !quoted)) unverified.push(key)
   }
-  return { items, unverified, problems }
+  return { items, quotes, unverified, problems }
 }
 
 const cachePath = (slug: string) => `.scispark/clinical/paper-digests/${slug}.json`
@@ -138,7 +156,7 @@ export async function generatePaperDigest(
     if (again && again.unverified.length <= best.unverified.length) best = again
   }
   const digest: StoredPaperDigest = {
-    version: 1, items: best.items, unverified: best.unverified,
+    version: 1, items: best.items, quotes: best.quotes, unverified: best.unverified,
     source: {
       ...(opts.source ?? { locator: hasFullText ? "Supplied full text" : "Abstract", checkedAt: (opts.now?.() ?? new Date()).toISOString(), notes: [] }),
       access: hasFullText ? "full-text" : "abstract", truncated: Boolean(opts.source?.truncated) || truncated,

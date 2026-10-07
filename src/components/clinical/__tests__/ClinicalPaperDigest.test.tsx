@@ -22,6 +22,7 @@ const digest = (over: Partial<StoredPaperDigest> = {}): StoredPaperDigest => ({
     intervention: "Drug A 20 mg versus placebo", mainResult: "Response was 48% with drug A and 31% with placebo.",
     secondaryOutcomes: null, safety: null, limitations: "Short follow-up.", conclusion: "Drug A improved response.", funding: null,
   },
+  quotes: { question: null, design: null, population: null, intervention: null, mainResult: "Response occurred in 48% of the drug A group and 31% of the placebo group.", secondaryOutcomes: null, safety: null, limitations: null, conclusion: null, funding: null },
   source: { access: "full-text", locator: "PMC", checkedAt: "2026-10-07T10:00:00.000Z", truncated: false, notes: [] },
   ...over,
 })
@@ -102,5 +103,14 @@ describe("the digest on the paper page", () => {
     document.body.innerHTML = ""
     await render(<ClinicalPaperNav hasSummary={false} digest={null} hasAbstract />)
     expect([...container.querySelectorAll("nav a")].map((link) => link.textContent)).toEqual(["Abstract"])
+  })
+
+  it("shows the sentence an item rests on when asked", async () => {
+    client.loadPaperDigestRemote.mockResolvedValue(digest())
+    await render(<Page />)
+    const source = container.querySelector('[data-digest-item="mainResult"] details')!
+    expect(source.querySelector("summary")!.textContent).toBe("Source sentence")
+    expect(source.textContent).toContain("Response occurred in 48% of the drug A group and 31% of the placebo group.")
+    expect(container.querySelector('[data-digest-item="design"] details')).toBeNull()
   })
 })

@@ -15,6 +15,7 @@ vi.mock("@/lib/papers/save-client", () => ({ savePaper: vi.fn(async () => ({ sav
 import { ClinicalAbstract } from "../ClinicalAbstract"
 import { ClinicalFeedCard } from "../ClinicalFeedCard"
 import { ClinicalPaperSummary } from "../ClinicalPaperSummary"
+import { ClinicalPaperHeader } from "../ClinicalPaperHeader"
 
 let container: HTMLDivElement
 async function render(node: React.ReactNode) {
@@ -105,5 +106,31 @@ describe("the AI summary on the paper page", () => {
   it("is as wide as the title above it", async () => {
     await render(<ClinicalPaperSummary digest={{ headline: "H", takeaway: "T", quote: "Q" }} />)
     expect(container.querySelector("section")!.className).not.toMatch(/max-w-/)
+  })
+})
+
+// Owner request 2026-10-07: the top of the paper page should be clearer, and say what kind of study it is.
+describe("the clinical paper header", () => {
+  const MANY = { ...PAPER, venue: "The Lancet Psychiatry", date: "2026-08-20", addedDate: "2026-09-30", ids: { pmid: "42", doi: "10.1000/x" }, authors: ["A", "B", "C", "D", "E", "F", "G"].map((name) => ({ name: `${name}. Author` })) }
+  it("shows the kind of study and the topic, then the headline, the paper's own title, and the source on a line of its own", async () => {
+    await render(<ClinicalPaperHeader paper={MANY} headline="Drug A beat placebo for depression" design="randomized-trial" designSource="publication-type" topic="Depression × Drug A" />)
+    expect([...container.querySelectorAll("[data-chip]")].map((chip) => chip.textContent)).toEqual(["Randomized trial", "Depression × Drug A"])
+    expect(container.querySelector("h1")!.textContent).toBe("Drug A beat placebo for depression")
+    expect(container.querySelector("[data-original-title]")!.textContent).toBe(PAPER.title)
+    expect(container.querySelector("[data-journal]")!.textContent).toBe("The Lancet Psychiatry")
+    expect(container.querySelector("[data-dates]")!.textContent).toBe("Published 2026-08-20 · In PubMed 2026-09-30")
+    expect([...container.querySelectorAll("[data-ids] a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["DOI 10.1000/x", "https://doi.org/10.1000/x"], ["PMID 42", "https://pubmed.ncbi.nlm.nih.gov/42/"]])
+  })
+  it("names the first authors and opens the full list on request", async () => {
+    await render(<ClinicalPaperHeader paper={MANY} />)
+    const authors = () => container.querySelector("[data-authors]")!
+    expect(authors().textContent).toBe("A. Author, B. Author, C. Author and 4 more")
+    await act(async () => { (authors().querySelector("button") as HTMLButtonElement).click() })
+    expect(authors().textContent).toContain("G. Author")
+    expect(container.querySelector("h1")!.textContent).toBe(PAPER.title)
+  })
+  it("shows no chip for a design nobody has named", async () => {
+    await render(<ClinicalPaperHeader paper={PAPER} design="randomized-trial" designSource="none" />)
+    expect(container.querySelectorAll("[data-chip]")).toHaveLength(0)
   })
 })

@@ -371,6 +371,9 @@ describe("ClinicalHome", () => {
     await act(async () => { byText("3 more").click() })
     expect(other().querySelectorAll("[data-source]")).toHaveLength(5)
     expect(container.querySelector('[data-kind="benefit"] mark')!.textContent).toBe("Ketamine")
+    // And it can be folded again.
+    await act(async () => { byText("Show less").click() })
+    expect(other().querySelectorAll("[data-source]")).toHaveLength(2)
   })
 
   it("still shows an overview stored as whole sentences", async () => {

@@ -328,6 +328,11 @@ export function ClinicalHome() {
                           <span>{STOP}</span>
                         </span>
                       ))}
+                      {row.kind === "other" && openOther.has(`${topic}|${group.id}`) && row.clusters.length > OTHER_SHOWN + 1 && (
+                        <button type="button" onClick={() => setOpenOther((current) => { const next = new Set(current); next.delete(`${topic}|${group.id}`); return next })} className="text-[13px] text-accent-ink underline decoration-dotted hover:text-accent-ink-hover">
+                          {CLINICAL_COPY.feed.fewerFindings}
+                        </button>
+                      )}
                       {row.kind === "other" && !openOther.has(`${topic}|${group.id}`) && row.clusters.length > OTHER_SHOWN + 1 && (
                         <button type="button" onClick={() => setOpenOther((current) => new Set(current).add(`${topic}|${group.id}`))} className="text-[13px] text-accent-ink underline decoration-dotted hover:text-accent-ink-hover">
                           {CLINICAL_COPY.feed.moreFindings(row.clusters.length - OTHER_SHOWN)}

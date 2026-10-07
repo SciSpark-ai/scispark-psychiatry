@@ -108,3 +108,28 @@ describe("reading the paper for the digest", () => {
     expect(calls).toBe(1)
   })
 })
+
+// Spec 5.4 and owner decision 2026-10-07: every item of the digest names the sentence it rests on.
+describe("the sentence each digest item rests on", () => {
+  const quotes = { question: null, design: "The trial was open label.", population: "Adults with treatment-resistant depression were randomised to esketamine nasal spray or quetiapine.", intervention: null, mainResult: "Remission at week 8 was 27% with esketamine and 18% with quetiapine.", secondaryOutcomes: null, safety: "Dizziness occurred in 12% of the esketamine group.", limitations: "The trial was open label.", conclusion: null, funding: "Funded by Janssen." }
+  it("keeps a quote that is in the text, word for word", async () => {
+    const { digest } = await generatePaperDigest(new MemoryVaultStorage(), RCT, { fullText: FULL_TEXT, source: FULL, settings: SETTINGS, providerOverride: { strong: strong({ ...ANSWER, quotes }) } })
+    expect(digest.quotes.safety).toBe("Dizziness occurred in 12% of the esketamine group.")
+    expect(digest.quotes.question).toBeNull()
+    expect(digest.unverified).toEqual([])
+  })
+  it("asks again when a quote is not in the text, and marks the item if it stays that way", async () => {
+    const invented = { ...ANSWER, quotes: { ...quotes, safety: "Dizziness was common and sometimes severe in both groups." } }
+    const provider = strong(invented, invented)
+    const { digest } = await generatePaperDigest(new MemoryVaultStorage(), RCT, { fullText: FULL_TEXT, source: FULL, settings: SETTINGS, providerOverride: { strong: provider } })
+    expect(provider.calls).toHaveLength(2)
+    expect(JSON.stringify(provider.calls[1])).toContain("safety")
+    expect(digest.quotes.safety).toBeNull()
+    expect(digest.unverified).toEqual(["safety"])
+  })
+  it("reads a digest stored before quotes existed", async () => {
+    const storage = new MemoryVaultStorage()
+    await storage.write(`.scispark/clinical/paper-digests/${paperSlug(RCT)}.json`, JSON.stringify({ version: 1, unverified: [], source: FULL, items: { question: "Q?" } }))
+    expect((await loadCachedPaperDigest(storage, paperSlug(RCT)))?.quotes.question).toBeNull()
+  })
+})
