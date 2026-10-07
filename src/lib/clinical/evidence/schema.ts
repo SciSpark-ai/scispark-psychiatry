@@ -28,4 +28,10 @@ export const FindingSchema = z.object({
   firstListedAt: z.string(), lastListedAt: z.string(),
 })
 export type Finding = z.infer<typeof FindingSchema>
-export const FindingsFileSchema = z.object({ version: z.literal(1), findings: z.record(z.string(), FindingSchema) })
+/**
+ * Version 2: a paper that matched only its topic's treatment is filed under no condition. Version 1
+ * filed it under the topic's condition, so a version-1 file is not read: it is copied aside and the
+ * store is built again from the kept searches.
+ */
+export const FINDINGS_VERSION = 2
+export const FindingsFileSchema = z.object({ version: z.literal(FINDINGS_VERSION), findings: z.record(z.string(), FindingSchema) })

@@ -18,7 +18,7 @@ let storage: MemoryVaultStorage
 beforeEach(async () => {
   storage = new MemoryVaultStorage()
   setServerVaultForTests(storage)
-  await storage.write(FINDINGS_PATH, JSON.stringify({ version: 1, findings: { "pmid:1": finding(1, ["treatment-resistant-depression"]), "pmid:2": finding(2, ["schizophrenia"]) } }))
+  await storage.write(FINDINGS_PATH, JSON.stringify({ version: 2, findings: { "pmid:1": finding(1, ["treatment-resistant-depression"]), "pmid:2": finding(2, ["schizophrenia"]) } }))
 })
 afterEach(() => setServerVaultForTests(null))
 

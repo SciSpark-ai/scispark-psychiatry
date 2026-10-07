@@ -77,6 +77,61 @@ describe("the findings store", () => {
     expect(await readFindings(storage)).toHaveLength(1)
   })
 
+  it("files a paper that matched only the topic's treatment under no condition", async () => {
+    const storage = new MemoryVaultStorage()
+    await recordFindings(storage, feed([item(1, { matched: "treatment" }), item(2, { matched: "full" }), item(3, { matched: "condition" }), item(4)]), TAXONOMY)
+    const codes = Object.fromEntries((await readFindings(storage)).map((finding) => [finding.key, finding.conditionCodes]))
+    expect(codes).toEqual({ "pmid:1": [], "pmid:2": ["depression"], "pmid:3": ["depression"], "pmid:4": ["depression"] })
+    // The treatment it matched is still kept with the finding.
+    expect((await readFindings(storage)).find((finding) => finding.key === "pmid:1")).toMatchObject({ treatment: "ketamine", treatmentCode: "ketamine" })
+  })
+
+  it("keeps both conditions of a topic that names two, whichever the paper matched", async () => {
+    const storage = new MemoryVaultStorage()
+    const two = feed([item(1, { matched: "condition" })], { topics: [{ id: "w1", condition: "depression", condition2: "Schizophrenia", treatment: "Ketamine" }] })
+    await recordFindings(storage, two, TAXONOMY)
+    expect((await readFindings(storage))[0].conditionCodes).toEqual(["depression", "schizophrenia"])
+  })
+
+  it("keeps an earlier named treatment when a newer answer names none", async () => {
+    const storage = new MemoryVaultStorage()
+    await recordFindings(storage, feed([item(1)]), TAXONOMY)
+    const later = feed([item(1)], { generatedAt: "2026-10-09T10:00:00.000Z", topicOverviews: { w1: [{ text: "was no better than placebo", sources: ["pmid:1"], kind: "no-benefit" }] } })
+    await recordFindings(storage, later, TAXONOMY)
+    const [finding] = await readFindings(storage)
+    expect(finding).toMatchObject({ kind: "no-benefit", text: "was no better than placebo", treatment: "ketamine", treatmentCode: "ketamine" })
+  })
+
+  it("keeps the PICO line and the journal band through a listing without an answer, and takes a newer answer over an older one", async () => {
+    const storage = new MemoryVaultStorage()
+    await recordFindings(storage, feed([item(1, { journalBand: 1 })]), TAXONOMY)
+    await recordFindings(storage, feed([item(1)], { generatedAt: "2026-10-08T10:00:00.000Z", topicOverviews: {} }), TAXONOMY)
+    expect((await readFindings(storage))[0]).toMatchObject({ population: "adults with depression", comparator: "placebo", outcome: "depressive symptoms", journalBand: 1, kind: "benefit" })
+    const newer = feed([item(1, { journalBand: 2 })], { generatedAt: "2026-10-09T10:00:00.000Z", topicOverviews: { w1: [{ text: "reduced relapse", sources: ["pmid:1"], kind: "benefit", treatment: "Ketamine", population: "older adults", comparator: "midazolam", outcome: "relapse" }] } })
+    await recordFindings(storage, newer, TAXONOMY)
+    expect((await readFindings(storage))[0]).toMatchObject({ text: "reduced relapse", population: "older adults", comparator: "midazolam", outcome: "relapse", journalBand: 2, treatment: "Ketamine", treatmentCode: "ketamine" })
+  })
+
+  it("copies a file of the earlier version aside and builds the store again from the kept searches, as a search does", async () => {
+    const storage = new MemoryVaultStorage()
+    // Version 1 filed a treatment-only match under the topic's condition.
+    await recordFindings(storage, feed([item(1, { matched: "treatment" })]), TAXONOMY)
+    const wrong = { ...(await readFindings(storage))[0], conditionCodes: ["depression"] }
+    const old = JSON.stringify({ version: 1, findings: { "pmid:1": wrong } })
+    await storage.write(FINDINGS_PATH, old)
+    expect(await readFindings(storage)).toEqual([])
+    await saveHistory(storage, feed([item(1, { matched: "treatment" }), item(5)], { generatedAt: "2026-10-01T10:00:00.000Z" }))
+    // A search fills an unreadable store from the kept searches, then records its own papers.
+    await backfillFindings(storage, TAXONOMY)
+    await recordFindings(storage, feed([item(6)], { generatedAt: "2026-10-08T10:00:00.000Z" }), TAXONOMY)
+    expect(await storage.read(FINDINGS_PATH.replace(/\.json$/, ".unreadable.json"))).toBe(old)
+    expect(JSON.parse((await storage.read(FINDINGS_PATH)) as string).version).toBe(2)
+    const byKey = Object.fromEntries((await readFindings(storage)).map((finding) => [finding.key, finding]))
+    expect(Object.keys(byKey).sort()).toEqual(["pmid:1", "pmid:5", "pmid:6"])
+    expect(byKey["pmid:1"].conditionCodes).toEqual([])
+    expect(byKey["pmid:5"].firstListedAt).toBe("2026-10-01T10:00:00.000Z")
+  })
+
   it("fills the store from the searches already kept, oldest first, once", async () => {
     const storage = new MemoryVaultStorage()
     await saveHistory(storage, feed([item(1)], { generatedAt: "2026-10-01T10:00:00.000Z" }))

@@ -135,7 +135,7 @@ describe("resolvePaperBySlug, from the findings store", () => {
   it("resolves a paper that only the findings store still knows", async () => {
     const storage = new MemoryVaultStorage()
     const record = { ids: { pmid: "7" }, title: "A paper that left the feed", authors: [], fields: [], source: "pubmed" as const }
-    await storage.write(".scispark/clinical/findings.json", JSON.stringify({ version: 1, findings: { "pmid:7": {
+    await storage.write(".scispark/clinical/findings.json", JSON.stringify({ version: 2, findings: { "pmid:7": {
       key: "pmid:7", slug: "a-paper-that-left-the-feed", paper: record, headline: "H", takeaway: "T", design: "cohort", designSource: "none", journalBand: null,
       conditionCodes: [], kind: null, treatment: null, treatmentCode: null, text: null, population: null, comparator: null, outcome: null,
       firstListedAt: "2026-10-01T10:00:00.000Z", lastListedAt: "2026-10-01T10:00:00.000Z" } } }))
