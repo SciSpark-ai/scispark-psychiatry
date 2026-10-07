@@ -188,7 +188,8 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   const scored = assessed.map((candidate) => {
     const tier = journalTierOf(deps.pack.journals, journalTiers, candidate.paper.venue)
     if (tier) bandOf.set(candidate.key, tier)
-    return scoreCandidate({ candidate, grade: gradeOf(candidate.key), mode, now: now(), journals: deps.pack.journals, journalBoost: tier ? JOURNAL_TIER_BOOST[tier] : 0 })
+    const item = scoreCandidate({ candidate, grade: gradeOf(candidate.key), mode, now: now(), journals: deps.pack.journals, journalBoost: tier ? JOURNAL_TIER_BOOST[tier] : 0 })
+    return tier ? { ...item, journalBand: tier } : item
   })
   // A paper already displayed to the user is not recommended again: it leaves the list and, if it
   // still matches, is kept under "Seen earlier".
@@ -234,7 +235,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   if (deps.summarise) {
     const pending = []
     for (const topic of overviewTopics(listedItems)) {
-      const hash = `v4|${topic.papers.map((paper) => paper.part[0]).join("")}|${topic.papers.map((paper) => paper.key).join("|")}`
+      const hash = `v5|${topic.papers.map((paper) => paper.part[0]).join("")}|${topic.papers.map((paper) => paper.key).join("|")}`
       const kept = cache?.overviews?.[topic.entryId]
       if (kept && kept.hash === hash) topicOverviews[topic.entryId] = kept.value
       else pending.push({ ...topic, label: entryLabel(topic.entryId), hash })

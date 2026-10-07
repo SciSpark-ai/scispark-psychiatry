@@ -8,7 +8,7 @@ import { FEED_PATH, loadClinicalFeed } from "../feed/stored"
 import { deleteHistory, listHistory, loadHistory, restoreHistory } from "../history/store"
 import { loadLatestRunLog } from "../feed/run-log"
 import { settingsForLookBack } from "../modes"
-import { loadSeenTimes, recordSeen } from "../seen/store"
+import { clearSeen, loadSeenTimes, recordSeen } from "../seen/store"
 import { ClinicalSettingsSchema } from "../types"
 import { saveClinicalSettings, saveWatchEntries } from "../watch/store"
 import { llmResult, paper, SETTINGS, strongOk, watch } from "./helpers"
@@ -233,3 +233,37 @@ describe("the AI overview of a topic", () => {
   })
 })
 
+// Owner request 2026-10-07: a way to see papers again that were already shown.
+describe("showing seen papers again", () => {
+  it("forgets what was seen under one time range and leaves the other ranges alone", async () => {
+    const storage = new MemoryVaultStorage()
+    const at = new Date("2026-10-07T10:00:00Z")
+    await recordSeen(storage, ["a", "b"], at, "14d")
+    await recordSeen(storage, ["b", "c"], at, "30d")
+    expect(await clearSeen(storage, "14d")).toBe(2)
+    expect([...(await loadSeenTimes(storage, "14d")).keys()]).toEqual([])
+    expect([...(await loadSeenTimes(storage, "30d")).keys()].sort()).toEqual(["b", "c"])
+    expect(await clearSeen(storage, "7d")).toBe(0)
+  })
+})
+
+// Owner request 2026-10-07: a synthesis, not a list: what helped, what did not, what else was found.
+describe("the overview as a synthesis", () => {
+  const papers = [
+    { key: "k1", headline: "Esketamine beat quetiapine", takeaway: "Remission at week 8 was 27% with esketamine and 18% with quetiapine." },
+    { key: "k2", headline: "Omega-3 added nothing", takeaway: "Adding omega-3 did not reduce symptoms." },
+    { key: "k3", headline: "Older age slowed improvement", takeaway: "Older age was linked to slower improvement." },
+  ]
+  it("keeps what each finding says about benefit", () => {
+    const { kept } = judgeOverview([
+      { text: "esketamine gave more remission than quetiapine", sources: [1], group: "focus", kind: "benefit", emphasis: ["esketamine"] },
+      { text: "adding omega-3 did not reduce symptoms", sources: [2], group: "focus", kind: "no-benefit" },
+      { text: "older age was linked to slower improvement", sources: [3], group: "related", kind: "other" },
+    ], papers)
+    expect(kept.map((point) => [point.kind, point.group, point.sources.length])).toEqual([["benefit", "focus", 1], ["no-benefit", "focus", 1], ["other", "related", 1]])
+  })
+  it("rejects a finding that runs on like a sentence about several things", () => {
+    const long = "esketamine gave more remission than quetiapine and also improved sleep, appetite, energy, concentration and overall functioning across all of the groups studied"
+    expect(judgeOverview([{ text: long, sources: [1], kind: "benefit" }], papers).problems).toEqual(["too-long"])
+  })
+})

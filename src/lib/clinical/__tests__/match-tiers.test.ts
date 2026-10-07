@@ -114,3 +114,20 @@ describe("a watch entry that names only a condition", () => {
   })
 })
 })
+
+// Owner decision 2026-10-07: how well a paper matches the topic comes first; among papers that match
+// equally well, those from leading journals come first, then established ones, then the rest.
+describe("within a layer, the journal's band decides before the score", () => {
+  const banded = (key: string, matched: StageAGrade["matched"], band: 1 | 2 | 3 | undefined, score: number) => ({ ...item(key, matched, 4, score), ...(band ? { journalBand: band } : {}) })
+  it("puts leading journals first, then established ones, then the others, each by score", () => {
+    const result = selectFeed([
+      banded("plain-high", "condition", undefined, 99), banded("lead-low", "condition", 1, 40), banded("est", "condition", 2, 70), banded("lead-high", "condition", 1, 60), banded("three", "condition", 3, 95),
+    ], [BOTH])
+    expect(result.items.map((i) => i.candidate.key)).toEqual(["lead-high", "lead-low", "est", "plain-high", "three"])
+  })
+  it("never lets a leading journal lift a weaker match over a full one", () => {
+    const result = selectFeed([banded("cond-lead", "condition", 1, 99), banded("full-plain", "full", undefined, 20)], [BOTH])
+    expect(result.items.map((i) => i.candidate.key)).toEqual(["full-plain", "cond-lead"])
+  })
+})
+

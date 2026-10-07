@@ -51,7 +51,7 @@ const StoredFeedSchema = z.object({
   })).optional(),
   /** AI overview of each topic's papers, by watch entry id: checked sentences with the papers they rest on. */
   topicOverviews: z.record(z.string(), z.array(z.object({
-    text: z.string(), sources: z.array(z.string()), group: z.enum(["focus", "related"]).optional(), emphasis: z.array(z.string()).optional(),
+    text: z.string(), sources: z.array(z.string()), group: z.enum(["focus", "related"]).optional(), kind: z.enum(["benefit", "no-benefit", "safety", "other"]).optional(), emphasis: z.array(z.string()).optional(),
   }))).optional(),
   safetySignals: z.array(z.object({ paper: PaperSchema, key: z.string() })),
   stats: z.object({ retrieved: z.number(), domain: z.number(), gated: z.number(), graded: z.number(), listed: z.number() }),

@@ -41,6 +41,12 @@ function suppressDuplicates(sorted: ScoredItem[]): { kept: ScoredItem[]; drops: 
   return { kept, drops }
 }
 
+/**
+ * The order within a layer (owner decision 2026-10-07): leading journals first, then established
+ * ones, then every other journal, known or not; within each of these, by score.
+ */
+const byBandThenScore = (a: ScoredItem, b: ScoredItem) => (a.journalBand ?? 3) - (b.journalBand ?? 3) || b.score - a.score
+
 const reservedSlots = (entry: WatchEntry) => (entry.priority === "high" ? 2 : 1)
 
 /**
@@ -72,7 +78,7 @@ export function layerOf(item: ScoredItem, entries: WatchEntry[] = []): 1 | 2 | 3
  */
 function arrange(layer: ScoredItem[], active: WatchEntry[], limit: number, pageSize: number): ScoredItem[] {
   const halfPage = Math.floor(pageSize / 2)
-  const pool = [...layer]
+  const pool = [...layer].sort(byBandThenScore)
   const items: ScoredItem[] = []
   while (pool.length > 0 && items.length < limit) {
     const size = Math.min(pageSize, limit - items.length)
@@ -98,7 +104,7 @@ function arrange(layer: ScoredItem[], active: WatchEntry[], limit: number, pageS
       if (page.length >= size) break
       take(item)
     }
-    items.push(...page.sort((a, b) => b.score - a.score))
+    items.push(...page.sort(byBandThenScore))
   }
   return items
 }

@@ -249,7 +249,7 @@ describe("ClinicalHome", () => {
     await act(async () => { ([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[])[1].click() })
     const overview = container.querySelector("[data-testid=clinical-topic-overview]")!
     expect(overview.textContent).toContain("AI overview")
-    expect(overview.textContent).toContain("Two trials reported benefit.")
+    expect(overview.textContent).toContain("Two trials reported benefit")
     expect([...overview.querySelectorAll("[data-source]")].map((source) => source.getAttribute("title"))).toEqual(["Paper 1", "Paper 2"])
   })
 
@@ -323,23 +323,42 @@ describe("ClinicalHome", () => {
   })
 
   // Owner request 2026-10-07: the overview as short points with the key words marked, in two parts.
-  it("shows the overview as points, marks the key words, and sets papers on the condition alone apart", async () => {
+  it("shows the overview as a synthesis: what helped, what did not, what else, then the papers on the condition alone, then what it rests on", async () => {
     const storage = vault.current as MemoryVaultStorage
     await saveWatchEntries(storage, [{ id: "w1", condition: "Depression", treatment: "Esketamine", priority: "normal", safetySignal: false }])
-    await saveClinicalFeed(storage, feedOf([item(1, { matched: "full" }), item(2, { matched: "condition" })], { topicOverviews: { w1: [
-      { text: "Esketamine gave more remission than quetiapine.", sources: ["pmid:1"], group: "focus", emphasis: ["Esketamine", "more remission"] },
-      { text: "Exercise lowered symptoms in adolescents.", sources: ["pmid:2"], group: "related", emphasis: ["Exercise"] },
+    await saveClinicalFeed(storage, feedOf([item(1, { matched: "full" }), item(2, { matched: "full", design: "meta-analysis" }), item(3, { matched: "condition", design: "cohort" })], { topicOverviews: { w1: [
+      { text: "esketamine gave more remission than quetiapine.", sources: ["pmid:1"], group: "focus", kind: "benefit", emphasis: ["esketamine"] },
+      { text: "adding omega-3 did not reduce symptoms.", sources: ["pmid:2"], group: "focus", kind: "no-benefit" },
+      { text: "exercise lowered symptoms in adolescents.", sources: ["pmid:3"], group: "related", kind: "benefit", emphasis: ["exercise"] },
     ] } }))
     await mount()
     await act(async () => { ([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[])[1].click() })
     const overview = container.querySelector("[data-testid=clinical-topic-overview]")!
     const groups = [...overview.querySelectorAll("[data-overview-group]")]
     expect(groups.map((group) => group.getAttribute("data-overview-group"))).toEqual(["focus", "related"])
-    expect(groups[0].querySelector("[data-group-title]")!.textContent).toBe("Depression × Esketamine")
     expect(groups[1].querySelector("[data-group-title]")!.textContent).toBe("Also on Depression")
-    expect(groups.map((group) => group.querySelectorAll("li").length)).toEqual([1, 1])
-    expect([...groups[0].querySelectorAll("strong")].map((mark) => mark.textContent)).toEqual(["Esketamine", "more remission"])
-    expect(groups[0].querySelector("li")!.textContent).toContain("Esketamine gave more remission than quetiapine.")
+    const rows = (group: Element) => [...group.querySelectorAll("[data-kind]")].map((row) => [row.getAttribute("data-kind"), row.querySelector("[data-kind-label]")!.textContent])
+    expect(rows(groups[0])).toEqual([["benefit", "Reported benefit"], ["no-benefit", "No benefit found"]])
+    expect(rows(groups[1])).toEqual([["benefit", "Reported benefit"]])
+    expect(groups[0].querySelector('[data-kind="benefit"]')!.textContent).toContain("esketamine gave more remission than quetiapine")
+    expect([...groups[0].querySelectorAll("strong")].map((mark) => mark.textContent)).toEqual(["esketamine"])
+    // What the overview rests on is counted by code from the papers it cites, not written by the model.
+    expect(overview.querySelector("[data-testid=overview-basis]")!.textContent).toBe("From 3 papers: 1 meta-analysis, 1 randomized trial, 1 observational study. A finding followed by one number rests on a single study.")
+  })
+
+  it("offers to show seen papers again, forgets them for this time range, and asks for a refresh", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1)], { lookBack: "30d" }))
+    await storage.write(".scispark/clinical/seen.json", JSON.stringify({ version: 1, seen: { "pmid:7": "2026-10-06T10:00:00.000Z" }, byLookBack: { "30d": { "pmid:7": "2026-10-06T10:00:00.000Z" }, "7d": { "pmid:9": "2026-10-06T10:00:00.000Z" } } }))
+    await mount()
+    await act(async () => {})
+    await act(async () => { byText("Show seen papers again").click() })
+    await act(async () => {})
+    const file = JSON.parse((await storage.read(".scispark/clinical/seen.json")) as string)
+    expect(file.byLookBack["30d"]).toBeUndefined()
+    expect(Object.keys(file.byLookBack["7d"])).toEqual(["pmid:9"])
+    expect(container.textContent).toContain("Press Refresh to list them")
   })
 })
 

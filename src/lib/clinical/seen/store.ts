@@ -69,3 +69,22 @@ export const SEEN_EARLIER_HOURS = 24
 export function seenRecently(seenAt: string | undefined, now: Date): boolean {
   return seenAt !== undefined && now.getTime() - new Date(seenAt).getTime() < SEEN_EARLIER_HOURS * 3_600_000
 }
+
+/**
+ * Forgets which papers were shown under one time range, so the next search of that range lists them
+ * again. Returns how many were forgotten. Other ranges are untouched.
+ */
+export async function clearSeen(storage: VaultStorage, lookBack: string): Promise<number> {
+  return withVaultExclusive(storage, "clinical-seen", async () => {
+    const file = await read(storage)
+    const byLookBack = ranges(file)
+    const forgotten = Object.keys(byLookBack[lookBack] ?? {}).length
+    if (forgotten === 0) return 0
+    delete byLookBack[lookBack]
+    // `seen` keeps only what is still seen under some range.
+    const still = new Set(Object.values(byLookBack).flatMap((range) => Object.keys(range)))
+    const seen = Object.fromEntries(Object.entries(file.seen).filter(([key]) => still.has(key)))
+    await storage.write(SEEN_PATH, JSON.stringify({ version: 1, seen, byLookBack }))
+    return forgotten
+  })
+}

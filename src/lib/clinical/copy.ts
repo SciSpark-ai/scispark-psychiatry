@@ -36,7 +36,24 @@ export const CLINICAL_COPY = {
     allTopics: "All",
     aiOverview: "AI overview",
     alsoOn: (condition: string) => `Also on ${condition}`,
-    aiOverviewNote: "Written by AI from the summaries of the papers listed under this topic. The numbers after a sentence are the papers it rests on. Read the papers before relying on it.",
+    aiOverviewNote: "Written by AI from the summaries of the papers listed under this topic. The numbers after a finding are the papers it rests on. Read the papers before relying on it.",
+    /** The lines of the AI overview, by what the findings say. */
+    overviewKinds: { benefit: "Reported benefit", "no-benefit": "No benefit found", safety: "Safety", other: "Other findings" },
+    /** What the overview rests on: counted from the papers it cites, never written by the model. */
+    overviewBasis: (papers: number, designs: string[]) =>
+      `From ${papers} ${papers === 1 ? "paper" : "papers"}${designs.length > 0 ? `: ${designs.join(", ")}` : ""}. A finding followed by one number rests on a single study.`,
+    basisDesigns: {
+      "meta-analysis": ["meta-analysis", "meta-analyses"], "systematic-review": ["systematic review", "systematic reviews"],
+      "randomized-trial": ["randomized trial", "randomized trials"], guideline: ["guideline", "guidelines"],
+      cohort: ["observational study", "observational studies"], "clinical-trial": ["clinical trial", "clinical trials"], review: ["review", "reviews"],
+      "case-report": ["case report", "case reports"], editorial: ["editorial", "editorials"], erratum: ["erratum", "errata"],
+      retraction: ["retracted paper", "retracted papers"], protocol: ["study protocol", "study protocols"],
+      preclinical: ["animal or lab study", "animal or lab studies"], other: ["other design", "other designs"], unknown: ["design not stated", "design not stated"],
+    },
+    showSeenAgain: "Show seen papers again",
+    showSeenAgainNote: "Papers you have already been shown are left out of a new list. This forgets them for the chosen time range, so the next refresh can list them again.",
+    seenForgotten: (count: number) => (count > 0 ? `${count} seen ${count === 1 ? "paper" : "papers"} can be listed again. Press Refresh to list them.` : "No seen papers were being held back for this time range."),
+    seenForgetFailed: "The list of seen papers could not be changed.",
     topicsLabel: "Topics",
     /** The count line of a tab. */
     overview: {

@@ -17,19 +17,31 @@ export { tidyOverviewSentence }
  * - A sentence may use only numbers that appear in the headline or takeaway of the papers it names.
  * - A sentence must be short.
  *
+ * Since 2026-10-07 the overview is a synthesis rather than a list of points: each finding is a short
+ * clause with a kind (benefit, no benefit, safety, other), and papers that found the same share one
+ * finding. The page groups the findings by kind. What the findings rest on (how many papers, of which
+ * designs) is counted by the page from the listed papers; the model does not write it.
+ *
  * What survives is stored with the list as sentences and the keys of their papers.
  */
 
 export const OVERVIEW_MIN_PAPERS = 2
 const OVERVIEW_MAX_PAPERS = 20
-const SENTENCE_MAX_WORDS = 30
-const OVERVIEW_MAX_SENTENCES = 5
+/** A finding is a clause, not a sentence about several things. The model is asked for fewer words than this. */
+const SENTENCE_MAX_WORDS = 18
+const OVERVIEW_MAX_SENTENCES = 8
+
+/** What a finding says: a treatment helped, did not help, raised a safety concern, or something else was found. */
+export const OVERVIEW_KINDS = ["benefit", "no-benefit", "safety", "other"] as const
+export type OverviewKind = (typeof OVERVIEW_KINDS)[number]
 
 export interface OverviewSentence {
   text: string
   sources: string[]
   /** "focus": about papers that match the whole topic; "related": about papers that match only its condition (or only its treatment). */
   group?: "focus" | "related"
+  /** What the finding says about benefit. Absent in overviews written before 2026-10-07. */
+  kind?: OverviewKind
   /** Words of the sentence to mark, so the eye finds the point. Each is in `text` as written. */
   emphasis?: string[]
 }
@@ -38,7 +50,7 @@ export interface OverviewPaper { key: string; headline: string; takeaway: string
 const OverviewSchema = z.object({
   sentences: z.array(z.object({
     text: z.string(), sources: z.array(z.number().int()),
-    group: z.enum(["focus", "related"]).nullable().default(null), emphasis: z.array(z.string()).default([]),
+    group: z.enum(["focus", "related"]).nullable().default(null), kind: z.enum(OVERVIEW_KINDS).nullable().default(null), emphasis: z.array(z.string()).default([]),
   })),
 })
 
@@ -49,24 +61,26 @@ interface OverviewInput {
   problems?: string[]
 }
 
-const SYSTEM_PROMPT = `You write a very short overview of new papers on one topic for a busy psychiatrist, as separate points, not as a paragraph. You are given the topic and, for each paper, a number, a headline, a one-sentence takeaway, and "part": "focus" for a paper about the whole topic (its condition and its treatment), "related" for a paper about the condition with another treatment or none.
+const SYSTEM_PROMPT = `You write the synthesis a busy psychiatrist reads before the paper list of one topic: what the new papers found to help, what they found not to help, what safety concerns they raise, and what else they found. It is a synthesis, not a list of the papers. You are given the topic and, for each paper, a number, a headline, a one-sentence takeaway, and "part": "focus" for a paper about the whole topic (its condition and its treatment), "related" for a paper about the condition with another treatment or none.
 
-Return "sentences": at most 3 points about the focus papers and at most 2 about the related papers. Skip a part that has no papers. Each point:
-- "text": ONE plain sentence of at most 22 words saying what the papers found. Name the treatment and the finding. Put the finding first. No filler ("recent papers explore", "various interventions"), no lists of everything.
-- "group": "focus" or "related", the part its papers belong to. Do not mix the two parts in one point.
-- "sources": the numbers of the papers the point rests on. At least one.
-- "emphasis": one or two short phrases (one to three words each) copied exactly from your text, the words a reader should see first: usually the treatment and the result.
+Return "sentences": at most 5 findings from the focus papers and at most 3 from the related papers. Skip a part that has no papers. Leave out papers that add nothing a clinician would want (protocols, methods papers); you need not use every paper. Each finding:
+- "text": ONE short clause of at most 14 words that names the treatment or exposure and what was found, in lower case unless a name, with no full stop. Examples of the form: "adjunctive X lowered relapse compared with placebo", "X did not improve remission over usual care", "X was linked to weight gain". No filler ("recent papers explore"), no study-design words unless they are the point.
+- "kind": "benefit" if a treatment or intervention did better than its comparator or improved the outcome; "no-benefit" if it made no difference, did worse, or the trial failed; "safety" if the finding is a harm, adverse effect or risk of a treatment; "other" for everything else (risk factors, mechanisms, prediction, prevalence, service use).
+- "group": "focus" or "related", the part its papers belong to. Never mix the two parts in one finding.
+- "sources": the numbers of the papers the finding rests on. At least one. When two or more papers found the same thing, write ONE finding and list them all; do not repeat it per paper.
+- "emphasis": one or two short phrases (one to three words each) copied exactly from your text: the treatment, and the result if it is short.
 
 Rules:
 - Use only the headlines and takeaways given. Add nothing from outside knowledge.
-- Use a number only if it appears in the headline or takeaway of a paper you list as a source for that point. Copy it exactly; never calculate or round. Prefer no number to a long string of statistics.
+- Keep each paper's own level of certainty: an association is "was linked to", not "caused"; a pilot or single small study "suggested". Never write "evidence shows".
+- Use a number only if it appears in the headline or takeaway of a paper you list as a source for that finding. Copy it exactly; never calculate or round. Prefer no number.
 - Do not write paper numbers, brackets with numbers, or phrases like "paper 2" inside the text.
-- Do not rank the papers, do not say which is best, and do not tell the reader what to do with a patient. Keep each paper's own level of certainty; a single small study is not "evidence shows".
-- If the input has "problems", your previous answer lost points for those reasons: write the overview again without them.`
+- Do not rank the papers, do not say which is best, and do not tell the reader what to do with a patient.
+- If the input has "problems", your previous answer lost findings for those reasons: write it again without them.`
 
 export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof OverviewSchema>>({
   name: "clinical-topic-overview",
-  version: "4",
+  version: "5",
   run: (ctx, input) =>
     ctx.llmStructured(
       // The stronger model: weighing several papers against each other is where the small one writes filler.
@@ -96,7 +110,7 @@ export function overviewTopics(
 
 /** Checks each sentence. `kept` have the keys of their papers as sources; `problems` say why the others were rejected. */
 export function judgeOverview(
-  sentences: Array<{ text: string; sources: number[]; group?: "focus" | "related" | null; emphasis?: string[] }>, papers: Array<Omit<OverviewPaper, "part"> & { part?: OverviewPaper["part"] }>,
+  sentences: Array<{ text: string; sources: number[]; group?: "focus" | "related" | null; kind?: OverviewKind | null; emphasis?: string[] }>, papers: Array<Omit<OverviewPaper, "part"> & { part?: OverviewPaper["part"] }>,
 ): { kept: OverviewSentence[]; problems: string[] } {
   const kept: OverviewSentence[] = []
   const problems: string[] = []
@@ -111,7 +125,7 @@ export function judgeOverview(
     if (invented) { problems.push(`number-not-in-sources:${invented}`); continue }
     // Only words that are in the sentence as written can be marked in it.
     const emphasis = (sentence.emphasis ?? []).map((phrase) => phrase.trim()).filter((phrase) => phrase.length > 1 && phrase.split(/\s+/).length <= 4 && text.includes(phrase)).slice(0, 2)
-    kept.push({ text, sources: cited.map((paper) => paper.key), ...(sentence.group ? { group: sentence.group } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
+    kept.push({ text, sources: cited.map((paper) => paper.key), ...(sentence.group ? { group: sentence.group } : {}), ...(sentence.kind ? { kind: sentence.kind } : {}), ...(emphasis.length > 0 ? { emphasis } : {}) })
   }
   return { kept, problems }
 }
@@ -126,7 +140,7 @@ function problemText(reason: string): string {
   const [kind, detail] = reason.split(":")
   if (kind === "number-not-in-sources") return `A sentence used the number ${detail}, which is not in the headline or takeaway of the papers it listed as sources. Use only numbers from the sources of that sentence, or no number.`
   if (kind === "no-source") return "A sentence listed no valid paper number in its sources. Every sentence needs at least one."
-  if (kind === "too-long") return "A point was too long. Keep each point to one sentence of at most 22 words."
+  if (kind === "too-long") return "A finding was too long. Keep each finding to one clause of at most 14 words; put a second result in a finding of its own."
   return "A sentence was empty."
 }
 
@@ -154,7 +168,7 @@ export async function writeTopicOverviews(
         const again = await ask([...new Set(best.problems.map(problemText))]).catch(() => null)
         if (again && again.kept.length >= best.kept.length) best = again
       }
-      // An overview is a glance, not a second list: at most five sentences.
+      // An overview is a glance, not a second list.
       if (best && best.kept.length > 0) overviews[topic.entryId] = best.kept.slice(0, OVERVIEW_MAX_SENTENCES)
       else dropped.push({ entryId: topic.entryId, reason: best?.problems[0] ?? "call-failed" })
     } catch {

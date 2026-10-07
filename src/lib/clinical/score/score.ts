@@ -14,6 +14,8 @@ export interface ScoreBreakdown {
 }
 
 export interface ScoredItem {
+  /** The journal's band (1 leading, 2 established, 3 other); absent when the journal is not known. */
+  journalBand?: 1 | 2 | 3
   candidate: GatedCandidate
   grade: StageAGrade
   score: number

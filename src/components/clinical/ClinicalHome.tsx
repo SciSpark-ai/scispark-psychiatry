@@ -11,7 +11,7 @@ import { LlmErrorMessage } from "@/components/papers/LlmErrorMessage"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { LOOK_BACK, lookBackName, lookBackOf, lookBackPhrase, settingsForLookBack, settingsForRange, type LookBack } from "@/lib/clinical/modes"
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
-import { recordSeen } from "@/lib/clinical/seen/store"
+import { clearSeen, recordSeen } from "@/lib/clinical/seen/store"
 import { loadReadLater } from "@/lib/clinical/readlater/store"
 import { tidyOverviewSentence } from "@/lib/clinical/text/overview-text"
 import { conditionLabel } from "@/lib/clinical/topic-label"
@@ -28,6 +28,9 @@ type Loaded = {
   later: Set<string>
 }
 
+const OVERVIEW_KIND_ORDER = ["benefit", "no-benefit", "safety", "other"] as const
+const FINDING_SEPARATOR = "; "
+
 export function ClinicalHome() {
   const [storage, setStorage] = useState<VaultStorage | null>(null)
   const [data, setData] = useState<Loaded | null>(null)
@@ -38,6 +41,8 @@ export function ClinicalHome() {
   const [customDates, setCustomDates] = useState<{ from: string; to: string } | null>(null)
   /** The card just jumped to from the AI overview; it is marked for a moment. */
   const [jumped, setJumped] = useState<number | null>(null)
+  /** What "Show seen papers again" answered, until the next refresh. */
+  const [seenNote, setSeenNote] = useState<string | null>(null)
   const [stage, setStage] = useState<ClinicalStage | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,6 +71,7 @@ export function ClinicalHome() {
     if (running) return
     setRunning(true)
     setError(null)
+    setSeenNote(null)
     try {
       const feed = await refreshClinicalFeed((next) => setStage(next))
       setData((current) => (current ? { ...current, feed } : current))
@@ -131,6 +137,19 @@ export function ClinicalHome() {
     { id: "focus", title: overviewTopic ? entryLabel(overviewTopic) : "", points: (overview ?? []).filter((point) => point.group !== "related") },
     { id: "related", title: CLINICAL_COPY.feed.alsoOn(overviewTopic ? (conditionLabel(overviewTopic) ?? entryLabel(overviewTopic)) : ""), points: (overview ?? []).filter((point) => point.group === "related") },
   ].filter((group) => group.points.length > 0)
+  // Each part as a synthesis: one line per kind of finding. An overview stored before findings had a kind reads as "other".
+  const overviewRows = (points: NonNullable<typeof overview>) =>
+    OVERVIEW_KIND_ORDER.map((kind) => ({ kind, points: points.filter((point) => (point.kind ?? "other") === kind) })).filter((row) => row.points.length > 0)
+  // What the overview rests on, counted from the listed papers it cites.
+  const citedItems = [...new Set((overview ?? []).flatMap((point) => point.sources))].flatMap((key) => inTab.find((item) => item.key === key) ?? [])
+  const basisDesigns = DESIGNS
+    .map((design) => ({ design, count: citedItems.filter((item) => (item.designSource === "none" ? "unknown" : item.design) === design).length }))
+    .filter((entry) => entry.count > 0)
+    .map((entry) => `${entry.count} ${CLINICAL_COPY.feed.basisDesigns[entry.design][entry.count === 1 ? 0 : 1]}`)
+  const forgetSeen = async () => {
+    if (!storage) return
+    try { setSeenNote(CLINICAL_COPY.feed.seenForgotten(await clearSeen(storage, current))) } catch { setSeenNote(CLINICAL_COPY.feed.seenForgetFailed) }
+  }
   /** The sentence with its key words in bold. Only words that are in it as written are marked. */
   const marked = (text: string, emphasis: string[]) => {
     const found = emphasis.map((phrase) => ({ phrase, at: text.indexOf(phrase) })).filter((entry) => entry.at >= 0).sort((a, b) => a.at - b.at)
@@ -209,8 +228,10 @@ export function ClinicalHome() {
         {feed && entries.length > 0 && (
           <p data-testid="clinical-feed-status" className="mt-1 text-[14px] text-secondary-dark">
             {CLINICAL_COPY.feed.status(feed.stats.listed, feed.stats.retrieved, lookBackPhrase(feedLookBack), new Date(feed.generatedAt).toLocaleString())}
+            <button type="button" onClick={() => void forgetSeen()} title={CLINICAL_COPY.feed.showSeenAgainNote} className="ml-3 text-[13px] text-accent-ink underline decoration-dotted hover:text-accent-ink-hover">{CLINICAL_COPY.feed.showSeenAgain}</button>
           </p>
         )}
+        {seenNote && <p role="status" className="mt-1 text-[13px] text-accent-ink">{seenNote}</p>}
       </div>
 
       {running && stage && <p role="status" aria-live="polite" className="mb-4 text-[13px] text-muted-text">{CLINICAL_COPY.stages[stage]}…</p>}
@@ -241,29 +262,36 @@ export function ClinicalHome() {
           {overview && overview.length > 0 && (
             <div data-testid="clinical-topic-overview" className="mb-5 rounded-card border border-border-warm/70 bg-light-surface px-5 py-4">
               <p className="mb-2 text-[12px] font-medium uppercase tracking-wide text-muted-text"><span title={CLINICAL_COPY.feed.aiOverviewNote} className="cursor-help underline decoration-dotted">{CLINICAL_COPY.feed.aiOverview}</span></p>
-              {/* Short points, the key words marked. Papers on the whole topic first, then those on its condition alone. */}
+              {/* A synthesis: what helped, what did not, safety, the rest. Papers on the whole topic first, then those on its condition alone. */}
               {overviewGroups.map((group) => (
                 <div key={group.id} data-overview-group={group.id} className="mt-2 first:mt-0">
                   {overviewGroups.length > 1 && <p data-group-title="true" className="mb-1 text-[14px] font-semibold text-espresso">{group.title}</p>}
                   {overviewGroups.length === 1 && <span data-group-title="true" className="sr-only">{group.title}</span>}
-                  <ul className="list-disc space-y-1.5 pl-5 text-[15px] leading-relaxed text-espresso">
-                    {group.points.map((point) => (
-                      <li key={point.text}>
-                        {marked(tidyOverviewSentence(point.text), point.emphasis ?? [])}
-                        {point.sources.map((key, index) => {
-                          // A source is always a paper of this list: the overview is written from the listed papers only.
-                          const position = inTab.findIndex((item) => item.key === key)
-                          if (position < 0) return null
-                          return (
-                            <button key={key} type="button" data-source="true" title={headlineOf.get(key) ?? key} onMouseDown={(event) => event.preventDefault()} onClick={() => jumpTo(position)}
-                              className={`align-super text-[11px] font-medium text-accent-ink underline decoration-dotted hover:text-accent-ink-hover ${index === 0 ? "ml-1" : "ml-1.5"}`}>{position + 1}</button>
-                          )
-                        })}
-                      </li>
+                  <div className="space-y-1.5 text-[15px] leading-relaxed text-espresso">
+                    {overviewRows(group.points).map((row) => (
+                      <p key={row.kind} data-kind={row.kind}>
+                        <span data-kind-label="true" className="mr-1.5 font-semibold text-secondary-dark">{CLINICAL_COPY.feed.overviewKinds[row.kind]}</span>
+                        {row.points.map((point, at) => (
+                          <span key={point.text}>
+                            {at > 0 && <span>{FINDING_SEPARATOR}</span>}
+                            {marked(tidyOverviewSentence(point.text).replace(/\.$/, ""), point.emphasis ?? [])}
+                            {point.sources.map((key, index) => {
+                              // A source is always a paper of this list: the overview is written from the listed papers only.
+                              const position = inTab.findIndex((item) => item.key === key)
+                              if (position < 0) return null
+                              return (
+                                <button key={key} type="button" data-source="true" title={headlineOf.get(key) ?? key} onMouseDown={(event) => event.preventDefault()} onClick={() => jumpTo(position)}
+                                  className={`align-super text-[11px] font-medium text-accent-ink underline decoration-dotted hover:text-accent-ink-hover ${index === 0 ? "ml-0.5" : "ml-1.5"}`}>{position + 1}</button>
+                              )
+                            })}
+                          </span>
+                        ))}
+                      </p>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               ))}
+              {citedItems.length > 0 && <p data-testid="overview-basis" className="mt-3 text-[12px] text-muted-text">{CLINICAL_COPY.feed.overviewBasis(citedItems.length, basisDesigns)}</p>}
             </div>
           )}
           {feed.items.length === 0 && <p className="mb-4 text-[14px] text-espresso">{CLINICAL_COPY.feed.nothingNew}</p>}
