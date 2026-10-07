@@ -22,12 +22,22 @@ export const CLINICAL_COPY = {
     savedToKnowledgeBase: "Saved",
     saveToKnowledgeBase: "Save to knowledge base",
     openWatchList: "Choose your topics",
-    modeChanged: (mode: string) => `Press Refresh to rebuild the list for ${mode}.`,
+    modeChanged: (lookBack: string) => `Press Refresh to rebuild the list for the last ${lookBack}.`,
     readLater: "Read later",
     readLaterRemove: "Remove from Read later",
     readLaterFailed: "The Read later list could not be saved.",
     /** The one line under the heading. */
-    status: (listed: number, found: number, mode: string, when: string) => `${listed} ${listed === 1 ? "paper" : "papers"} from ${found} found · ${mode} · updated ${when}`,
+    status: (listed: number, found: number, lookBack: string, when: string) => `${listed} ${listed === 1 ? "paper" : "papers"} from ${found} found · last ${lookBack} · updated ${when}`,
+    lookBack: "Look back",
+    lookBackOptions: { "3d": "3 days", "7d": "1 week", "14d": "2 weeks", "30d": "30 days", "3m": "3 months", "6m": "6 months", "12m": "12 months" },
+    allTopics: "All",
+    topicsLabel: "Topics",
+    /** The count line of a tab. */
+    overview: {
+      papers: (count: number) => `${count} ${count === 1 ? "paper" : "papers"}`,
+      full: "Condition and treatment",
+      leading: "Leading journals",
+    },
     saveFailed: "This paper could not be saved.",
     /** How well a paper fits the watch entry it was matched to (the stage-A grade, 1 to 4), in words. */
     matchLabels: { 4: "Direct match", 3: "Close match", 2: "Related", 1: "Loosely related" },

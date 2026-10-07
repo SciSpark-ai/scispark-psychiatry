@@ -24,6 +24,8 @@ export const StoredItemSchema = z.object({
   quoteVerified: z.boolean(),
   /** Which part of the watch entry the paper matches; the card names only that part. */
   matched: z.enum(MATCHED_PARTS).optional(),
+  /** The journal's band (1 leading, 2 established, 3 other), when the journal is known. */
+  journalBand: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   ungraded: z.boolean(),
   score: z.number(),
   flags: z.array(z.string()),
@@ -36,6 +38,8 @@ const StoredFeedSchema = z.object({
   version: z.literal(1),
   generatedAt: z.string(),
   mode: z.enum(FEED_MODES),
+  /** How far back this list looked ("7d", "6m", ...); see LOOK_BACK in modes.ts. */
+  lookBack: z.string().optional(),
   strictness: z.enum(GATE_STRICTNESS),
   items: z.array(StoredItemSchema),
   lowerConfidence: z.array(StoredItemSchema),

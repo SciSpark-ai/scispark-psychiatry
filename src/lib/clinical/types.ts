@@ -35,6 +35,8 @@ export const ClinicalSettingsSchema = z.object({
   mode: z.enum(FEED_MODES).default("whats-new"),
   strictness: z.enum(GATE_STRICTNESS).default("standard"),
   catchUpMonths: z.union([z.literal(3), z.literal(6), z.literal(12)]).default(6),
+  /** Days looked back in the "whats-new" mode: 3, 7, 14 or 30. Absent means 30. See LOOK_BACK in modes.ts. */
+  windowDays: z.union([z.literal(3), z.literal(7), z.literal(14), z.literal(30)]).optional(),
   defaultPopulation: z.string().min(1).optional(),
 })
 export type ClinicalSettings = z.infer<typeof ClinicalSettingsSchema>

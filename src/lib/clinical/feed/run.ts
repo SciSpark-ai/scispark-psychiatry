@@ -7,12 +7,12 @@ import { resolveFacet } from "../plan/queries"
 import { domainFilter } from "../filter/prefilter"
 import { gradeStageA } from "../grade/stage-a"
 import { verifyMatchedParts } from "../grade/verify-parts"
-import { MODES, windowFor } from "../modes"
+import { MODES, lookBackOf, windowFor } from "../modes"
 import type { SpecialtyPack } from "../pack/schema"
 import { planQueries } from "../plan/skill"
 import { retrieve, type EnumerateFn } from "../retrieve/pool"
 import { scoreCandidate, type ScoredItem } from "../score/score"
-import { JOURNAL_TIER_BOOST, journalTierOf, loadJournalTiers } from "../score/journal-tiers"
+import { JOURNAL_TIER_BOOST, journalTierOf, loadJournalTiers, type JournalTier } from "../score/journal-tiers"
 import { digestCards } from "../digest/card"
 import { seenRecently } from "../seen/store"
 import { cachedDigest, cachedGrade, keepsGrade, loadFeedCache, saveFeedCache, textHash } from "./cache"
@@ -39,6 +39,8 @@ export interface ClinicalFeedDeps {
 
 const ref = (candidate: Candidate): PoolRef => ({ key: candidate.key, pmid: candidate.paper.ids.pmid, doi: candidate.paper.ids.doi })
 
+/** Places in the stored list for each active topic. */
+const PER_TOPIC = 24
 const JOURNALS = "journals"
 const lower = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim()
 
@@ -104,7 +106,7 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   deps.onStage?.("context")
   const context = await assembleContext(storage)
   const mode = context.settings.mode
-  const window = windowFor(mode, now(), context.settings.catchUpMonths)
+  const window = windowFor(mode, now(), context.settings.catchUpMonths, context.settings.windowDays)
 
   deps.onStage?.("plan")
   const planned = await planQueries(deps.pack, context.entries, window, runOpts)
@@ -170,13 +172,17 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
 
   deps.onStage?.("select")
   const journalTiers = await loadJournalTiers(storage)
+  const bandOf = new Map<string, JournalTier>()
   const scored = assessed.map((candidate) => {
     const tier = journalTierOf(deps.pack.journals, journalTiers, candidate.paper.venue)
+    if (tier) bandOf.set(candidate.key, tier)
     return scoreCandidate({ candidate, grade: gradeOf(candidate.key), mode, now: now(), journals: deps.pack.journals, journalBoost: tier ? JOURNAL_TIER_BOOST[tier] : 0 })
   })
   // A paper already displayed to the user is not recommended again: it leaves the list and, if it
   // still matches, is kept under "Seen earlier".
-  const selected = selectFeed(scored.filter((item) => !context.seen.has(item.candidate.key)), context.entries)
+  // Papers are shown by topic, so the list has room for every topic: 24 places for each active one.
+  const listCap = Math.max(LIST_CAP, PER_TOPIC * context.entries.length)
+  const selected = selectFeed(scored.filter((item) => !context.seen.has(item.candidate.key)), context.entries, { listCap })
   const seenEarlier = scored
     .filter((item) => seenRecently(context.seenAt.get(item.candidate.key), now()) && layerOf(item, context.entries) !== null)
     .sort((a, b) => (layerOf(a, context.entries) as number) - (layerOf(b, context.entries) as number) || b.score - a.score).slice(0, LIST_CAP)
@@ -204,12 +210,13 @@ export async function runClinicalFeed(storage: VaultStorage, deps: ClinicalFeedD
   }
   const withDigest = (item: ScoredItem): StoredFeedItem => {
     const digest = summaries?.digests.get(item.candidate.key) ?? (cache ? cachedDigest(cache, item.candidate.key, item.candidate.paper) : undefined)
-    return digest ? { ...toStoredItem(item), digest } : toStoredItem(item)
+    const journalBand = bandOf.get(item.candidate.key)
+    return { ...toStoredItem(item), ...(journalBand ? { journalBand } : {}), ...(digest ? { digest } : {}) }
   }
 
   const generatedAt = now().toISOString()
   const feed: StoredFeed = {
-    version: 1, generatedAt, mode, strictness: context.settings.strictness,
+    version: 1, generatedAt, mode, lookBack: lookBackOf(context.settings), strictness: context.settings.strictness,
     items: selected.items.map(withDigest),
     lowerConfidence: selected.lowerConfidence.map(toStoredItem),
     ...(seenEarlier.length > 0 ? { seenEarlier: seenEarlier.map(withDigest) } : {}),

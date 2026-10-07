@@ -108,15 +108,6 @@ describe("ClinicalHome", () => {
     expect(container.textContent).toContain("Paper 1")
   })
 
-  it("saves the mode when the toggle changes", async () => {
-    const storage = vault.current as MemoryVaultStorage
-    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
-    await mount()
-    await act(async () => { byText("Catch up").click() })
-    expect((await loadClinicalSettings(storage)).mode).toBe("catch-up")
-    expect(byText("Catch up").getAttribute("aria-pressed")).toBe("true")
-  })
-
   it("records a vote from the card and marks it pressed", async () => {
     const storage = vault.current as MemoryVaultStorage
     await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
@@ -149,7 +140,7 @@ describe("ClinicalHome", () => {
     expect(container.querySelector("h1")!.className).toContain("font-semibold")
     const status = container.querySelector("[data-testid=clinical-feed-status]")!
     expect(status.textContent).toContain("1 paper from 99 found")
-    expect(status.textContent).toContain("What's new")
+    expect(status.textContent).toContain("last 30 days")
     const note = container.querySelector("[data-testid=clinical-feed-note]")!
     expect(note.textContent).toContain("For literature awareness only")
     expect(note.textContent).toContain("written by AI")
@@ -166,22 +157,6 @@ describe("ClinicalHome", () => {
     expect(topics).toEqual(["Depression × Esketamine", "Depression", "Esketamine"])
   })
 
-  it("lets the Catch up window be chosen on Home, and says when the list on screen is from the other mode", async () => {
-    const storage = vault.current as MemoryVaultStorage
-    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
-    await saveClinicalFeed(storage, feedOf([item(1)]))
-    await mount()
-    expect(container.querySelector('select[aria-label="Catch up looks back"]')).toBeNull()
-    await act(async () => { byText("Catch up").click() })
-    const months = container.querySelector<HTMLSelectElement>('select[aria-label="Catch up looks back"]')!
-    await act(async () => {
-      months.value = "12"
-      months.dispatchEvent(new Event("change", { bubbles: true }))
-    })
-    expect(await loadClinicalSettings(storage)).toMatchObject({ mode: "catch-up", catchUpMonths: 12 })
-    expect(container.textContent).toContain("Press Refresh to rebuild the list")
-  })
-
   it("puts a paper on the Read later list from its card, and takes it off again", async () => {
     const storage = vault.current as MemoryVaultStorage
     await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
@@ -193,5 +168,76 @@ describe("ClinicalHome", () => {
     expect((await loadReadLater(storage)).map((entry) => entry.key)).toEqual(["pmid:1"])
     await act(async () => { later().click() })
     expect(await loadReadLater(storage)).toEqual([])
+  })
+
+  // Owner decisions 2026-10-07: one "look back" choice replaces What's new / Catch up; papers are shown by topic.
+  const lookBack = () => container.querySelector<HTMLSelectElement>('select[aria-label="Look back"]')!
+  const choose = async (value: string) => act(async () => {
+    lookBack().value = value
+    lookBack().dispatchEvent(new Event("change", { bubbles: true }))
+  })
+
+  it("offers one look-back choice, from 3 days to 12 months, in place of the two modes", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "depression", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([item(1)]))
+    await mount()
+    expect([...lookBack().options].map((option) => option.textContent)).toEqual(["3 days", "1 week", "2 weeks", "30 days", "3 months", "6 months", "12 months"])
+    expect(lookBack().value).toBe("30d")
+    expect(container.textContent).not.toContain("Catch up")
+    await choose("7d")
+    expect(await loadClinicalSettings(storage)).toMatchObject({ mode: "whats-new", windowDays: 7 })
+    expect(container.textContent).toContain("Press Refresh to rebuild the list")
+    await choose("12m")
+    expect(await loadClinicalSettings(storage)).toMatchObject({ mode: "catch-up", catchUpMonths: 12 })
+  })
+
+  it("shows the papers by topic: a tab for all and one for each topic, with its count", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [
+      { id: "w1", condition: "Depression", treatment: "Esketamine", priority: "normal", safetySignal: false },
+      { id: "w2", condition: "ADHD", priority: "normal", safetySignal: false },
+    ])
+    await saveClinicalFeed(storage, feedOf([item(1), item(2, { entryId: "w2" }), item(3)]))
+    await mount()
+    const tabs = () => [...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[]
+    expect(tabs().map((tab) => tab.textContent)).toEqual(["All 3", "Depression × Esketamine 2", "ADHD 1"])
+    expect(tabs()[0].getAttribute("aria-selected")).toBe("true")
+    const shown = () => [...container.querySelectorAll("[data-testid=clinical-feed-card] h3")].map((heading) => heading.textContent)
+    expect(shown()).toEqual(["Paper 1", "Paper 2", "Paper 3"])
+    await act(async () => { tabs()[2].click() })
+    expect(shown()).toEqual(["Paper 2"])
+    expect(tabs()[2].getAttribute("aria-selected")).toBe("true")
+  })
+
+  it("gives each tab a short count of what is in it: designs, leading journals, full matches", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [{ id: "w1", condition: "Depression", treatment: "Esketamine", priority: "normal", safetySignal: false }])
+    await saveClinicalFeed(storage, feedOf([
+      item(1, { matched: "full", journalBand: 1 }),
+      item(2, { matched: "condition", design: "meta-analysis", journalBand: 1 }),
+      item(3, { matched: "condition", designSource: "none", design: "other" }),
+    ]))
+    await mount()
+    const overview = container.querySelector("[data-testid=clinical-feed-overview]")!
+    const parts = [...overview.querySelectorAll("[data-stat]")].map((part) => part.textContent)
+    expect(parts).toEqual(["3 papers", "Condition and treatment 1", "Leading journals 2", "Meta-analysis 1", "Randomized trial 1"])
+  })
+
+  it("marks as seen only the papers of the tab that is on screen", async () => {
+    const storage = vault.current as MemoryVaultStorage
+    await saveWatchEntries(storage, [
+      { id: "w1", condition: "Depression", priority: "normal", safetySignal: false },
+      { id: "w2", condition: "ADHD", priority: "normal", safetySignal: false },
+    ])
+    await saveClinicalFeed(storage, feedOf([...Array.from({ length: 13 }, (_, n) => item(n + 1)), item(50, { entryId: "w2" })]))
+    await mount()
+    await act(async () => {})
+    const seen = async () => Object.keys(JSON.parse((await storage.read(".scispark/clinical/seen.json")) ?? '{"seen":{}}').seen)
+    expect(await seen()).toHaveLength(12)
+    expect(await seen()).not.toContain("pmid:50")
+    await act(async () => { ([...container.querySelectorAll('[role="tab"]')] as HTMLButtonElement[])[2].click() })
+    await act(async () => {})
+    expect(await seen()).toContain("pmid:50")
   })
 })

@@ -9,15 +9,15 @@ import { paperKey } from "@/lib/papers/types"
 import { paperRecordFromFrontmatter } from "@/lib/papers/resolve"
 import { LlmErrorMessage } from "@/components/papers/LlmErrorMessage"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
-import { MODE_LABELS } from "@/lib/clinical/modes"
+import { LOOK_BACK, lookBackOf, settingsForLookBack, type LookBack } from "@/lib/clinical/modes"
 import { loadFeedback, type FeedbackKind } from "@/lib/clinical/feedback/store"
 import { loadSeenTimes, recordSeen, seenRecently } from "@/lib/clinical/seen/store"
 import { loadReadLater } from "@/lib/clinical/readlater/store"
-import { topicLookup } from "./topic"
+import { entryLabel, topicLookup } from "./topic"
 import { refreshClinicalFeed } from "@/lib/clinical/feed/client"
-import { feedPage, loadClinicalFeed, pageCount, type StoredFeed } from "@/lib/clinical/feed/stored"
+import { loadClinicalFeed, type StoredFeed } from "@/lib/clinical/feed/stored"
 import { loadClinicalSettings, loadWatchEntries, saveClinicalSettings } from "@/lib/clinical/watch/store"
-import { CATCH_UP_MONTHS, FEED_MODES, type CatchUpMonths, type ClinicalSettings, type ClinicalStage, type WatchEntry } from "@/lib/clinical/types"
+import { DESIGNS, PAGE_SIZE, type ClinicalSettings, type ClinicalStage, type WatchEntry } from "@/lib/clinical/types"
 import { ClinicalFeedCard } from "./ClinicalFeedCard"
 
 type Loaded = {
@@ -38,6 +38,8 @@ export function ClinicalHome() {
   const [storage, setStorage] = useState<VaultStorage | null>(null)
   const [data, setData] = useState<Loaded | null>(null)
   const [pages, setPages] = useState(1)
+  /** The topic tab on screen: a watch entry's id, or null for all topics. */
+  const [topic, setTopic] = useState<string | null>(null)
   const [stage, setStage] = useState<ClinicalStage | null>(null)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,7 +94,8 @@ export function ClinicalHome() {
 
   // Every paper put on screen is remembered as seen, so that a later refresh does not recommend it again.
   // Only what was displayed counts: the pages opened so far, not the whole stored list.
-  const displayedKeys = data?.feed ? Array.from({ length: pages }, (_, page) => feedPage(data.feed as StoredFeed, page)).flat().map((item) => item.key).join("\n") : ""
+  const inTab = (data?.feed?.items ?? []).filter((item) => topic === null || item.entryId === topic)
+  const displayedKeys = inTab.slice(0, pages * PAGE_SIZE).map((item) => item.key).join("\n")
   useEffect(() => {
     if (storage && displayedKeys) void recordSeen(storage, displayedKeys.split("\n")).catch(() => {})
   }, [storage, displayedKeys])
@@ -104,7 +107,30 @@ export function ClinicalHome() {
   const { entries, settings, feed, saved, votes } = data
   const { topicOf, toneOf } = topicLookup(entries)
   const seenToday = (feed?.seenEarlier ?? []).filter((item) => data.seenToday.has(item.key))
-  const shown = feed ? Array.from({ length: pages }, (_, page) => feedPage(feed, page)).flat() : []
+  const shown = inTab.slice(0, pages * PAGE_SIZE)
+  const current = lookBackOf(settings)
+  const feedLookBack = feed ? ((feed.lookBack ?? lookBackOf({ mode: feed.mode, catchUpMonths: 6, windowDays: 30 })) as LookBack) : current
+  const optionLabel = (key: LookBack) => CLINICAL_COPY.feed.lookBackOptions[key]
+  const tabs = [
+    { id: null as string | null, label: CLINICAL_COPY.feed.allTopics, count: feed?.items.length ?? 0 },
+    ...entries.map((entry) => ({ id: entry.id as string | null, label: entryLabel(entry), count: (feed?.items ?? []).filter((item) => item.entryId === entry.id).length })),
+  ]
+  // The count line of the tab: how many papers, how many match a condition and a treatment together,
+  // how many are in leading journals, and the most common designs that someone has named.
+  const designCounts = DESIGNS
+    .filter((design) => design !== "other" && design !== "unknown")
+    .map((design) => ({ design, count: inTab.filter((item) => item.design === design && item.designSource !== "none").length }))
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 4)
+  const stats = [
+    { key: "papers", text: CLINICAL_COPY.feed.overview.papers(inTab.length) },
+    ...[
+      { key: "full", label: CLINICAL_COPY.feed.overview.full, count: inTab.filter((item) => item.matched === "full" && entries.some((entry) => entry.id === item.entryId && entry.condition && entry.treatment)).length },
+      { key: "leading", label: CLINICAL_COPY.feed.overview.leading, count: inTab.filter((item) => item.journalBand === 1).length },
+      ...designCounts.map((entry) => ({ key: entry.design, label: CLINICAL_COPY.designLabels[entry.design], count: entry.count })),
+    ].filter((entry) => entry.count > 0).map((entry) => ({ key: entry.key, text: `${entry.label} ${entry.count}` })),
+  ]
   const markSaved = (key: string) => setData((current) => (current ? { ...current, saved: new Set(current.saved).add(key) } : current))
 
   return (
@@ -114,26 +140,16 @@ export function ClinicalHome() {
           <h1 className="font-heading text-[26px] font-semibold tracking-heading text-espresso">{CLINICAL_COPY.feed.heading}</h1>
           {feed && entries.length > 0 && (
             <p data-testid="clinical-feed-status" className="mt-1 text-[14px] text-secondary-dark">
-              {CLINICAL_COPY.feed.status(feed.stats.listed, feed.stats.retrieved, MODE_LABELS[feed.mode], new Date(feed.generatedAt).toLocaleString())}
+              {CLINICAL_COPY.feed.status(feed.stats.listed, feed.stats.retrieved, optionLabel(feedLookBack), new Date(feed.generatedAt).toLocaleString())}
             </p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <div role="group" aria-label={CLINICAL_COPY.watch.mode} className="flex overflow-hidden rounded-pill border border-border-warm text-[13px]">
-            {FEED_MODES.map((mode) => (
-              <button key={mode} type="button" aria-pressed={settings.mode === mode} onClick={() => void changeSettings({ mode })}
-                className={`px-3 py-1.5 ${settings.mode === mode ? "bg-orange text-on-accent" : "text-muted-text hover:bg-card-surface/60"}`}>
-                {MODE_LABELS[mode]}
-              </button>
-            ))}
-          </div>
-          {settings.mode === "catch-up" && (
-            <select aria-label={CLINICAL_COPY.watch.catchUpWindow} title={CLINICAL_COPY.watch.catchUpWindow} value={settings.catchUpMonths}
-              onChange={(event) => void changeSettings({ catchUpMonths: Number(event.target.value) as CatchUpMonths })}
-              className="rounded-pill border border-border-warm bg-transparent px-3 py-1.5 text-[13px] text-espresso">
-              {CATCH_UP_MONTHS.map((months) => <option key={months} value={months}>{CLINICAL_COPY.watch.months[months]}</option>)}
-            </select>
-          )}
+          <select aria-label={CLINICAL_COPY.feed.lookBack} title={CLINICAL_COPY.feed.lookBack} value={current}
+            onChange={(event) => void changeSettings(settingsForLookBack(event.target.value as LookBack))}
+            className="rounded-pill border border-border-warm bg-transparent px-3 py-1.5 text-[13px] text-espresso">
+            {LOOK_BACK.map((key) => <option key={key} value={key}>{optionLabel(key)}</option>)}
+          </select>
           <button type="button" onClick={() => void refresh()} disabled={running || entries.length === 0}
             className="rounded-pill bg-orange px-4 py-1.5 text-[13px] font-medium text-on-accent hover:bg-orange/90 disabled:opacity-50">
             {running ? CLINICAL_COPY.feed.refreshing : CLINICAL_COPY.feed.refresh}
@@ -153,7 +169,19 @@ export function ClinicalHome() {
         <p className="text-[14px] text-muted-text">{CLINICAL_COPY.feed.emptyNoFeed}</p>
       ) : (
         <>
-          {feed.mode !== settings.mode && <p className="mb-4 text-[14px] text-accent-ink">{CLINICAL_COPY.feed.modeChanged(MODE_LABELS[settings.mode])}</p>}
+          {feedLookBack !== current && <p className="mb-4 text-[14px] text-accent-ink">{CLINICAL_COPY.feed.modeChanged(optionLabel(current))}</p>}
+          <div role="tablist" aria-label={CLINICAL_COPY.feed.topicsLabel} className="mb-3 flex flex-wrap gap-2">
+            {tabs.map((tab) => (
+              <button key={tab.id ?? "all"} type="button" role="tab" aria-selected={topic === tab.id}
+                onClick={() => { setTopic(tab.id); setPages(1) }}
+                className={`rounded-pill border px-3.5 py-1.5 text-[14px] transition-colors ${topic === tab.id ? "border-orange bg-orange/10 font-semibold text-accent-ink" : "border-border-warm text-secondary-dark hover:bg-card-surface/60"}`}>
+                {tab.label} <span className="text-[12px] font-normal text-muted-text">{tab.count}</span>
+              </button>
+            ))}
+          </div>
+          <p data-testid="clinical-feed-overview" className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-secondary-dark">
+            {stats.map((stat, index) => <span key={stat.key} data-stat="true" className={index === 0 ? "font-semibold text-espresso" : ""}>{stat.text}</span>)}
+          </p>
           {feed.items.length === 0 && <p className="mb-4 text-[14px] text-espresso">{CLINICAL_COPY.feed.nothingNew}</p>}
           {feed.warnings.length > 0 && <ul className="mb-4 list-disc pl-5 text-[12px] text-muted-text">{feed.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           <div className="grid gap-4 lg:grid-cols-2">
@@ -162,7 +190,7 @@ export function ClinicalHome() {
                 entryLabel={topicOf(item)} tone={toneOf(item)} vote={votes.get(item.key)} readLater={data.later.has(item.key)} />
             ))}
           </div>
-          {pages < pageCount(feed) && (
+          {shown.length < inTab.length && (
             <button type="button" onClick={() => setPages(pages + 1)} className="mt-5 rounded-pill border border-border-warm px-4 py-1.5 text-[13px] text-espresso hover:bg-card-surface/60">
               {CLINICAL_COPY.feed.morePapers}
             </button>
