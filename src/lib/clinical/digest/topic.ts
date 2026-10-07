@@ -28,8 +28,15 @@ export { tidyOverviewSentence }
 export const OVERVIEW_MIN_PAPERS = 2
 const OVERVIEW_MAX_PAPERS = 20
 /** One sentence about one thing. The model is asked for fewer words than this. */
-const SENTENCE_MAX_WORDS = 28
-const OVERVIEW_MAX_SENTENCES = 14
+const SENTENCE_MAX_WORDS = 36
+
+/**
+ * How many sentences an overview of this many papers may have. Fewer than the papers, so that those
+ * which found related things have to share a sentence; otherwise the overview is the list again.
+ */
+export function overviewSentenceLimit(papers: number): number {
+  return Math.min(8, Math.max(3, Math.ceil(papers * 0.6)))
+}
 
 /** What a finding says: a treatment helped, did not help, did both, raised a safety concern, or something else was found. */
 export const OVERVIEW_KINDS = ["benefit", "no-benefit", "mixed", "safety", "other"] as const
@@ -57,14 +64,16 @@ const OverviewSchema = z.object({
 interface OverviewInput {
   topic: string
   papers: Array<{ n: number; part: "focus" | "related"; headline: string; takeaway: string }>
+  /** The most sentences the answer may have. */
+  maxSentences: number
   /** Why sentences of the previous answer were rejected, when this is the second try. */
   problems?: string[]
 }
 
 const SYSTEM_PROMPT = `You write the short overview a busy psychiatrist reads before the paper list of one topic: which treatments the new papers found to help, which they found not to help, where the result was mixed, what safety concerns they raise, and what else they found. It reads as running text, not as a list of the papers. You are given the topic and, for each paper, a number, a headline, a one-sentence takeaway, and "part": "focus" for a paper about the whole topic (its condition and its treatment), "related" for a paper about the condition with another treatment or none.
 
-Return "sentences". Every paper must be a source of at least one sentence. Papers that found the same or a closely related thing share ONE sentence that lists them all; do not write one sentence per paper when they can be joined. Each sentence:
-- "text": one plain sentence of at most 24 words, starting with a capital letter and ending with a full stop. Name the treatment or exposure and what was found, with the patient group when it matters. No filler ("recent papers explore"), no study-design words unless they are the point.
+Return "sentences": at most "maxSentences" of them, and every paper must be a source of at least one. That is fewer sentences than papers, so you must join: papers on the same treatment, or with the same kind of result, share ONE sentence that lists them all as sources (for example "Ketamine improved depressive symptoms and suicidal thoughts in treatment-resistant depression" for three ketamine papers, or "Psychoeducation and arts therapy improved coping and hope" for two). Never write one sentence per paper. Each sentence:
+- "text": one plain sentence of at most 30 words, starting with a capital letter and ending with a full stop. Name the treatment or exposure and what was found, with the patient group when it matters. No filler ("recent papers explore"), no study-design words unless they are the point.
 - "kind": "benefit" if a treatment or intervention did better than its comparator or improved the outcome; "no-benefit" if it made no difference, did worse, or the trial failed; "mixed" if it helped on one outcome and not on another; "safety" if the finding is a harm, adverse effect or risk of a treatment; "other" for everything that is not about whether a treatment works (risk factors, mechanisms, prediction, prevalence, service use, protocols).
 - "group": "focus" or "related", the part its papers belong to. Never mix the two parts in one sentence.
 - "sources": the numbers of the papers the sentence rests on. At least one.
@@ -81,7 +90,7 @@ Rules:
 
 export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof OverviewSchema>>({
   name: "clinical-topic-overview",
-  version: "6",
+  version: "7",
   run: (ctx, input) =>
     ctx.llmStructured(
       // The stronger model: weighing several papers against each other is where the small one writes filler.
@@ -141,7 +150,7 @@ function problemText(reason: string): string {
   const [kind, detail] = reason.split(":")
   if (kind === "number-not-in-sources") return `A sentence used the number ${detail}, which is not in the headline or takeaway of the papers it listed as sources. Use only numbers from the sources of that sentence, or no number.`
   if (kind === "no-source") return "A sentence listed no valid paper number in its sources. Every sentence needs at least one."
-  if (kind === "too-long") return "A sentence was too long. Keep each sentence to at most 24 words; put a second result in a sentence of its own."
+  if (kind === "too-long") return "A sentence was too long. Keep each sentence to at most 30 words."
   return "A sentence was empty."
 }
 
@@ -158,8 +167,9 @@ export async function writeTopicOverviews(
   let costUsd: number | null = 0
   await Promise.all(topics.map(async (topic) => {
     const papers = topic.papers.map((paper, index) => ({ n: index + 1, part: paper.part, headline: paper.headline, takeaway: paper.takeaway }))
+    const limit = overviewSentenceLimit(topic.papers.length)
     const ask = async (problems?: string[]) => {
-      const run = await runSkill({ skill: topicOverviewSkill, input: { topic: topic.label, papers, ...(problems ? { problems } : {}) }, ...opts })
+      const run = await runSkill({ skill: topicOverviewSkill, input: { topic: topic.label, papers, maxSentences: limit, ...(problems ? { problems } : {}) }, ...opts })
       costUsd = addCosts(costUsd, run.costUsd)
       return run.status === "ok" && run.output ? judgeOverview(run.output.sentences, topic.papers) : null
     }
@@ -167,14 +177,18 @@ export async function writeTopicOverviews(
       // The overview is about the whole list: a paper no sentence rests on is a reason to ask again.
       const leftOut = (answer: { kept: OverviewSentence[] }) => topic.papers.flatMap((paper, index) => (answer.kept.some((sentence) => sentence.sources.includes(paper.key)) ? [] : index + 1))
       let best = await ask()
-      if (best && (best.problems.length > 0 || leftOut(best).length > 0)) {
+      if (best && (best.problems.length > 0 || leftOut(best).length > 0 || best.kept.length > limit)) {
         const missing = leftOut(best)
-        const problems = [...new Set(best.problems.map(problemText)), ...(missing.length > 0 ? [`No sentence listed ${missing.length === 1 ? "paper" : "papers"} ${missing.join(", ")} as a source. Every paper must be a source of at least one sentence; join papers that found related things.`] : [])]
+        const tooMany = best.kept.length > limit ? [`You wrote ${best.kept.length} sentences; write at most ${limit}. Join papers on the same treatment or with the same kind of result into one sentence.`] : []
+        const problems = [...new Set(best.problems.map(problemText)), ...tooMany, ...(missing.length > 0 ? [`No sentence listed ${missing.length === 1 ? "paper" : "papers"} ${missing.join(", ")} as a source. Every paper must be a source of at least one sentence; join papers that found related things.`] : [])]
         const again = await ask(problems).catch(() => null)
-        if (again && (leftOut(again).length < missing.length || (leftOut(again).length === missing.length && again.kept.length >= best.kept.length))) best = again
+        // Better: leaves out fewer papers; then, is within the limit; then, loses fewer sentences to the checks.
+        const worse = (answer: NonNullable<typeof best>) => [leftOut(answer).length, answer.kept.length > limit ? 1 : 0, answer.problems.length]
+        const [a, b] = [again ? worse(again) : null, worse(best)]
+        if (again && again.kept.length > 0 && a && (a[0] < b[0] || (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] <= b[2]))))) best = again
       }
       // An overview is a glance, not a second list.
-      if (best && best.kept.length > 0) overviews[topic.entryId] = best.kept.slice(0, OVERVIEW_MAX_SENTENCES)
+      if (best && best.kept.length > 0) overviews[topic.entryId] = best.kept
       else dropped.push({ entryId: topic.entryId, reason: best?.problems[0] ?? "call-failed" })
     } catch {
       dropped.push({ entryId: topic.entryId, reason: "call-failed" })
