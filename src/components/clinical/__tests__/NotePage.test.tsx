@@ -114,7 +114,7 @@ describe("the page of a note", () => {
     expect(anchor("Ask about this note").getAttribute("href")).toBe("/chat?new=1&note=esk")
     for (const label of ["Cite a paper", "Link a condition or treatment", "Copy with references", "Delete"]) expect(button(label)).toBeTruthy()
     expect(state()).toBe("saved")
-    expect(container.textContent).toContain("Do not write anything about a patient.")
+    expect(container.textContent).toContain("Do not enter patient information.")
     expect(container.textContent).toContain("Asking sends this note and its cited papers to your model provider.")
     expect(area().className).not.toContain("font-mono")
     await tick(5 * SAVE_DELAY_MS)

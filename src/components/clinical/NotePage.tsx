@@ -484,7 +484,7 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
             <button type="button" onClick={() => void save()} className={`font-medium underline underline-offset-2 ${FOCUS}`}>{P.retry}</button>
           </>
         ) : <span role="status" data-note-state={unsaved ? "saving" : "saved"}>{unsaved ? P.saving : P.saved}</span>}
-        <span aria-hidden="true" className="px-1.5">·</span>{P.noPatient}
+        <span aria-hidden="true" className="px-1.5">·</span>{CLINICAL_COPY.noPatientData}
         <span aria-hidden="true" className="px-1.5">·</span>{P.askHint}
       </p>
     </div>

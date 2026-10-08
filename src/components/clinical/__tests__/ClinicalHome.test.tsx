@@ -141,10 +141,12 @@ describe("ClinicalHome", () => {
     expect(status.textContent).toContain("1 paper from 99 found in PubMed")
     expect(status.textContent).toContain("last 30 days")
     const note = container.querySelector("[data-testid=clinical-feed-note]")!
-    expect(note.textContent).toContain("For literature awareness only")
+    expect(note.textContent).toContain("Designs and grades describe the papers")
+    // The first sentence of the safety line is drawn once, by the shell, not again here.
+    expect(note.textContent).not.toContain("For literature awareness only")
     expect(note.textContent).toContain("written by AI")
     const order = container.textContent ?? ""
-    expect(order.indexOf("Paper 1")).toBeLessThan(order.indexOf("For literature awareness only"))
+    expect(order.indexOf("Paper 1")).toBeLessThan(order.indexOf("Designs and grades describe the papers"))
   })
 
   it("names on the card only the part of the watch entry the paper matches", async () => {

@@ -12,6 +12,8 @@ import ThemeApplier from "./ThemeApplier";
 import NavHistoryTracker from "./NavHistoryTracker";
 import { UserIdentityHydrator } from "./UserIdentityHydrator";
 import { ProfileGate } from "./ProfileGate";
+// Clinical edition: the safety line under every page.
+import { ClinicalFooterNote } from "@/components/clinical/ClinicalFooterNote";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -37,12 +39,15 @@ function OpenProfileShell({ children }: AppShellProps) {
           <Sidebar collapsed={!desktopSidebarOpen} />
         </div>
 
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        <div className="flex min-w-0 flex-1 flex-col">
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
           {/* App Router owns page identity. A keyed exit animation can receive
               the destination children before it exits, then mount them again,
               erasing inputs/selections and duplicating initialization. */}
           <div className="h-full">{children}</div>
         </main>
+        <ClinicalFooterNote />
+        </div>
       </div>
       <SelectionToNoteBubble />
       {/* Sparky is already in the onboarding panel; avoid covering its composer. */}

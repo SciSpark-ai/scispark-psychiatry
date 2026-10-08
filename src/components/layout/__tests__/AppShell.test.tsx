@@ -48,3 +48,24 @@ describe("App Router page ownership", () => {
     },
   )
 })
+
+// Clinical edition: the safety line is part of the shell, so no page can be without it.
+describe("the safety line", () => {
+  it.each(["/", "/wiki", "/chat", "/notes", "/outputs", "/watch", "/paper/fixture", "/onboarding", "/setup"])("is drawn under the page at %s, outside the scrolling area", async (pathname) => {
+    const container = document.createElement("div")
+    const root = createRoot(container)
+    try {
+      route.pathname = pathname
+      await act(async () => root.render(<AppShell><p>Page</p></AppShell>))
+      const notes = container.querySelectorAll("[data-testid=clinical-footer-note]")
+      expect(notes).toHaveLength(1)
+      expect(notes[0].textContent).toBe("For literature awareness only — not medical advice. AI summaries can be wrong. Do not enter patient information.")
+      const main = container.querySelector("main")!
+      expect(main.textContent).toBe("Page")
+      expect(main.contains(notes[0])).toBe(false)
+      expect(main.parentElement!.contains(notes[0])).toBe(true)
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
+})

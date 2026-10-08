@@ -15,9 +15,15 @@ export const CLINICAL_COPY = {
     backTo: (view: string) => `← ${view}`,
   },
   metaDescription: "A literature radar and knowledge base for psychiatry: new papers matched to your watch list, with study design shown.",
-  disclaimerShort:
-    "For literature awareness only. Designs and grades describe the papers, not whether a treatment is right for a patient.",
+  /**
+   * The safety line under every page (`ClinicalFooterNote`) is these three, in this order. `noPatientData` is also
+   * shown beside every box a reader types in at length: the note editor and Ask.
+   */
+  disclaimerShort: "For literature awareness only — not medical advice.",
+  aiCanBeWrong: "AI summaries can be wrong.",
   noPatientData: "Do not enter patient information.",
+  /** At the foot of the feed, with `feed.aiNotice`. */
+  disclaimerGrades: "Designs and grades describe the papers, not whether a treatment is right for a patient.",
   loading: "Loading…",
   errorPrefix: "Error:",
   modes: { "whats-new": "What's new", "catch-up": "Catch up" },
@@ -412,7 +418,6 @@ export const CLINICAL_COPY = {
       saved: "Saved",
       saving: "Saving…",
       retry: "Retry",
-      noPatient: "Do not write anything about a patient.",
       askHint: "Asking sends this note and its cited papers to your model provider.",
       conflictStored: "The stored version",
       keepMine: "Keep mine",

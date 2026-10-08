@@ -369,7 +369,7 @@ export function ClinicalHome() {
       )}
       {/* What the feed is and is not, once per page and out of the way of the papers. */}
       <p data-testid="clinical-feed-note" className="mt-10 border-t border-border-warm/60 pt-4 text-[13px] leading-relaxed text-muted-text">
-        {CLINICAL_COPY.disclaimerShort} {CLINICAL_COPY.feed.aiNotice}
+        {CLINICAL_COPY.disclaimerGrades} {CLINICAL_COPY.feed.aiNotice}
       </p>
     </div>
   )

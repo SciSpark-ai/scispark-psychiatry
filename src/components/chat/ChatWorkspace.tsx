@@ -275,7 +275,7 @@ export function ChatWorkspace({ sessionId, fresh = false, resume = false, initia
           </div>
         </details>
         {mode !== "chat" && sourcesError && <p role="alert" className="mt-3 text-sm text-espresso">{sourcesError} <button onClick={() => openSettings("sources")} className="text-accent-ink underline">Manage sources</button></p>}
-        <p className="mt-4 text-center text-xs text-muted-text">Enter to send. Shift+Enter for a new line.</p>
+        <p className="mt-4 text-center text-xs text-muted-text">Enter to send. Shift+Enter for a new line. <span data-chat-no-patient>{CLINICAL_COPY.noPatientData}</span></p>
         {busy && <div className="mt-6"><StreamingReply text={draft} label={stage ? STAGE_LABELS[stage] : "Thinking…"} /></div>}
         {recent.length > 0 && <details className="mt-8 border-t border-border-warm pt-4 text-sm text-muted-text">
           <summary className="w-fit cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-accent-ink">Recent conversations</summary>
@@ -318,7 +318,7 @@ export function ChatWorkspace({ sessionId, fresh = false, resume = false, initia
       {mode !== "chat" && showSources && <div className="mb-3 flex flex-wrap gap-3">{enabledSources.map((s) => <label key={s} className="flex items-center gap-1.5 text-sm text-espresso"><input type="checkbox" disabled={busy} checked={sources.includes(s)} onChange={() => { const next = sources.includes(s) ? sources.filter((p) => p !== s) : [...sources, s]; setSources(next); saveDraftOptions({ sources: next }) }} />{SOURCE_LABELS[s]}</label>)}</div>}
       {mode !== "chat" && sourcesError && <p role="alert" className="mb-2 text-sm text-espresso">{sourcesError}</p>}
       <Composer value={question} onChange={changeQuestion} onSubmit={submit} busy={busy || loading || Boolean(scopeError) || (mode !== "chat" && (!sources.length || Boolean(sourcesError)))} placeholder={mode === "review" ? "What question should this literature review investigate?" : mode === "search" ? "Ask a research question to find papers…" : "Ask about your research or the papers above…"} />
-      <p className="mt-2 text-xs text-muted-text">Enter to send. Shift+Enter for a new line.</p>
+      <p className="mt-2 text-xs text-muted-text">Enter to send. Shift+Enter for a new line. <span data-chat-no-patient>{CLINICAL_COPY.noPatientData}</span></p>
     </footer>
     </div>
     {reportId && <ReviewReport key={`${reportId}:${reportVersion ?? "latest"}`} id={reportId} initialVersion={reportVersion} onClose={() => setReportId(null)} />}
