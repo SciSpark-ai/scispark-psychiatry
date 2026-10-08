@@ -193,6 +193,25 @@ describe("the Evidence view", () => {
     expect(leavingIsGuarded()).toBe(false)
   })
 
+  it("keeps with a draft the notes it was begun from, so a change made elsewhere meanwhile is not written over", async () => {
+    const path = "wiki/conditions/major-depressive-disorder.md"
+    await render("condition=depression&tab=notes")
+    await type("Notes on depression. Mine.")
+    await at("condition=depression")
+    NOTES[path] = "Written in another window."
+    try {
+      await at("condition=depression&tab=notes")
+      expect(area().value).toBe("Notes on depression. Mine.")
+      await act(async () => { saveButton().click() })
+      await act(async () => {})
+      expect(vault.write).not.toHaveBeenCalled()
+      expect(container.querySelector("[data-stored-notes]")!.textContent).toBe("Written in another window.")
+      expect(area().value).toBe("Notes on depression. Mine.")
+    } finally {
+      NOTES[path] = "Notes on depression."
+    }
+  })
+
   it("opens the notes of a page that was made on a first save, when the reader comes back to them", async () => {
     await render("condition=adhd&tab=notes")
     records.createConditionPageRemote.mockResolvedValue({ id: "wiki/conditions/adhd", created: true })

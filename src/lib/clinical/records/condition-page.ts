@@ -43,7 +43,7 @@ export async function createConditionPage(storage: VaultStorage, taxonomy: Taxon
 function withEvidenceSection(raw: string, section: string): string | null {
   let parsed: ReturnType<typeof parseDocument>
   try { parsed = parseDocument(raw) } catch { return null }
-  if (new RegExp(`^\`\`\`${CONDITION_FENCE}[ \\t]*$`, "m").test(parsed.body)) return null
+  if (new RegExp(`^\`\`\`${CONDITION_FENCE}[ \\t]*\\r?$`, "m").test(parsed.body)) return null
   // The text before the body is kept as it stands, so the reader's own front matter is not rewritten.
   return raw.endsWith(parsed.body) ? `${raw.slice(0, raw.length - parsed.body.length)}${section}${parsed.body}` : serializeDocument(parsed.frontmatter, `${section}${parsed.body}`)
 }

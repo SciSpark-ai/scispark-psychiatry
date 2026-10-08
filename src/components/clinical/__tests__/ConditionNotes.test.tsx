@@ -12,7 +12,8 @@ vi.mock("@/lib/vault/get-vault", () => ({ getOpenVault: async () => vault }))
 const records = vi.hoisted(() => ({ createConditionPageRemote: vi.fn() }))
 vi.mock("@/lib/clinical/records/client", () => records)
 
-import { ConditionNotes } from "../ConditionNotes"
+import { useState } from "react"
+import { ConditionNotes, type NotesDraft } from "../ConditionNotes"
 
 const P = CLINICAL_COPY.records.conditionPage
 const ID = "wiki/conditions/schizophrenia"
@@ -22,7 +23,7 @@ const pageWith = (notes: string) => `${TOP}## ${P.notes}\n\n${notes}\n`
 let container: HTMLDivElement
 const onDraft = vi.fn()
 const onPage = vi.fn()
-async function render(pageId: string | null, draft?: string) {
+async function render(pageId: string | null, draft?: NotesDraft) {
   container = document.createElement("div")
   document.body.appendChild(container)
   await act(async () => { createRoot(container).render(<ConditionNotes code="schizophrenia" pageId={pageId} draft={draft} onDraft={onDraft} onPage={onPage} />) })
@@ -119,17 +120,71 @@ describe("the notes on a condition", () => {
   it("opens with the text the reader had not saved, Save enabled, and tells its caller of a draft and of its end", async () => {
     vault.read.mockResolvedValue(pageWith("Old."))
     vault.write.mockResolvedValue(undefined)
-    await render(ID, "Half a thought")
+    await render(ID, { text: "Half a thought", opened: "Old." })
     expect(area().value).toBe("Half a thought")
     expect(button().disabled).toBe(false)
     await type("Half a thought, finished.")
-    expect(onDraft).toHaveBeenLastCalledWith("schizophrenia", "Half a thought, finished.")
+    expect(onDraft).toHaveBeenLastCalledWith("schizophrenia", { text: "Half a thought, finished.", opened: "Old." })
     await type("Old.")
     expect(onDraft).toHaveBeenLastCalledWith("schizophrenia", null)
     await type("A whole thought.")
     await save()
     expect(vault.write).toHaveBeenCalledWith(`${ID}.md`, pageWith("A whole thought."))
     expect(onDraft).toHaveBeenLastCalledWith("schizophrenia", null)
+  })
+
+  it("keeps the typed text when its own first save tells the caller of the new page, whatever a read of that page then gives", async () => {
+    // As the Evidence view does: the page a save made comes back as the `pageId` prop.
+    function Parent() {
+      const [made, setMade] = useState<string | null>(null)
+      return <ConditionNotes code="schizophrenia" pageId={made} onDraft={onDraft} onPage={(_code, pageId) => setMade(pageId)} />
+    }
+    container = document.createElement("div")
+    document.body.appendChild(container)
+    await act(async () => { createRoot(container).render(<Parent />) })
+    records.createConditionPageRemote.mockResolvedValue({ id: ID, created: true })
+    // Every read after the page is made gives the empty template, as one that runs before the write has landed does.
+    vault.read.mockResolvedValue(pageWith(P.notesHint))
+    vault.write.mockResolvedValue(undefined)
+    await type("First note.")
+    await save()
+    expect(vault.write).toHaveBeenCalledWith(`${ID}.md`, pageWith("First note."))
+    expect(vault.read).toHaveBeenCalledTimes(1)
+    expect(area().value).toBe("First note.")
+    expect(button().disabled).toBe(true)
+  })
+
+  it("cannot be typed in while a save is under way, and keeps as a draft what was put in it meanwhile", async () => {
+    vault.read.mockResolvedValue(pageWith("Old."))
+    let landed: () => void = () => {}
+    vault.write.mockReturnValue(new Promise<void>((resolve) => { landed = () => resolve() }))
+    await render(ID)
+    await type("New notes.")
+    expect(area().readOnly).toBe(false)
+    await act(async () => { button().click() })
+    await act(async () => {})
+    expect(vault.write).toHaveBeenCalledWith(`${ID}.md`, pageWith("New notes."))
+    expect(area().readOnly).toBe(true)
+    // Text that gets in all the same is not what was saved: its draft is not thrown away.
+    await type("New notes. And more.")
+    await act(async () => { landed() })
+    await act(async () => {})
+    expect(area().readOnly).toBe(false)
+    expect(area().value).toBe("New notes. And more.")
+    expect(onDraft).toHaveBeenLastCalledWith("schizophrenia", { text: "New notes. And more.", opened: "New notes." })
+    expect(button().disabled).toBe(false)
+  })
+
+  it("does not write a resumed draft over notes that were changed elsewhere since the draft was begun", async () => {
+    // The notes were "x" when the reader began; another window has saved "y" since.
+    vault.read.mockResolvedValue(pageWith("y"))
+    await render(ID, { text: "x mine", opened: "x" })
+    expect(area().value).toBe("x mine")
+    await save()
+    expect(vault.write).not.toHaveBeenCalled()
+    expect(container.querySelector('[role="alert"]')!.textContent).toBe(CLINICAL_COPY.evidence.notes.conflict)
+    expect(container.querySelector("[data-stored-notes]")!.textContent).toBe("y")
+    expect(area().value).toBe("x mine")
   })
 
   it("tells its caller where the page it made is", async () => {

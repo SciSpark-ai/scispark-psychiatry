@@ -64,6 +64,16 @@ describe("creating a condition page", () => {
     expect(await storage.read(path)).toBe(once)
     expect((await storage.list(".scispark/changesets/")).length).toBe(1)
   })
+  it("leaves a page with Windows line endings that has the block as it is", async () => {
+    const storage = new MemoryVaultStorage()
+    const path = "wiki/conditions/major-depressive-disorder.md"
+    await createConditionPage(storage, TAXONOMY, "depression", { now: NOW })
+    const crlf = ((await storage.read(path)) as string).replace(/\n/g, "\r\n")
+    await storage.write(path, crlf)
+    expect(await createConditionPage(storage, TAXONOMY, "depression", { now: NOW })).toEqual({ id: "wiki/conditions/major-depressive-disorder", created: false })
+    expect(await storage.read(path)).toBe(crlf)
+    expect((await storage.list(".scispark/changesets/")).length).toBe(1)
+  })
   it("refuses a code that is not a condition of the pack", async () => {
     const storage = new MemoryVaultStorage()
     await expect(createConditionPage(storage, TAXONOMY, "esketamine", { now: NOW })).rejects.toThrow(/not in the pack/)

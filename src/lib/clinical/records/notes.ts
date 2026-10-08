@@ -9,23 +9,34 @@ const HEADING = /^#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/
 const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/
 
 /**
- * Where the notes heading's line ends (before its line break), or null when the page has none. It is the first
- * heading of that name outside a fenced block; a fence is closed only by its own marker, at least as long.
- * Line endings may be Windows ones.
+ * One pass over the page for the notes heading: where its line ends (before its line break), or null, and whether the
+ * pass ended inside a fence that was never closed. Without `fences` every line is read as text.
  */
-function headingEnd(markdown: string): number | null {
+function scan(markdown: string, fences: boolean): { end: number | null; unclosed: boolean } {
   let fence: string | null = null
   let offset = 0
   for (const raw of markdown.split("\n")) {
     const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw
-    const marker = FENCE.exec(line)
+    const marker = fences ? FENCE.exec(line) : null
     if (fence !== null) {
       if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && marker[2].trim() === "") fence = null
     } else if (marker) fence = marker[1]
-    else if (HEADING.exec(line)?.[1] === P.notes) return offset + line.length
+    else if (HEADING.exec(line)?.[1] === P.notes) return { end: offset + line.length, unclosed: false }
     offset += raw.length + 1
   }
-  return null
+  return { end: null, unclosed: fence !== null }
+}
+
+/**
+ * Where the notes heading's line ends (before its line break), or null when the page has none. It is the first
+ * heading of that name outside a fenced block; a fence is closed only by its own marker, at least as long.
+ * A fence that is never closed would hide every heading after it, and each save would add one more: the page is
+ * then read again with no fences, and the first heading of that name anywhere is taken.
+ * Line endings may be Windows ones.
+ */
+function headingEnd(markdown: string): number | null {
+  const fenced = scan(markdown, true)
+  return fenced.end === null && fenced.unclosed ? scan(markdown, false).end : fenced.end
 }
 
 const plain = (text: string) => text.replace(/\r\n/g, "\n")

@@ -62,6 +62,19 @@ describe("the notes section of a condition page", () => {
     expect(twice.split(`## ${P.notes}`)).toHaveLength(2)
   })
 
+  it("keeps one heading over two saves when a fence before the notes heading is never closed", () => {
+    const start = page(`\`\`\`text\nnever closed\n\n## ${P.notes}\n\nOld.\n`)
+    expect(notesOf(start)).toBe("Old.")
+    const once = replaceNotes(start, "One.")
+    const twice = replaceNotes(once, "Two.")
+    expect(twice).toBe(page(`\`\`\`text\nnever closed\n\n## ${P.notes}\n\nTwo.\n`))
+    expect(twice.split(`## ${P.notes}`)).toHaveLength(2)
+    // And on a page that has the open fence and no heading yet.
+    const bare = replaceNotes(replaceNotes(page("~~~\nnever closed\n"), "One."), "Two.")
+    expect(bare.split(`## ${P.notes}`)).toHaveLength(2)
+    expect(notesOf(bare)).toBe("Two.")
+  })
+
   it("adds the heading at the end of a page that has none", () => {
     expect(replaceNotes(`${TOP}Some text.\n\n\n`, "Mine.")).toBe(`${TOP}Some text.\n\n## ${P.notes}\n\nMine.\n`)
   })

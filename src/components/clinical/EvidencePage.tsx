@@ -8,7 +8,7 @@ import type { ConditionEvidence as Evidence, Period, Scope } from "@/lib/clinica
 import { listFollowedConditionsRemote, loadConditionEvidenceRemote } from "@/lib/clinical/evidence/client"
 import { evidenceHref, PERIODS, SCOPES, type EvidenceTab } from "@/lib/clinical/evidence/href"
 import { ConditionEvidence } from "./ConditionEvidence"
-import { ConditionNotes } from "./ConditionNotes"
+import { ConditionNotes, type NotesDraft } from "./ConditionNotes"
 
 const E = CLINICAL_COPY.evidence
 const V = E.page
@@ -25,8 +25,8 @@ const oneOf = <T extends string>(values: readonly T[], value: string | null, fal
  * The Evidence view (`/wiki`): the conditions the reader follows as tabs, and under the chosen one its
  * evidence summary or the reader's notes on it. The condition, which papers, of what time and which of
  * the two is open are kept in the address, so a reload and a link keep them. Notes that are typed and not
- * saved are kept here, by condition, while the reader looks at something else in the view; the browser asks
- * before the page is left with any.
+ * saved are kept here, by condition, with the notes they were begun from, while the reader looks at something
+ * else in the view; the browser asks before the page is left with any.
  */
 export function EvidencePage() {
   const router = useRouter()
@@ -41,7 +41,7 @@ export function EvidencePage() {
   const [followed, setFollowed] = useState<Entry[] | null>(null)
   // The condition the address names when the reader does not follow it: asked of the pack, with its page; null for one the pack lacks.
   const [extra, setExtra] = useState<{ code: string; entry: Entry | null } | null>(null)
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [drafts, setDrafts] = useState<Record<string, NotesDraft>>({})
   // The pages that a first save of notes made, which the list of conditions does not know of yet.
   const [made, setMade] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
@@ -66,8 +66,8 @@ export function EvidencePage() {
     return () => { cancelled = true }
   }, [unfollowed, wanted])
 
-  const keepDraft = useCallback((code: string, text: string | null) => setDrafts((before) => {
-    if (text !== null) return before[code] === text ? before : { ...before, [code]: text }
+  const keepDraft = useCallback((code: string, draft: NotesDraft | null) => setDrafts((before) => {
+    if (draft !== null) return before[code]?.text === draft.text && before[code]?.opened === draft.opened ? before : { ...before, [code]: draft }
     if (!(code in before)) return before
     const next = { ...before }
     delete next[code]

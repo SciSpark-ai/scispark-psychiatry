@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { createConditionPageRemote } from "@/lib/clinical/records/client"
 import { notesOf, replaceNotes } from "@/lib/clinical/records/notes"
@@ -13,6 +13,8 @@ const pathOf = (pageId: string) => `${pageId}.md`
 
 type Loading = { state: "loading" } | { state: "failed"; message: string } | { state: "ready" }
 type Outcome = { kind: "saved" } | { kind: "error"; message: string } | null
+/** Text that is not saved yet, with the notes as they were when it was begun: what a save of it checks the stored notes against. */
+export interface NotesDraft { text: string; opened: string }
 
 /**
  * The reader's notes on one condition: the notes section of the condition's wiki page, written in place.
@@ -20,38 +22,46 @@ type Outcome = { kind: "saved" } | { kind: "error"; message: string } | null
  * first save when the condition has none. A save reads the page again and changes only its notes section.
  * Notes that are not the ones that were opened are never written over unseen: they are shown first.
  * Mount it with the condition as its key. It is taken down when the reader looks at something else, so the
- * text that is not saved yet is the caller's to keep: `onDraft` gets it at every change (null once it is what
- * is stored) and `draft` gives it back; `onPage` says where the page is when a save made it.
+ * text that is not saved yet is the caller's to keep: `onDraft` gets it at every change, with the notes it was
+ * begun from (null once it is what is stored), and `draft` gives both back; `onPage` says where the page is
+ * when a save made it. The page is loaded once, when it is mounted: the page its own save made is not read again.
  */
 export function ConditionNotes({ code, pageId: initialPageId, draft, onDraft, onPage }: {
-  code: string; pageId: string | null; draft?: string
-  onDraft?: (code: string, text: string | null) => void; onPage?: (code: string, pageId: string) => void
+  code: string; pageId: string | null; draft?: NotesDraft
+  onDraft?: (code: string, draft: NotesDraft | null) => void; onPage?: (code: string, pageId: string) => void
 }) {
-  const [pageId, setPageId] = useState(initialPageId)
-  const [loading, setLoading] = useState<Loading>(initialPageId === null ? { state: "ready" } : { state: "loading" })
-  // The notes as they were when opened or last saved, and what the reader has in the text area.
-  const [opened, setOpened] = useState("")
-  const [text, setText] = useState(draft ?? "")
-  // Whether it was opened with text the reader had not saved: the stored notes do not replace that.
+  // The page it was mounted with. A page a save of its own made comes back as the prop: that must not load it again over the reader's text.
+  const [first] = useState(initialPageId)
+  const [pageId, setPageId] = useState(first)
+  const [loading, setLoading] = useState<Loading>(first === null ? { state: "ready" } : { state: "loading" })
+  // Whether it was opened with text the reader had not saved: the stored notes replace neither that text nor what it was begun from.
   const [resumed] = useState(draft !== undefined)
+  // The notes as they were when opened or last saved (for a resumed draft, when the draft was begun), and what the reader has in the text area.
+  const [opened, setOpened] = useState(draft?.opened ?? "")
+  const [text, setText] = useState(draft?.text ?? "")
+  // The text area as it stands now, for a save to read when it ends.
+  const latest = useRef(text)
   const [stored, setStored] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [outcome, setOutcome] = useState<Outcome>(null)
 
   useEffect(() => {
-    if (initialPageId === null) return
+    if (first === null) return
     let cancelled = false
-    getOpenVault().then((vault) => vault.read(pathOf(initialPageId)))
+    getOpenVault().then((vault) => vault.read(pathOf(first)))
       .then((raw) => {
         if (cancelled) return
-        const notes = raw === null ? "" : notesOf(raw)
-        setOpened(notes)
-        if (!resumed) setText(notes)
+        if (!resumed) {
+          const notes = raw === null ? "" : notesOf(raw)
+          setOpened(notes)
+          setText(notes)
+          latest.current = notes
+        }
         setLoading({ state: "ready" })
       })
       .catch((failure) => { if (!cancelled) setLoading({ state: "failed", message: messageOf(failure) }) })
     return () => { cancelled = true }
-  }, [initialPageId, resumed])
+  }, [first, resumed])
 
   const save = async () => {
     setSaving(true)
@@ -77,10 +87,13 @@ export function ConditionNotes({ code, pageId: initialPageId, draft, onDraft, on
       }
       const next = replaceNotes(raw, text)
       await vault.write(pathOf(id), next)
-      setOpened(notesOf(next))
+      const written = notesOf(next)
+      setOpened(written)
       setStored(null)
       setOutcome({ kind: "saved" })
-      onDraft?.(code, null)
+      // The draft ends only if the text area still holds what was saved.
+      const now = latest.current
+      onDraft?.(code, now === text ? null : { text: now, opened: written })
     } catch (failure) {
       setOutcome({ kind: "error", message: messageOf(failure) })
     } finally {
@@ -94,12 +107,13 @@ export function ConditionNotes({ code, pageId: initialPageId, draft, onDraft, on
   const changed = text.trim() !== opened || stored !== null
   const edit = (value: string) => {
     setText(value)
+    latest.current = value
     setOutcome((before) => (before?.kind === "saved" ? null : before))
-    onDraft?.(code, value.trim() !== opened ? value : null)
+    onDraft?.(code, value.trim() !== opened ? { text: value, opened } : null)
   }
   return (
     <div className="my-4">
-      <textarea aria-label={P.notes} placeholder={P.notesHint} value={text} rows={14}
+      <textarea aria-label={P.notes} placeholder={P.notesHint} value={text} rows={14} readOnly={saving}
         onChange={(event) => edit(event.target.value)}
         className="block w-full rounded-card border border-border-warm bg-light-surface px-4 py-3 text-[14px] leading-relaxed text-espresso placeholder:text-muted-text" />
       <div className="mt-3 flex flex-wrap items-center gap-3">
