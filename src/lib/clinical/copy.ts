@@ -316,12 +316,22 @@ export const CLINICAL_COPY = {
     effectNote: "Computed by this app from the numbers above, not taken from the paper and not written by AI. One trial is not a meta-analysis.",
   },
   evidence: {
-    home: {
-      heading: "Conditions you follow",
-      count: (total: number, recent: number) => (total === 0 ? "No papers yet" : `${total} ${total === 1 ? "paper" : "papers"}${recent > 0 ? ` · ${recent} new` : ""}`),
-      open: "Open", opening: "Opening…",
+    /** The Evidence view: a tab for each condition, and under it the summary and the notes. */
+    page: {
+      conditionsLabel: "Conditions you follow",
       none: "You are not following a condition yet.", addTopics: "Add one under My topics",
       loading: "Loading…",
+      viewsLabel: "Summary or notes",
+      views: { summary: "Evidence summary", notes: "Notes" },
+      scopeLabel: "Papers",
+      scopes: { all: "Everything my feed listed", saved: (count: number | null) => (count === null ? "Saved to Library" : `Saved to Library (${count})`) },
+    },
+    /** The reader's notes on a condition, kept in the condition's wiki page. */
+    notes: {
+      loading: "Loading…", save: "Save", saving: "Saving…", saved: "Saved",
+      conflict: "These notes were changed since you opened them, so nothing was saved. Your text is kept. The saved version is shown below; press Save again to replace it.",
+      stored: "The saved version",
+      missing: "The page of this condition could not be read.",
     },
     badRequest: "The request was not understood.",
     noSuchCondition: "That condition is not in the pack.",

@@ -3,29 +3,18 @@
 import { useEffect, useId, useState } from "react"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { loadConditionEvidenceRemote } from "@/lib/clinical/evidence/client"
-import type { ConditionEvidence as Evidence, Period, Study } from "@/lib/clinical/evidence/build"
-import { parseEvidenceQuery } from "@/lib/clinical/records/query"
+import type { ConditionEvidence as Evidence, Period, Scope, Study } from "@/lib/clinical/evidence/build"
 import { EvidenceTimeline } from "./EvidenceTimeline"
 import { ResearchList } from "./ResearchList"
 import { StudyTable } from "./StudyTable"
 import { TreatmentList } from "./TreatmentList"
 
 const E = CLINICAL_COPY.evidence
-const PERIODS: Period[] = ["all", "12m", "6m", "3m"]
 const TABS = ["treatments", "safety", "research"] as const
 type Tab = (typeof TABS)[number]
-type Loaded = { condition: string; period: Period; evidence: Evidence | null; error: string | null }
+type Loaded = { condition: string; period: Period; scope: Scope; evidence: Evidence | null; error: string | null }
 
 const periodPhrase = (period: Exclude<Period, "all">) => E.periodPhrases[period]
-
-function PeriodSelect({ period, onChange }: { period: Period; onChange: (period: Period) => void }) {
-  return (
-    <select aria-label={E.periodLabel} value={period} onChange={(event) => onChange(event.target.value as Period)}
-      className="rounded-pill border border-border-warm bg-light-surface px-3 py-1 text-[12px] text-espresso">
-      {PERIODS.map((entry) => <option key={entry} value={entry}>{E.periods[entry]}</option>)}
-    </select>
-  )
-}
 
 /** The studies of the safety groups, each paper once (a paper is in the group of every treatment it names), newest first. */
 function safetyStudies(evidence: Evidence): Study[] {
@@ -60,49 +49,42 @@ function Tabs({ evidence, tab, onPick }: { evidence: Evidence; tab: Tab; onPick:
 }
 
 /**
- * The evidence the reader's feed has seen on one condition (spec D53), drawn from the page's fenced
- * block: classes of treatment, what each treatment did in a few words, and the studies on request;
- * the safety findings; the research that names no treatment; and, folded away, when the papers came
- * out. Counted on the server from the stored findings. Papers are counted, never pooled.
+ * The evidence the reader's feed has seen on one condition (spec D53): classes of treatment, what each
+ * treatment did in a few words, and the studies on request; the safety findings; the research that names
+ * no treatment; and, folded away, when the papers came out. Counted on the server from the stored findings.
+ * Papers are counted, never pooled. Which papers (`scope`) and of what time (`period`) is the caller's to
+ * say: the Evidence view keeps both in its address; a page's fenced block asks for everything.
  */
-export function ConditionEvidence({ body }: { body: string }) {
-  const condition = parseEvidenceQuery(body)?.condition ?? null
-  const [period, setPeriod] = useState<Period>("all")
+export function ConditionEvidence({ condition, scope = "all", period = "all", onLoaded }: { condition: string | null; scope?: Scope; period?: Period; onLoaded?: (evidence: Evidence) => void }) {
   const [tab, setTab] = useState<Tab>("treatments")
-  // The answer is kept with what it was asked for, so a new period keeps showing the last answer until the next comes, and another condition starts from "Counting…".
+  // The answer is kept with what it was asked for, so a new period or scope keeps showing the last answer until the next comes, and another condition starts from "Counting…".
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   useEffect(() => {
     if (!condition) return
     let cancelled = false
-    loadConditionEvidenceRemote(condition, { period, scope: "all" })
-      .then((next) => { if (!cancelled) setLoaded({ condition, period, evidence: next, error: null }) })
-      .catch((failure) => { if (!cancelled) setLoaded({ condition, period, evidence: null, error: failure instanceof Error ? failure.message : String(failure) }) })
+    loadConditionEvidenceRemote(condition, { period, scope })
+      .then((next) => {
+        if (cancelled) return
+        setLoaded({ condition, period, scope, evidence: next, error: null })
+        onLoaded?.(next)
+      })
+      .catch((failure) => { if (!cancelled) setLoaded({ condition, period, scope, evidence: null, error: failure instanceof Error ? failure.message : String(failure) }) })
     return () => { cancelled = true }
-  }, [condition, period])
+  }, [condition, period, scope, onLoaded])
 
   const current = loaded && loaded.condition === condition ? loaded : null
   if (!condition) return <p className="my-4 text-[13px] text-muted-text">{E.notAQuery}</p>
-  if (current?.error) {
-    return (
-      <div className="my-4 flex items-center gap-3">
-        <p role="alert" className="text-[13px] text-accent-ink">{current.error}</p>
-        <PeriodSelect period={period} onChange={setPeriod} />
-      </div>
-    )
-  }
+  if (current?.error) return <p role="alert" className="my-4 text-[13px] text-accent-ink">{current.error}</p>
   const evidence = current?.evidence ?? null
   if (!evidence) return <p className="my-4 text-[13px] text-muted-text">{E.loading}</p>
   if (evidence.collected === 0) return <p className="my-4 text-[14px] text-muted-text">{E.empty(evidence.condition.name)}</p>
   const name = evidence.condition.name
   const phrase = evidence.period === "all" ? null : periodPhrase(evidence.period)
   const basis = phrase === null ? E.basis(evidence.total, name, evidence.since) : E.basisPeriod(evidence.total, evidence.collected, phrase, name)
-  const pending = current?.period !== period
+  const pending = current?.period !== period || current?.scope !== scope
   return (
     <div data-testid="condition-evidence" aria-busy={pending ? "true" : undefined} className={pending ? "my-4 opacity-60 transition-opacity" : "my-4"}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-        <p data-testid="evidence-basis" className="text-[13px] text-muted-text">{basis}</p>
-        <PeriodSelect period={period} onChange={setPeriod} />
-      </div>
+      <p data-testid="evidence-basis" className="text-[13px] text-muted-text">{basis}</p>
       {evidence.total === 0 && phrase !== null ? (
         <p className="mt-4 text-[14px] text-muted-text">{E.emptyPeriod(name, phrase, evidence.collected)}</p>
       ) : (

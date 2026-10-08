@@ -47,13 +47,17 @@ const EVIDENCE: Evidence = {
 }
 
 let container: HTMLDivElement
+let root: ReturnType<typeof createRoot>
 async function render(node: React.ReactNode) {
   container = document.createElement("div")
   document.body.appendChild(container)
-  await act(async () => { createRoot(container).render(node) })
+  root = createRoot(container)
+  await act(async () => { root.render(node) })
   await act(async () => {})
 }
-const show = async (evidence: Evidence = EVIDENCE) => { client.loadConditionEvidenceRemote.mockResolvedValue(evidence); await render(<ConditionEvidence body="condition: depression" />) }
+/** The same block with other props, as the Evidence view gives them when its address changes. */
+const again = async (node: React.ReactNode) => { await act(async () => { root.render(node) }) }
+const show = async (evidence: Evidence = EVIDENCE) => { client.loadConditionEvidenceRemote.mockResolvedValue(evidence); await render(<ConditionEvidence condition="depression" />) }
 const q = (selector: string) => container.querySelector(selector) as HTMLElement
 const qa = (selector: string) => [...container.querySelectorAll(selector)] as HTMLElement[]
 const click = async (element: Element | null) => { await act(async () => { (element as HTMLElement).click() }) }
@@ -73,23 +77,30 @@ describe("the evidence block of a condition page", () => {
     expect(q("[data-testid=evidence-basis]").textContent).toContain("nothing is pooled")
   })
 
-  it("asks again with the chosen period, and keeps the old content, dimmed, until the answer comes", async () => {
+  it("asks again with a new period or scope, and keeps the old content, dimmed, until the answer comes", async () => {
     await show()
     let answer: (value: Evidence) => void = () => {}
     client.loadConditionEvidenceRemote.mockReturnValue(new Promise<Evidence>((resolve) => { answer = resolve }))
-    const select = q("select") as HTMLSelectElement
-    expect([...select.options].map((option) => option.textContent)).toEqual(["All time", "Last 12 months", "Last 6 months", "Last 3 months"])
-    await act(async () => {
-      select.value = "6m"
-      select.dispatchEvent(new Event("change", { bubbles: true }))
-    })
+    await again(<ConditionEvidence condition="depression" period="6m" />)
     expect(client.loadConditionEvidenceRemote).toHaveBeenLastCalledWith("depression", { period: "6m", scope: "all" })
     expect(q("[data-class=medicine]")).not.toBeNull()
     expect(q("[data-testid=condition-evidence]").getAttribute("aria-busy")).toBe("true")
     await act(async () => { answer({ ...EVIDENCE, period: "6m", total: 1, collected: 5, classes: [ect] }) })
     expect(q("[data-class=medicine]")).toBeNull()
     expect(q("[data-testid=condition-evidence]").getAttribute("aria-busy")).toBeNull()
-    expect((q("select") as HTMLSelectElement).value).toBe("6m")
+    client.loadConditionEvidenceRemote.mockReturnValue(new Promise<Evidence>(() => {}))
+    await again(<ConditionEvidence condition="depression" period="6m" scope="saved" />)
+    expect(client.loadConditionEvidenceRemote).toHaveBeenLastCalledWith("depression", { period: "6m", scope: "saved" })
+    expect(q("[data-testid=condition-evidence]").getAttribute("aria-busy")).toBe("true")
+  })
+
+  it("has no control of its own for the period or the scope, and tells its caller what it loaded", async () => {
+    const onLoaded = vi.fn()
+    client.loadConditionEvidenceRemote.mockResolvedValue({ ...EVIDENCE, savedCount: 3 })
+    await render(<ConditionEvidence condition="depression" onLoaded={onLoaded} />)
+    expect(q("select")).toBeNull()
+    expect(onLoaded).toHaveBeenCalledTimes(1)
+    expect(onLoaded.mock.calls[0][0].savedCount).toBe(3)
   })
 
   it("has three tabs with their counts, Treatments first and selected", async () => {
@@ -315,13 +326,9 @@ describe("the evidence block of a condition page", () => {
     expect(q("[data-testid=condition-evidence]").lastElementChild!.tagName).toBe("DETAILS")
   })
 
-  it("says so when nothing was published in the period, and keeps the period control", async () => {
-    await show()
-    client.loadConditionEvidenceRemote.mockResolvedValue({ ...EVIDENCE, period: "3m", total: 0, collected: 5, classes: [], safety: [], research: [] })
-    const select = q("select") as HTMLSelectElement
-    await act(async () => { select.value = "3m"; select.dispatchEvent(new Event("change", { bubbles: true })) })
+  it("says so when nothing was published in the period", async () => {
+    await show({ ...EVIDENCE, period: "3m", total: 0, collected: 5, classes: [], safety: [], research: [] })
     expect(container.textContent).toContain("No paper on Major depressive disorder was published in the last 3 months. 5 are collected in all.")
-    expect((q("select") as HTMLSelectElement).value).toBe("3m")
     expect(q('[role="tablist"]')).toBeNull()
   })
 
@@ -329,16 +336,26 @@ describe("the evidence block of a condition page", () => {
     await show({ ...EVIDENCE, total: 0, collected: 0, classes: [], safety: [], research: [], timeline: { months: [], series: [] } })
     expect(container.textContent).toContain("Your feed has not listed a paper on Major depressive disorder yet")
     document.body.innerHTML = ""
-    await render(<ConditionEvidence body="nothing" />)
+    await render(<ConditionEvidence condition={null} />)
     expect(container.textContent).toContain("This block does not name a condition")
     document.body.innerHTML = ""
     client.loadConditionEvidenceRemote.mockReturnValue(new Promise(() => {}))
-    await render(<ConditionEvidence body="condition: depression" />)
+    await render(<ConditionEvidence condition="depression" />)
     expect(container.textContent).toContain("Counting…")
     document.body.innerHTML = ""
     client.loadConditionEvidenceRemote.mockRejectedValue(new Error("That condition is not in the pack."))
-    await render(<ConditionEvidence body="condition: zzz" />)
+    await render(<ConditionEvidence condition="zzz" />)
     expect(q('[role="alert"]').textContent).toContain("not in the pack")
+  })
+
+  it("is drawn from a page's block with everything listed, of all time, and says so for a block that names no condition", async () => {
+    client.loadConditionEvidenceRemote.mockResolvedValue(EVIDENCE)
+    await render(clinicalFence("condition-evidence", "condition: depression"))
+    expect(client.loadConditionEvidenceRemote).toHaveBeenCalledWith("depression", { period: "all", scope: "all" })
+    expect(q("[data-testid=evidence-basis]")).not.toBeNull()
+    document.body.innerHTML = ""
+    await render(clinicalFence("condition-evidence", "nothing"))
+    expect(container.textContent).toContain("This block does not name a condition")
   })
 
   it("is drawn for its own block name, and the trial-numbers block still is for its", () => {

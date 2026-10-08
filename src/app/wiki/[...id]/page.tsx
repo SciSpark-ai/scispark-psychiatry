@@ -14,6 +14,8 @@ import type { WikiPage } from "@/lib/vault/types"
 import { PageEditor } from "@/components/wiki/PageEditor"
 import { clinicalFence } from "@/components/clinical/clinical-fence"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
+import { evidenceHref } from "@/lib/clinical/evidence/href"
+import { conditionCodeOf } from "@/lib/clinical/records/notes"
 import { Backlinks } from "@/components/wiki/Backlinks"
 import DeleteConfirmCard from "@/components/wiki/DeleteConfirmCard"
 
@@ -70,6 +72,12 @@ export default function WikiPageDetail() {
     if (joined.startsWith("wiki/")) router.replace(wikiHref(id))
   }, [joined, id, router])
 
+  // A condition is read on the Evidence view, not in the editor: its page leads there.
+  const conditionCode = page && page.frontmatter.type === "condition" ? conditionCodeOf(page) : null
+  useEffect(() => {
+    if (conditionCode) router.replace(evidenceHref({ condition: conditionCode }))
+  }, [conditionCode, router])
+
   const handleSave = async () => {
     if (!storage || !page) return
     try {
@@ -103,7 +111,7 @@ export default function WikiPageDetail() {
     }
   }
 
-  if (page === undefined) {
+  if (page === undefined || conditionCode) {
     return <div className="p-7 text-[14px] text-muted-text">Loading…</div>
   }
 

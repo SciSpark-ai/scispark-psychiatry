@@ -22,7 +22,7 @@ vi.mock("@/lib/wiki/review-queue", () => ({
 }))
 vi.mock("@/lib/clinical/records/client", () => ({ listConditionsRemote: async () => [], createConditionPageRemote: async () => ({ id: "", created: false }) }))
 
-vi.mock("@/components/clinical/ConditionHome", () => ({ ConditionHome: () => <div data-testid="condition-home" /> }))
+vi.mock("@/components/clinical/EvidencePage", () => ({ EvidencePage: () => <div data-testid="evidence-page" /> }))
 vi.mock("@/lib/clinical/evidence/client", () => ({ listFollowedConditionsRemote: async () => [] }))
 
 import WikiIndexPage from "../page"
@@ -89,14 +89,14 @@ const title = (container: HTMLElement) => container.querySelector("h1")?.textCon
 const hasLink = (container: HTMLElement, href: string) => container.querySelector(`a[href="${href}"]`) !== null
 
 describe("WikiIndexPage — Evidence view (default)", () => {
-  it("shows the conditions on wiki home and keeps New note + inbox count in the header", async () => {
+  it("shows the Evidence view on wiki home and keeps New note + inbox count in the header", async () => {
     loadBundleMock.mockResolvedValue(smallBundle())
     const { container, cleanup } = await renderPage()
 
     expect(title(container)).toBe("Evidence")
     expect(container.textContent).toContain("New note")
     expect(container.textContent).toContain("Review inbox (3)")
-    expect(container.querySelector("[data-testid=condition-home]")).not.toBeNull()
+    expect(container.querySelector("[data-testid=evidence-page]")).not.toBeNull()
     // nothing of the upstream dashboard, and no Dashboard / All pages toggle
     expect(container.textContent).not.toContain("In knowledge base")
     expect(container.textContent).not.toContain("Dashboard")
@@ -121,7 +121,7 @@ describe("WikiIndexPage — Library view (?view=all)", () => {
     expect(hasLink(container, "/read-later")).toBe(true)
     expect(hasLink(container, "/feed-history")).toBe(true)
     expect(container.textContent).not.toContain("All pages")
-    expect(container.querySelector("[data-testid=condition-home]")).toBeNull()
+    expect(container.querySelector("[data-testid=evidence-page]")).toBeNull()
 
     // Tree groups by type heading and links papers to /paper/<slug>; concept pages are not listed
     expect(container.textContent).toContain("Papers")
@@ -144,7 +144,7 @@ describe("WikiIndexPage — empty vault", () => {
 
     searchParamsValue = new URLSearchParams()
     const home = await renderPage()
-    expect(home.container.querySelector("[data-testid=condition-home]")).not.toBeNull()
+    expect(home.container.querySelector("[data-testid=evidence-page]")).not.toBeNull()
     expect(home.container.textContent).not.toContain("Search for papers")
     home.cleanup()
   })

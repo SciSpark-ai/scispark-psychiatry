@@ -16,7 +16,7 @@ import { EmptyState } from "@/components/ui/EmptyState"
 import { COMPANION_CLEARANCE } from "@/components/layout/companion-clearance"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { NewConditionPage } from "@/components/clinical/NewConditionPage"
-import { ConditionHome } from "@/components/clinical/ConditionHome"
+import { EvidencePage } from "@/components/clinical/EvidencePage"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 
 const N = CLINICAL_COPY.nav
@@ -136,7 +136,7 @@ function WikiIndexPageContent() {
           </div>
         )
       ) : (
-        <ConditionHome />
+        <EvidencePage />
       )}
 
       {bundle && bundle.errors.length > 0 && (
