@@ -40,6 +40,6 @@ describe("the way back from a wiki page", () => {
   it("leads to the Library from any other page", async () => {
     expect(await backLink("wiki/papers/a-paper", "paper")).toEqual(["← Library", "/wiki?view=all"])
     document.body.innerHTML = ""
-    expect(await backLink("wiki/notes/a-note", "note")).toEqual(["← Library", "/wiki?view=all"])
+    expect(await backLink("wiki/concepts/a-concept", "concept")).toEqual(["← Library", "/wiki?view=all"])
   })
 })

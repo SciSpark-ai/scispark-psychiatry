@@ -41,6 +41,9 @@ export interface NoteReference { slug: string; text: string }
 /** The title the Library's "New note" button writes. A note that still has it is read as having no title. */
 export const UNTITLED_STORED = "Untitled note"
 
+/** True for a stored title that reads as "no title": none, or the one the old button wrote. */
+export const isUntitledStored = (title: unknown) => typeof title !== "string" || title.trim() === "" || title.trim() === UNTITLED_STORED
+
 /** A pack id, as the links carry it. */
 export const CODE_RE = /^[a-z0-9][a-z0-9-]*$/
 

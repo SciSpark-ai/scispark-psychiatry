@@ -36,8 +36,11 @@ export async function createNoteRemote(input: { title?: string; body?: string; a
 }
 
 /** Saves a note. A note that changed since `revision` was read comes back as a value, the stored version in it, not as an error. */
-export async function saveNoteRemote(input: { id: string; title: string; body: string; revision: string }, fetchFn: typeof fetch = fetch): Promise<NoteSaved | NoteConflict> {
-  const res = await fetchFn(URL, json("PUT", input))
+export async function saveNoteRemote(
+  input: { id: string; title: string; body: string; revision: string }, fetchFn: typeof fetch = fetch, opts: { keepalive?: boolean } = {},
+): Promise<NoteSaved | NoteConflict> {
+  // `keepalive` lets the request outlive the page that sent it: the save of a reader who is leaving.
+  const res = await fetchFn(URL, opts.keepalive ? { ...json("PUT", input), keepalive: true } : json("PUT", input))
   if (res.status === 409) {
     const stored = ((await res.json()) as { conflict?: Omit<NoteConflict, "conflict"> }).conflict
     if (stored) return { conflict: true, title: stored.title, body: stored.body, revision: stored.revision }

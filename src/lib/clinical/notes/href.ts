@@ -42,3 +42,19 @@ const NOTES_DIR = "wiki/notes"
 export function noteHref(id: string): string {
   return wikiHref(`${NOTES_DIR}/${id}`)
 }
+
+/** The id of the note a wiki page is, as the notes route knows it; null for a page that is not in the notes directory. */
+export function noteIdOf(pageId: string): string | null {
+  const prefix = `${NOTES_DIR}/`
+  return pageId.startsWith(prefix) && pageId.length > prefix.length ? pageId.slice(prefix.length) : null
+}
+
+/** A new chat that starts from a note. */
+export function noteChatHref(id: string): string {
+  return `/chat?new=1&note=${encodeURIComponent(id)}`
+}
+
+/** The page of a paper. */
+export function paperHref(slug: string): string {
+  return `/paper/${slug}`
+}

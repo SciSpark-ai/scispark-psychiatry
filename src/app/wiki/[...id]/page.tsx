@@ -16,6 +16,9 @@ import { clinicalFence } from "@/components/clinical/clinical-fence"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { evidenceHref } from "@/lib/clinical/evidence/href"
 import { conditionCodeOf } from "@/lib/clinical/records/notes"
+import { NotePage } from "@/components/clinical/NotePage"
+import { libraryHref, noteIdOf } from "@/lib/clinical/notes/href"
+import { isUntitledStored } from "@/lib/clinical/notes/links"
 import { Backlinks } from "@/components/wiki/Backlinks"
 import DeleteConfirmCard from "@/components/wiki/DeleteConfirmCard"
 
@@ -78,6 +81,9 @@ export default function WikiPageDetail() {
     if (conditionCode) router.replace(evidenceHref({ condition: conditionCode }))
   }, [conditionCode, router])
 
+  // A note is written on its own page, which saves itself: the editor and the Backlinks column are not drawn for it.
+  const noteId = page && page.frontmatter.type === "note" ? noteIdOf(page.id) : null
+
   const handleSave = async () => {
     if (!storage || !page) return
     try {
@@ -103,7 +109,7 @@ export default function WikiPageDetail() {
     setDeleteError(null)
     try {
       await deletePage(storage, page)
-      router.push("/wiki")
+      router.push(noteId ? libraryHref("notes") : "/wiki")
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -124,6 +130,30 @@ export default function WikiPageDetail() {
           ← Back to wiki
         </Link>
       </div>
+    )
+  }
+
+  if (noteId) {
+    return (
+      <NotePage
+        key={noteId}
+        id={noteId}
+        untitled={isUntitledStored(page.frontmatter.title)}
+        onDelete={() => {
+          setDeleteError(null)
+          setConfirmingDelete(true)
+        }}
+        confirm={confirmingDelete ? (
+          <DeleteConfirmCard
+            title={displayTitle(String(page.frontmatter.title ?? ""))}
+            backlinks={bundle ? backlinkCount(bundle, page.id) : 0}
+            busy={deleteBusy}
+            error={deleteError}
+            onConfirm={handleConfirmDelete}
+            onCancel={handleCancelDelete}
+          />
+        ) : null}
+      />
     )
   }
 
