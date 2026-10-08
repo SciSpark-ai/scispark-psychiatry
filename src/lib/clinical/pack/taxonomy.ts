@@ -100,17 +100,40 @@ function search({ matchers, nodeOf }: TreatmentIndex, text: string): TaxonomyNod
   return [...first.values()].filter((entry) => !ancestors.has(entry.node.id)).sort((a, b) => a.start - b.start).map((entry) => entry.node)
 }
 
+/** A negation among the three words before a term, with no comma and no "or" or "and" between: "no ketamine", "without add-on lithium". */
+const RULED_OUT_BEFORE = /(?<![\p{L}\p{N}])(?:no|non|not|without|absence of)[\s-]+(?:(?!(?:or|and)\s)[\p{L}\p{N}'-]+\s+){0,2}$/iu
+/** What says after a term that it was not given: "antipsychotic-naive", "lithium naive", "lithium-free". */
+const RULED_OUT_AFTER = /^(?:[\s-]*na[iï]ve|-free)(?![\p{L}\p{N}])/iu
+
+/**
+ * The pack treatments a comparator's text names as given to that arm. A treatment the text rules out is not one
+ * (owner decision 2026-10-09): "placebo or no ketamine-class agent" names ketamine and gave none. A treatment named
+ * once plainly and once ruled out was given.
+ */
+function comparatorTreatments(taxonomy: Taxonomy, text: string): string[] {
+  const { matchers } = indexOf(taxonomy)
+  const whole = norm(text)
+  return findTreatments(taxonomy, text).filter((node) => {
+    // The whole text as one short abbreviation has nothing before or after it.
+    const mine = matchers.filter((matcher) => matcher.node === node)
+    if (mine.some((matcher) => matcher.alone !== null && matcher.alone === whole)) return true
+    const spans = mine.flatMap((matcher) => [...text.matchAll(matcher.pattern)].map((match) => ({ start: match.index, end: match.index + match[0].length })))
+    return spans.some((span) => !RULED_OUT_BEFORE.test(text.slice(0, span.start)) && !RULED_OUT_AFTER.test(text.slice(span.end)))
+  }).map((node) => node.id)
+}
+
 /**
  * The two arms of a finding (owner decision 2026-10-09): the pack treatments its result is about, and the pack treatments
  * it was compared with, each as ids in the order of its text. A treatment named in both texts is a comparator only: an
  * answer that lists both arms as the treatment ("clozapine and olanzapine" against "olanzapine") is about the first.
- * A comparison that is not with a pack treatment (placebo, sham, usual care, a waiting list) gives no comparator. When
+ * A comparison that is not with a pack treatment (placebo, sham, usual care, a waiting list) gives no comparator, nor
+ * does a treatment the comparator rules out ("no ketamine-class agent", "without lithium", "antipsychotic-naive"). When
  * every treatment named is also named as the comparator the answer cannot be read: the treatments stand as they were
  * given, with no comparator, so the paper is not lost.
  */
 export function armsOf(taxonomy: Taxonomy, treatment: string | null | undefined, comparator: string | null | undefined): { treatments: string[]; comparators: string[] } {
   const named = treatment ? findTreatments(taxonomy, treatment).map((node) => node.id) : []
-  const against = comparator ? findTreatments(taxonomy, comparator).map((node) => node.id) : []
+  const against = comparator ? comparatorTreatments(taxonomy, comparator) : []
   const tested = named.filter((id) => !against.includes(id))
   if (named.length > 0 && tested.length === 0) return { treatments: named, comparators: [] }
   return { treatments: tested, comparators: against }

@@ -664,6 +664,10 @@ describe("a paper that compares two pack treatments", () => {
     const evidence = build([finding(1, { treatment: "clozapine and olanzapine", treatmentCode: null, comparator: "placebo" }), finding(2, { treatment: "Clozapine", treatmentCode: "clozapine", comparator: "treatment as usual" })])
     expect(treatmentsOf(evidence).map((treatment) => [treatment.key, treatment.papers, treatment.comparatorPapers])).toEqual([["clozapine", 2, 0], ["olanzapine", 1, 0]])
   })
+  it("does not take a treatment the comparator rules out as a comparison", () => {
+    const evidence = build([own(1), finding(2, { treatment: "clozapine and olanzapine", treatmentCode: null, comparator: "placebo or no olanzapine-class agent" }), versus(3, { comparator: "olanzapine-naive controls" })])
+    expect(treatmentsOf(evidence).map((treatment) => [treatment.key, treatment.papers, treatment.comparatorPapers])).toEqual([["clozapine", 2, 0], ["olanzapine", 2, 0]])
+  })
   it("makes no class, no safety group and no research row of a treatment that is only a comparator", () => {
     const evidence = build([finding(1, { comparator: "olanzapine" }), finding(2, { kind: "safety", comparator: "risperidone" }), finding(3, { kind: "other", comparator: "paliperidone" })])
     expect(evidence.classes.map((entry) => [entry.key, entry.treatments.map((treatment) => treatment.key)])).toEqual([["medicine", ["ketamine"]]])

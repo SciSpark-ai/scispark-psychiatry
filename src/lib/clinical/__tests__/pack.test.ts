@@ -168,6 +168,28 @@ describe("the arms of a finding", () => {
     expect(await arms("clozapine and olanzapine", "olanzapine or clozapine")).toEqual({ treatments: ["clozapine", "olanzapine"], comparators: [] })
     expect(await arms("olanzapine", "olanzapine")).toEqual({ treatments: ["olanzapine"], comparators: [] })
   })
+  // Owner decision 2026-10-09: a treatment the comparator rules out ("no", "without", "-naive") was not given to that arm.
+  it("does not take a treatment the comparator rules out as a comparison arm", async () => {
+    expect(await arms("ketamine and esketamine", "placebo or no ketamine-class agent")).toEqual({ treatments: ["ketamine", "esketamine"], comparators: [] })
+    expect(await arms("clozapine", "treatment without lithium")).toEqual({ treatments: ["clozapine"], comparators: [] })
+    expect(await arms("clozapine", "antipsychotic-naive controls")).toEqual({ treatments: ["clozapine"], comparators: [] })
+    for (const comparator of ["no olanzapine", "non-olanzapine drugs", "not on olanzapine", "absence of olanzapine", "no add-on olanzapine", "olanzapine naive patients", "olanzapine-free weeks", "Olanzapine-Naïve adults"]) {
+      expect(await arms("clozapine", comparator), comparator).toEqual({ treatments: ["clozapine"], comparators: [] })
+    }
+  })
+  it("still takes a treatment the comparator names plainly, also beside one it rules out", async () => {
+    expect(await arms("clozapine", "olanzapine")).toEqual({ treatments: ["clozapine"], comparators: ["olanzapine"] })
+    expect(await arms("clozapine", "olanzapine without lithium")).toEqual({ treatments: ["clozapine"], comparators: ["olanzapine"] })
+    // The negation reaches three words, and not past a comma or an "or".
+    expect(await arms("clozapine", "no drug at all, olanzapine")).toEqual({ treatments: ["clozapine"], comparators: ["olanzapine"] })
+    expect(await arms("clozapine", "no treatment or olanzapine")).toEqual({ treatments: ["clozapine"], comparators: ["olanzapine"] })
+    expect(await arms("clozapine", "no change in the dose of olanzapine")).toEqual({ treatments: ["clozapine"], comparators: ["olanzapine"] })
+    // Named once ruled out and once plainly: it was given.
+    expect(await arms("clozapine", "olanzapine, or no olanzapine")).toEqual({ treatments: ["clozapine"], comparators: ["olanzapine"] })
+  })
+  it("does not drop a treatment that only a ruled-out comparator names", async () => {
+    expect(await arms("clozapine and olanzapine", "no olanzapine")).toEqual({ treatments: ["clozapine", "olanzapine"], comparators: [] })
+  })
   it("still gives the comparators of a treatment the pack does not know, and none of no text", async () => {
     expect(await arms("a drug nobody listed", "olanzapine")).toEqual({ treatments: [], comparators: ["olanzapine"] })
     expect(await arms(null, null)).toEqual({ treatments: [], comparators: [] })
