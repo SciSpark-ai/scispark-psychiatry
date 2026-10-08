@@ -23,7 +23,8 @@ const LABEL = "pointer-events-none absolute left-1/2 w-max -translate-x-1/2 roun
 /**
  * The classes of treatment, or the treatments of one class, on a map: across, the participants their papers state,
  * added up, on a log scale, with a column at the left for those that state none; up, the share of their papers that
- * report benefit. A bubble is a button over the picture of the axes; its size is its papers. On a narrow screen the
+ * report benefit. A bubble is a button over the picture of the axes; its size is its papers. Bubbles that would
+ * overlap are set side by side at their own height; one that had to move up or down has a thin line to where it belongs. On a narrow screen the
  * same bubbles are a grid of two columns, with the participants in words. When no item states its participants there
  * is nothing to map, and the grid is drawn alone with a line that says so. Counts and stated sizes: nothing is pooled.
  */
@@ -63,6 +64,7 @@ export function EvidenceMap({ label, entries, chosen, onPick }: { label: string;
     .map((each, at) => ({ ...each, at: places[at], pressed: each.entry.key === chosen }))
     .sort((a, b) => a.at.x - b.at.x || a.at.y - b.at.y || (a.entry.key < b.entry.key ? -1 : 1))
     .map((each) => ({ ...each, style: { left: percent(each.at.x, width), top: percent(each.at.y, height), width: percent(2 * each.at.r, width) } }))
+  const leaders = places.filter((place) => place.displaced)
   const shares = [{ id: "all", y: scales.yTop, text: M.shares.all }, { id: "split", y: scales.yMiddle, text: M.shares.split }, { id: "none", y: scales.yBottom, text: M.shares.none }]
   return (
     <div data-evidence-map-root="true">
@@ -80,6 +82,8 @@ export function EvidenceMap({ label, entries, chosen, onPick }: { label: string;
                 <text data-tick="true" x={tick.x} y={plot.bottom + 16} textAnchor="middle" fontSize={11} fill={AXIS_TEXT_COLOUR}>{M.tick(tick.value)}</text>
               </g>
             ))}
+            {leaders.map((place) => <line key={place.key} data-leader={place.key} x1={place.home.x} y1={place.home.y} x2={place.x} y2={place.y} stroke={AXIS_TEXT_COLOUR} strokeWidth={1} />)}
+            {leaders.map((place) => <circle key={place.key} data-home={place.key} cx={place.home.x} cy={place.home.y} r={2.5} fill={AXIS_TEXT_COLOUR} />)}
             {shares.map((share) => <text key={share.id} data-share-label="true" x={plot.left - 8} y={share.y} textAnchor="end" dominantBaseline="central" fontSize={11} fill={AXIS_TEXT_COLOUR}>{share.text}</text>)}
           </svg>
           {bubbles.map(({ entry, marks, says, at, pressed, style }) => (

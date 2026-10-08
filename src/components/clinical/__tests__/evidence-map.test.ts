@@ -78,19 +78,56 @@ describe("the map of the evidence summary", () => {
   }
   const overlaps = (placed: Placed[]) => placed.flatMap((a, at) => placed.slice(at + 1).filter((b) => Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r + 6 - 1e-9).map((b) => `${a.key}/${b.key}`))
 
-  it("moves apart ten items that belong at the same point, along y first, and keeps them all in the plot", () => {
+  it("moves apart ten items that belong at the same point sideways, so their height stays their share", () => {
     const items = Array.from({ length: 10 }, (_, at) => item(`k${at}`, { papers: 1 + (at % 3) }))
     const placed = layoutMap(items, MAP_SIZE)
     expect(placed.map((entry) => entry.key)).toEqual(items.map((entry) => entry.key))
     expect(overlaps(placed)).toEqual([])
     expect(inside(placed, items)).toBe(true)
-    // The largest, and of those the first by key, keeps its place; the next one moves along y only.
     const scales = mapScales(items, MAP_SIZE)
-    const first = byKey(placed).get("k2")!
-    expect([first.x, first.y]).toEqual([(scales.x0 + scales.x1) / 2, scales.yMiddle])
-    const second = byKey(placed).get("k5")!
-    expect(second.x).toBe(first.x)
-    expect(second.y).toBeLessThan(first.y)
+    const middle = (scales.x0 + scales.x1) / 2
+    // Where each belongs is kept with it, and an item is at that height unless it says it was displaced.
+    expect(placed.every((entry) => entry.home.x === middle && entry.home.y === scales.yMiddle)).toBe(true)
+    expect(placed.every((entry) => entry.displaced === (entry.y !== scales.yMiddle))).toBe(true)
+    // The largest, and of those the first by key, keeps its place; the next goes to its right, the third to its left.
+    const of = byKey(placed)
+    expect([of.get("k2")!.x, of.get("k2")!.y, of.get("k2")!.displaced]).toEqual([middle, scales.yMiddle, false])
+    expect(of.get("k5")!.x).toBeGreaterThan(middle)
+    expect(of.get("k8")!.x).toBeLessThan(middle)
+    expect([of.get("k5")!.y, of.get("k8")!.y]).toEqual([scales.yMiddle, scales.yMiddle])
+    // Five fit on the line within a quarter of the plot either way; no one is moved sideways further than that.
+    expect(placed.filter((entry) => !entry.displaced).map((entry) => entry.key).sort()).toEqual(["k1", "k2", "k4", "k5", "k8"])
+    const reach = 0.25 * (scales.plot.right - scales.plot.left)
+    expect(placed.every((entry) => Math.abs(entry.x - middle) <= reach)).toBe(true)
+  })
+
+  it("sets four items that state no participants and all report benefit side by side at the top of the column", () => {
+    const items = ["clozapine", "olanzapine", "paliperidone", "zuclopenthixol"].map((key) => item(key, { name: key, participants: null, share: 1, marks: "+1 new" }))
+    const placed = layoutMap(items, MAP_SIZE)
+    const scales = mapScales(items, MAP_SIZE)
+    const column = scales.column!
+    // The column is wide enough for four: over a fifth of the plot.
+    expect((column.right - column.left) / (scales.plot.right - scales.plot.left)).toBeGreaterThan(0.2)
+    expect((column.right - column.left) / (scales.plot.right - scales.plot.left)).toBeLessThan(0.3)
+    expect(placed.map((entry) => [entry.y, entry.displaced])).toEqual(Array(4).fill([scales.yTop, false]))
+    expect(new Set(placed.map((entry) => entry.x)).size).toBe(4)
+    expect(overlaps(placed)).toEqual([])
+    expect(placed.every((entry) => entry.x - entry.r >= column.left && entry.x + entry.r <= column.right)).toBe(true)
+  })
+
+  it("moves an item up or down only when its line is full, by the least that fits, and says it is displaced", () => {
+    const items = Array.from({ length: 7 }, (_, at) => item(`k${at}`, { participants: null, share: 1 }))
+    const placed = layoutMap(items, MAP_SIZE)
+    const scales = mapScales(items, MAP_SIZE)
+    const column = scales.column!
+    expect(placed.slice(0, 4).map((entry) => [entry.y, entry.displaced])).toEqual(Array(4).fill([scales.yTop, false]))
+    const moved = placed.slice(4)
+    expect(moved.every((entry) => entry.displaced && entry.y !== scales.yTop && entry.home.y === scales.yTop)).toBe(true)
+    // The least that fits: under the names of the first line, not at the bottom of the plot.
+    expect(Math.max(...moved.map((entry) => entry.y))).toBeLessThan(scales.yMiddle)
+    expect(overlaps(placed)).toEqual([])
+    expect(inside(placed, items)).toBe(true)
+    expect(placed.every((entry) => entry.x - entry.r >= column.left && entry.x + entry.r <= column.right)).toBe(true)
   })
 
   it("moves the items of the column apart too, without leaving the column", () => {
@@ -156,13 +193,16 @@ describe("the map of the evidence summary", () => {
     // The first of the largest keeps its own place.
     const scales = mapScales(items, MAP_SIZE)
     expect(byKey(placed).get("antipsychotics")!.y).toBeCloseTo(scales.yTop + 0.33 * (scales.yBottom - scales.yTop), 6)
+    // No one is moved up or down: every height is the share of benefit.
+    expect(placed.filter((entry) => entry.displaced || entry.y !== entry.home.y).map((entry) => entry.key)).toEqual([])
   })
 
-  it("does not write a name over a bubble that was moved under its own", () => {
+  it("sets a smaller bubble beside a larger one that is at its place, at the same height", () => {
     const items = [item("a", { papers: 4 }), item("b", { papers: 1 })]
     const placed = byKey(layoutMap(items, MAP_SIZE))
-    // b moved up, over a: its name would be on a, so it is written above b.
-    expect(placed.get("b")!.y).toBeLessThan(placed.get("a")!.y)
-    expect([placed.get("a")!.labelAbove, placed.get("b")!.labelAbove]).toEqual([false, true])
+    expect(placed.get("b")!.y).toBe(placed.get("a")!.y)
+    expect(placed.get("b")!.x - placed.get("a")!.x).toBe(48)
+    expect([placed.get("a")!.displaced, placed.get("b")!.displaced]).toEqual([false, false])
+    expect(placed.get("b")!.home).toEqual({ x: placed.get("a")!.x, y: placed.get("a")!.y })
   })
 })

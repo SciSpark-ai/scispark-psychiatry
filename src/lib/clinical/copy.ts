@@ -395,7 +395,7 @@ export const CLINICAL_COPY = {
      */
     map: {
       axis: "Total participants across its papers (log scale)",
-      note: "Across = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Up = the share of its papers reporting benefit. Size = the number of papers.",
+      note: "Across = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Up = the share of its papers reporting benefit. Size = the number of papers. Bubbles that would overlap are moved sideways; a line shows where one that had to move up or down belongs.",
       /** The column of the items whose papers state no participants. */
       notStated: "not stated",
       /** Up the side: the top, the middle and the bottom. */

@@ -118,12 +118,32 @@ describe("the map of treatments", () => {
   })
 
   it("writes a name above its bubble where the layout says so", async () => {
-    const stacked = [entry("a", { papers: 4, efficacy: { benefit: 2, "no-benefit": 2, mixed: 0 } }), entry("b", { efficacy: { benefit: 0, "no-benefit": 0, mixed: 1 } })]
-    await show(stacked)
+    const long = "A rather long name"
+    const beside = [entry("a", { name: long, papers: 4, efficacy: { benefit: 2, "no-benefit": 2, mixed: 0 } }), entry("b", { name: long, efficacy: { benefit: 0, "no-benefit": 0, mixed: 1 } })]
+    await show(beside)
     expect(q(`${WIDE} button[data-bubble=a] [data-label]`).getAttribute("data-label")).toBe("under")
     expect(q(`${WIDE} button[data-bubble=a] [data-label]`).className).toContain("top-full")
     expect(q(`${WIDE} button[data-bubble=b] [data-label]`).getAttribute("data-label")).toBe("above")
     expect(q(`${WIDE} button[data-bubble=b] [data-label]`).className).toContain("bottom-full")
+    // Side by side at one height: no one was moved up or down, so no line is drawn.
+    expect(q(`${WIDE} button[data-bubble=a]`).style.top).toBe(q(`${WIDE} button[data-bubble=b]`).style.top)
+    expect(qa(`${WIDE} [data-leader]`)).toHaveLength(0)
+  })
+
+  it("draws a thin line from a bubble that had to move up or down to where it belongs", async () => {
+    const crowd = Array.from({ length: 7 }, (_, at) => entry(`k${at}`, { participants: null, sized: 0 }))
+    await show([...crowd, entry("sized")])
+    const places = layoutMap(items([...crowd, entry("sized")]), MAP_SIZE)
+    const moved = places.filter((place) => place.displaced)
+    expect(moved.length).toBeGreaterThan(0)
+    const leaders = qa(`${WIDE} svg[data-map-axes] line[data-leader]`)
+    expect(leaders.map((line) => line.getAttribute("data-leader"))).toEqual(moved.map((place) => place.key))
+    for (const line of leaders) {
+      const place = moved.find((each) => each.key === line.getAttribute("data-leader"))!
+      expect(["x1", "y1", "x2", "y2"].map((name) => Number(line.getAttribute(name)))).toEqual([place.home.x, place.home.y, place.x, place.y])
+      expect(line.getAttribute("stroke")).toContain("var(--")
+    }
+    expect(qa(`${WIDE} svg[data-map-axes] circle[data-home]`)).toHaveLength(moved.length)
   })
 
   it("tells its owner which bubble was pressed, from the map and from the grid", async () => {
@@ -136,7 +156,7 @@ describe("the map of treatments", () => {
 
   it("says under the map what across, up and size are", async () => {
     await show()
-    expect(q("[data-map-note]").textContent).toBe("Across = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Up = the share of its papers reporting benefit. Size = the number of papers.")
+    expect(q("[data-map-note]").textContent).toBe("Across = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Up = the share of its papers reporting benefit. Size = the number of papers. Bubbles that would overlap are moved sideways; a line shows where one that had to move up or down belongs.")
   })
 
   it("is a grid of two columns of tiles on a narrow screen, each with its participants in words, and only one of the two is shown", async () => {

@@ -246,7 +246,7 @@ describe("the evidence block of a condition page", () => {
       expect(medicine.style.left).toMatch(/^\d+(\.\d+)?%$/)
       expect(medicine.style.top).toMatch(/^\d+(\.\d+)?%$/)
       expect(q(`${NARROW} button[data-bubble=medicine] [data-participants]`).textContent).toBe("2,520 participants")
-      expect(q("[data-map-note]").textContent).toContain("Size = the number of papers.")
+      expect(q("[data-map-note]").textContent).toContain("Bubbles that would overlap are moved sideways")
       expect(q("[data-bubble-note]").compareDocumentPosition(q(WIDE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 

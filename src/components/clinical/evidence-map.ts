@@ -12,7 +12,13 @@ export interface MapItem {
   marks?: string
 }
 export interface MapSize { width: number; height: number }
-export interface Placed { key: string; x: number; y: number; r: number; labelAbove: boolean }
+export interface Placed {
+  key: string; x: number; y: number; r: number; labelAbove: boolean
+  /** Where it belongs by the scales. Its `x` may differ from this one's; its `y` does only when it is `displaced`. */
+  home: { x: number; y: number }
+  /** It could not stay at its own height: a line is drawn from it to where it belongs. */
+  displaced: boolean
+}
 export interface Box { left: number; right: number; top: number; bottom: number }
 export interface MapScales {
   /** The box the bubbles stay in. */
@@ -33,9 +39,13 @@ const MAX_RADIUS = 40
 /** The least clear space between two bubbles. */
 const GAP = 6
 const STEP = 4
-/** How far along y a bubble is moved before it is moved along x: under a third of the way from no benefit to all. */
-const Y_REACH = 60
-const [GUTTER, RIGHT, TOP, FOOT, COLUMN] = [74, 8, 12, 24, 88]
+const [GUTTER, RIGHT, TOP, FOOT] = [74, 8, 16, 24]
+/** The share of the plot's width the column of items that state no participants takes: room for four small bubbles side by side. */
+const COLUMN_SHARE = 0.29
+/** How far sideways a bubble of the scaled part is moved before it is moved up or down, as a share of the plot's width. */
+const X_REACH = 0.25
+/** Half the least distance between two small bubbles: the items of the column start this far left of its middle when they are not one or three. */
+const HALF_PITCH = 22
 /** The room kept under the lowest bubble for its name, and the size of a name's box. */
 const LABEL_ROOM = 34
 const [LABEL_WIDTH, LABEL_OFFSET, CHAR, MARK_CHAR, NAME_LINE, MARKS_LINE] = [96, 3, 6.2, 5.6, 15, 14]
@@ -54,7 +64,7 @@ export function benefitShare(efficacy: Efficacy, papers: number): number {
 /** The scales of a map of `items`: 10 to the next power of ten at or above the largest, on a log scale; share 1 at the top. */
 export function mapScales(items: MapItem[], size: MapSize): MapScales {
   const plot = { left: GUTTER, right: size.width - RIGHT, top: TOP, bottom: size.height - FOOT }
-  const column = items.some((item) => item.participants === null) ? { left: plot.left, right: plot.left + COLUMN } : null
+  const column = items.some((item) => item.participants === null) ? { left: plot.left, right: plot.left + Math.round(COLUMN_SHARE * (plot.right - plot.left)) } : null
   const largest = Math.max(0, ...items.map((item) => item.participants ?? 0))
   let max = MIN_DOMAIN
   while (max < largest) max *= 10
@@ -92,16 +102,22 @@ export function nameBoxes(item: MapItem, spot: Spot, r: number): { under: Box; a
 }
 
 /**
- * The place of every item: its own by the scales where that is free, else the nearest free one along y (up first,
- * then down, in small steps), and along x only when no y is free. Larger bubbles are placed first, so the small ones
- * move. An item that states no participants stays in the column. A name goes under its bubble, or above it when a
- * bubble or a name already placed is in the way there; a place where the name fits neither way, or where the bubble
- * would cover a name, is not free while another is. The places are returned in the order of `items`.
+ * The place of every item. Its height is its share of benefit, and stays so: an item whose own place is taken is moved
+ * sideways (right, then left, in small steps), within a quarter of the plot's width for the scaled part and within the
+ * column for an item that states no participants. Only when nothing is free on its line is it moved up or down, by
+ * the least that fits, and it is then `displaced`. Larger bubbles are placed first, so the small ones move. A name
+ * goes under its bubble, or above it when a bubble or a name already placed is in the way there; a place where the
+ * name fits neither way, or where the bubble would cover a name, is not free while another is. The places are
+ * returned in the order of `items`.
  */
 export function layoutMap(items: MapItem[], size: MapSize): Placed[] {
   const { plot, column, domain, x0, x1, yTop, yBottom } = mapScales(items, size)
   const span = Math.log10(domain.max) - 1
   const order = [...items].sort((a, b) => b.papers - a.papers || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+  // One item or three in the column start at its middle; any other number starts half a step left of it, so that two
+  // sit evenly and four fit on a line.
+  const unstated = items.filter((item) => item.participants === null).length
+  const columnStart = column ? (column.left + column.right) / 2 - (unstated === 1 || unstated === 3 ? 0 : HALF_PITCH) : 0
   const placed: Placed[] = []
   const names: Box[] = []
   for (const item of order) {
@@ -109,8 +125,9 @@ export function layoutMap(items: MapItem[], size: MapSize): Placed[] {
     const inColumn = item.participants === null && column !== null
     const xs: Range = inColumn ? { low: column.left + r + 2, high: column.right - r - 2 } : { low: (column ? column.right : plot.left) + r + 2, high: plot.right - r }
     const ys: Range = { low: plot.top + r, high: plot.bottom - LABEL_ROOM - r }
-    const ideal: Spot = {
-      x: clamp(inColumn ? (column.left + column.right) / 2 : x0 + ((Math.log10(Math.max(domain.min, item.participants ?? domain.min)) - 1) / span) * (x1 - x0), xs),
+    const reach = inColumn ? column.right - column.left : X_REACH * (plot.right - plot.left)
+    const home: Spot = {
+      x: clamp(inColumn ? columnStart : x0 + ((Math.log10(Math.max(domain.min, item.participants ?? domain.min)) - 1) / span) * (x1 - x0), xs),
       y: clamp(yTop + (1 - item.share) * (yBottom - yTop), ys),
     }
     const clearance = (spot: Spot) => Math.min(Infinity, ...placed.map((other) => Math.hypot(spot.x - other.x, spot.y - other.y) - other.r - r - GAP))
@@ -121,30 +138,28 @@ export function layoutMap(items: MapItem[], size: MapSize): Placed[] {
       const { under, above } = nameBoxes(item, spot, r)
       return nameFree(under) ? false : nameFree(above) ? true : null
     }
-    // The first place where the bubble and its name are clear; failing that, where the bubble is; failing that, the clearest.
+    // Its own line first, sideways; then the nearest line with room. The first place where the bubble and its name are
+    // clear; failing that, where the bubble is; failing that, the clearest.
     let clear: Spot | null = null
-    let clearest = { spot: ideal, by: clearance(ideal) }
+    let clearest = { spot: home, by: clearance(home) }
     let found: { spot: Spot; above: boolean } | null = null
-    // Along y only as far as a bubble can go without saying another share; past that, along x; the whole height last.
-    search: for (const reach of [Y_REACH, size.height]) {
-      for (const dx of offsets(1, size.width)) {
-        const x = ideal.x + dx
-        if (!within(x, xs)) continue
-        for (const dy of offsets(-1, reach)) {
-          const spot = { x, y: ideal.y + dy }
-          if (!within(spot.y, ys)) continue
-          const by = clearance(spot)
-          if (by > clearest.by) clearest = { spot, by }
-          if (by < 0) continue
-          clear ??= spot
-          const above = nameSide(spot)
-          if (above !== null) { found = { spot, above }; break search }
-        }
+    search: for (const dy of offsets(-1, size.height)) {
+      const y = home.y + dy
+      if (!within(y, ys)) continue
+      for (const dx of offsets(1, reach)) {
+        const spot = { x: home.x + dx, y }
+        if (!within(spot.x, xs)) continue
+        const by = clearance(spot)
+        if (by > clearest.by) clearest = { spot, by }
+        if (by < 0) continue
+        clear ??= spot
+        const above = nameSide(spot)
+        if (above !== null) { found = { spot, above }; break search }
       }
     }
     const at = found?.spot ?? clear ?? clearest.spot
     const labelAbove = found?.above ?? false
-    placed.push({ key: item.key, x: at.x, y: at.y, r, labelAbove })
+    placed.push({ key: item.key, x: at.x, y: at.y, r, labelAbove, home, displaced: at.y !== home.y })
     const boxes = nameBoxes(item, at, r)
     names.push(labelAbove ? boxes.above : boxes.under)
   }
