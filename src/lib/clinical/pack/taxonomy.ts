@@ -100,6 +100,22 @@ function search({ matchers, nodeOf }: TreatmentIndex, text: string): TaxonomyNod
   return [...first.values()].filter((entry) => !ancestors.has(entry.node.id)).sort((a, b) => a.start - b.start).map((entry) => entry.node)
 }
 
+/**
+ * The two arms of a finding (owner decision 2026-10-09): the pack treatments its result is about, and the pack treatments
+ * it was compared with, each as ids in the order of its text. A treatment named in both texts is a comparator only: an
+ * answer that lists both arms as the treatment ("clozapine and olanzapine" against "olanzapine") is about the first.
+ * A comparison that is not with a pack treatment (placebo, sham, usual care, a waiting list) gives no comparator. When
+ * every treatment named is also named as the comparator the answer cannot be read: the treatments stand as they were
+ * given, with no comparator, so the paper is not lost.
+ */
+export function armsOf(taxonomy: Taxonomy, treatment: string | null | undefined, comparator: string | null | undefined): { treatments: string[]; comparators: string[] } {
+  const named = treatment ? findTreatments(taxonomy, treatment).map((node) => node.id) : []
+  const against = comparator ? findTreatments(taxonomy, comparator).map((node) => node.id) : []
+  const tested = named.filter((id) => !against.includes(id))
+  if (named.length > 0 && tested.length === 0) return { treatments: named, comparators: [] }
+  return { treatments: tested, comparators: against }
+}
+
 /** The node and every node below it (tracking a condition includes its subtypes). */
 export function withDescendants(taxonomy: Taxonomy, id: string): TaxonomyNode[] {
   const byParent = new Map<string, TaxonomyNode[]>()

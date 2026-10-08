@@ -1,6 +1,6 @@
 // src/lib/clinical/evidence/build.ts
 import type { Taxonomy, TaxonomyNode } from "../pack/schema"
-import { findTreatments, withDescendants } from "../pack/taxonomy"
+import { armsOf, withDescendants } from "../pack/taxonomy"
 import { sampleSizeStated } from "../text/sample-size"
 import type { Design } from "../types"
 import { RESEARCH_TYPES, type Finding, type FindingKind, type ResearchType, type TreatmentClass } from "./schema"
@@ -14,7 +14,9 @@ import { RESEARCH_TYPES, type Finding, type FindingKind, type ResearchType, type
  *
  * A treatment is found by its words (owner decision 2026-10-08): a finding is under every pack treatment its text
  * names, so findings stored before that are read the same way with no migration. A paper has one kind, so it is in one
- * section, under each treatment it names. The counting rule: a treatment counts each paper under it once; a class
+ * section, under each treatment it names. A pack treatment the paper names as its comparator is not one of them (owner
+ * decision 2026-10-09): the paper's direction is of the treatment it tested, so the comparator does not count the paper
+ * and only shows it as a comparison. The counting rule: a treatment counts each paper under it once; a class
  * counts its DISTINCT papers, so a paper that names three antipsychotics adds 1 to each of the three and 1 to
  * Antipsychotics, and a class is not the sum of its treatments; a paper under two classes adds 1 to each; `total` and
  * `sections` count distinct papers.
@@ -69,6 +71,11 @@ export interface TreatmentEvidence {
   papers: number; efficacy: Efficacy; newPapers: number
   /** How many safety papers and how many papers without an efficacy result name this treatment (shown as marks, listed elsewhere). */
   safetyPapers: number; unreportedPapers: number
+  /**
+   * The efficacy papers of ANOTHER treatment that this one was the comparator in, newest first, and how many they are.
+   * Their direction is of the treatment they tested: they are in none of `papers`, `efficacy`, `lines` and `studies`.
+   */
+  comparatorPapers: number; comparedIn: Study[]
   /** At most 4 per kind, newest first. The safety lines come from the safety papers of the same treatment. */
   lines: { benefit: Line[]; "no-benefit": Line[]; mixed: Line[]; safety: Line[] }
   /** The efficacy studies, newest first. */
@@ -175,14 +182,18 @@ const studyOf = (finding: Finding, now: Date, saved: ReadonlySet<string> | undef
 interface ClassRef { key: string; label: string | null }
 
 interface TreatmentRef { key: string; class: ClassRef | null }
+/** The treatments a finding is under, and the pack treatments it was compared with (never one of the former). */
+interface Arms { refs: TreatmentRef[]; compared: TreatmentRef[] }
+const NO_ARMS: Arms = { refs: [], compared: [] }
 
 /**
  * Where a finding that names a treatment belongs: for each treatment, its key and the class of it. Empty when it names none.
- * The treatments are the pack's that the finding's text names as whole words; when it names none, the stored code; when
- * there is neither, the name itself. The class is null when the pack does not decide it (an uncoded name, a node of
+ * The treatments are the pack's that the finding's text names as whole words, less those its comparator names; when it
+ * names none, the stored code; when there is neither, the name itself. `compared` are the pack treatments its comparator
+ * names: empty for a finding under no treatment, and never a treatment the finding is under. The class is null when the pack does not decide it (an uncoded name, a node of
  * modality other): the caller then takes it from the findings of that treatment, so one treatment is never in two classes.
  */
-function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => TreatmentRef[]; byClass: (value: TreatmentClass | null) => ClassRef } {
+function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => Arms; byClass: (value: TreatmentClass | null) => ClassRef } {
   const nodeOf = new Map(taxonomy.nodes.map((node) => [node.id, node]))
   const treatmentNode = (id: string | null | undefined): TaxonomyNode | undefined => {
     const node = id ? nodeOf.get(id) : undefined
@@ -222,16 +233,21 @@ function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => Treat
       : null
     return { key: node.id, class: cls }
   }
-  const classify = (finding: Finding): TreatmentRef[] => {
+  const refsOf = (ids: string[]) => ids.flatMap((id) => { const node = treatmentNode(id); return node ? [ofNode(node)] : [] })
+  const classify = (finding: Finding): Arms => {
     // A paper filed under a type of research, with no class and no code of a treatment, is research: the treatment an earlier answer named is not what it is about.
-    if (finding.researchType !== null && finding.treatmentClass === null && !finding.treatmentCode) return []
+    if (finding.researchType !== null && finding.treatmentClass === null && !finding.treatmentCode) return NO_ARMS
     const name = finding.treatment?.trim() || null
-    // The same texts come again for every period and every condition: findTreatments remembers them with the taxonomy.
-    const found = name ? findTreatments(taxonomy, name) : []
-    if (found.length > 0) return found.map(ofNode)
+    // The same texts come again for every period and every condition: findTreatments, under armsOf, remembers them with the taxonomy.
+    const arms = armsOf(taxonomy, name, finding.comparator)
+    const found = refsOf(arms.treatments)
     const node = treatmentNode(finding.treatmentCode)
-    if (node) return [ofNode(node)]
-    return name || finding.treatmentCode ? [{ key: `name:${(name ?? finding.treatmentCode ?? "").toLowerCase().replace(/\s+/g, " ")}`, class: null }] : []
+    const refs: TreatmentRef[] =
+      found.length > 0 ? found
+      : node ? [ofNode(node)]
+      : name || finding.treatmentCode ? [{ key: `name:${(name ?? finding.treatmentCode ?? "").toLowerCase().replace(/\s+/g, " ")}`, class: null }] : []
+    if (refs.length === 0) return NO_ARMS
+    return { refs, compared: refsOf(arms.comparators).filter((ref) => !refs.some((entry) => entry.key === ref.key)) }
   }
   return { classify, byClass }
 }
@@ -255,7 +271,7 @@ interface Organised {
   named: Array<{ key: string; label: string | null; papers: number }>
 }
 /** What one treatment holds: its efficacy papers, its safety papers, and how many of its papers report no efficacy result. */
-interface Slot { key: string; name: string; cls: ClassRef; efficacy: Finding[]; safety: Finding[]; unreported: number }
+interface Slot { key: string; name: string; cls: ClassRef; efficacy: Finding[]; safety: Finding[]; unreported: number; /** The efficacy papers of other treatments it was the comparator in. */ compared: Finding[] }
 
 /**
  * The three sections of `findings`. The class and the spelling of a treatment the pack does not decide are taken from
@@ -268,7 +284,7 @@ function organise(findings: Finding[], all: Finding[], taxonomy: Taxonomy, now: 
   // A treatment the pack does not know is named as its earliest-listed finding wrote it.
   const firstOf = new Map<string, Finding>()
   for (const finding of all) {
-    const refs = classify(finding)
+    const { refs } = classify(finding)
     for (const ref of refs) {
       const held = classGiver.get(ref.key)
       // The one class a paper names is the class of its one treatment: with several treatments it says nothing of each.
@@ -284,8 +300,17 @@ function organise(findings: Finding[], all: Finding[], taxonomy: Taxonomy, now: 
   const several = new Set<string>()
   const researchFindings = new Map<ResearchGroup["type"], Finding[]>()
   const sections = { treatments: 0, safety: 0, research: 0 }
+  const slotOf = (ref: TreatmentRef, finding: Finding): Slot => {
+    const held = slots.get(ref.key)
+    if (held) return held
+    const first = firstOf.get(ref.key) ?? finding
+    const cls = ref.class ?? byClass(classGiver.get(ref.key)?.treatmentClass ?? CLASS_BY_ID[ref.key] ?? null)
+    const slot: Slot = { key: ref.key, name: nodeOf.get(ref.key)?.name ?? (first.treatment?.trim() || first.treatmentCode || ref.key), cls, efficacy: [], safety: [], unreported: 0, compared: [] }
+    slots.set(ref.key, slot)
+    return slot
+  }
   for (const finding of findings) {
-    const refs = classify(finding)
+    const { refs, compared } = classify(finding)
     const efficacy = isEfficacy(finding.kind)
     const safety = finding.kind === "safety"
     if (refs.length === 0 || (!efficacy && !safety)) {
@@ -298,14 +323,10 @@ function organise(findings: Finding[], all: Finding[], taxonomy: Taxonomy, now: 
     if (refs.length > 1) several.add(finding.key)
     const mine = new Set<string>()
     classOf.set(finding.key, mine)
+    // A comparator counts nothing of the paper: it is in no class for it, and has a bubble only through papers of its own.
+    if (efficacy) for (const ref of compared) slotOf(ref, finding).compared.push(finding)
     for (const ref of refs) {
-      let slot = slots.get(ref.key)
-      if (!slot) {
-        const first = firstOf.get(ref.key) ?? finding
-        const cls = ref.class ?? byClass(classGiver.get(ref.key)?.treatmentClass ?? CLASS_BY_ID[ref.key] ?? null)
-        slot = { key: ref.key, name: nodeOf.get(ref.key)?.name ?? (first.treatment?.trim() || first.treatmentCode || ref.key), cls, efficacy: [], safety: [], unreported: 0 }
-        slots.set(ref.key, slot)
-      }
+      const slot = slotOf(ref, finding)
       mine.add(slot.cls.key)
       if (!labels.get(slot.cls.key)) labels.set(slot.cls.key, slot.cls.label)
       if (efficacy) slot.efficacy.push(finding)
@@ -326,11 +347,13 @@ function organise(findings: Finding[], all: Finding[], taxonomy: Taxonomy, now: 
     if (harms.length > 0) safetyGroups.push({ key: slot.key, name: slot.name, classKey: slot.cls.key, papers: harms.length, newPapers: fresh(harms), studies: studies(harms) })
     if (slot.efficacy.length === 0) continue
     const ordered = [...slot.efficacy].sort(newestFirst)
+    const compared = [...slot.compared].sort(newestFirst)
     const entry = held.get(slot.cls.key) ?? { treatments: [], papers: new Map<string, Finding>() }
     held.set(slot.cls.key, entry)
     for (const finding of ordered) entry.papers.set(finding.key, finding)
     entry.treatments.push({
       key: slot.key, name: slot.name, papers: ordered.length, efficacy: efficacyOf(ordered), newPapers: fresh(ordered), safetyPapers: harms.length, unreportedPapers: slot.unreported,
+      comparatorPapers: compared.length, comparedIn: studies(compared),
       lines: { benefit: linesOf(ordered, "benefit"), "no-benefit": linesOf(ordered, "no-benefit"), mixed: linesOf(ordered, "mixed"), safety: linesOf(harms, "safety") },
       studies: studies(ordered),
     })

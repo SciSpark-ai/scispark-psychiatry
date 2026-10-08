@@ -72,6 +72,24 @@ describe("a bubble of the evidence summary", () => {
     expect(q("button").getAttribute("aria-label")).toBe("Ketamine: 2 papers; 2 benefit, 0 no benefit, 0 mixed; 3 safety")
   })
 
+  it("says in words in how many papers the treatment was the comparison, only when there are some", async () => {
+    await render(<EvidenceBubble id="olanzapine" name="Olanzapine" papers={2} efficacy={{ benefit: 2, "no-benefit": 0, mixed: 0 }} safetyPapers={1} comparatorPapers={3} pressed={false} onPick={() => {}} />)
+    expect(q("[data-compared-mark]").textContent).toBe("compared in 3")
+    expect(q("[data-compared-mark]").className).toContain("text-secondary-dark")
+    expect(q("[data-safety-mark]").textContent).toBe("1 safety")
+    expect(q("button").getAttribute("aria-label")).toBe("Olanzapine: 2 papers; 2 benefit, 0 no benefit, 0 mixed; 1 safety; the comparison in 3 other papers")
+    // The number in the disc and its colours are of the treatment's own papers.
+    expect(q("svg [data-number]").textContent).toBe("2")
+    expect(qa("svg [data-slice]").map((slice) => slice.getAttribute("data-slice"))).toEqual(["benefit"])
+    document.body.innerHTML = ""
+    await render(<EvidenceBubble id="olanzapine" name="Olanzapine" papers={2} efficacy={{ benefit: 2, "no-benefit": 0, mixed: 0 }} comparatorPapers={1} pressed={false} onPick={() => {}} />)
+    expect(q("button").getAttribute("aria-label")).toBe("Olanzapine: 2 papers; 2 benefit, 0 no benefit, 0 mixed; the comparison in 1 other paper")
+    document.body.innerHTML = ""
+    await render(<EvidenceBubble id="olanzapine" name="Olanzapine" papers={2} efficacy={{ benefit: 2, "no-benefit": 0, mixed: 0 }} comparatorPapers={0} pressed={false} onPick={() => {}} />)
+    expect(q("[data-compared-mark]")).toBeNull()
+    expect(q("button").getAttribute("aria-label")).toBe("Olanzapine: 2 papers; 2 benefit, 0 no benefit, 0 mixed")
+  })
+
   it("is a plain light disc with no direction when it is given no efficacy", async () => {
     await render(<EvidenceBubble id="mechanism" name="Mechanisms" papers={4} pressed={false} onPick={() => {}} />)
     expect(qa("svg [data-slice]")).toHaveLength(0)

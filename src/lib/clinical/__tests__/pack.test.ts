@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { loadPackFromDir, loadPsychiatryPack } from "../pack/load"
 import { TaxonomySchema } from "../pack/schema"
-import { findNode, findTreatments, treatmentMatcherStats, withDescendants } from "../pack/taxonomy"
+import { armsOf, findNode, findTreatments, treatmentMatcherStats, withDescendants } from "../pack/taxonomy"
 
 describe("psychiatry pack", () => {
   it("loads and validates the shipped files", async () => {
@@ -146,5 +146,30 @@ describe("pack validation", () => {
     await cp(path.join(process.cwd(), "packs", "psychiatry"), dir, { recursive: true })
     await writeFile(path.join(dir, "journals.json"), JSON.stringify({ version: "1", journals: [{ name: "No ISSN", tier: "A" }] }))
     await expect(loadPackFromDir(dir)).rejects.toThrow(/journals\.json/)
+  })
+})
+
+// Owner decision 2026-10-09: a paper that compares two treatments counts for the one it tested; the other is its comparator.
+describe("the arms of a finding", () => {
+  const arms = async (treatment: string | null, comparator: string | null) => armsOf((await loadPsychiatryPack()).taxonomy, treatment, comparator)
+  it("gives the treatment and, apart, the pack treatment it was compared with", async () => {
+    expect(await arms("clozapine", "olanzapine")).toEqual({ treatments: ["clozapine"], comparators: ["olanzapine"] })
+  })
+  it("takes a treatment that is also the comparator as the comparator only", async () => {
+    expect(await arms("clozapine and olanzapine", "olanzapine")).toEqual({ treatments: ["clozapine"], comparators: ["olanzapine"] })
+  })
+  it("has no comparator when the comparison is not with a pack treatment", async () => {
+    for (const comparator of ["placebo", "sham", "treatment as usual", "control", "waiting list", null, ""]) expect(await arms("clozapine", comparator), String(comparator)).toEqual({ treatments: ["clozapine"], comparators: [] })
+  })
+  it("keeps the treatments that share one result together", async () => {
+    expect(await arms("lithium and quetiapine", "placebo")).toEqual({ treatments: ["lithium", "quetiapine"], comparators: [] })
+  })
+  it("keeps the treatments, with no comparator, when every one of them is also named as the comparator", async () => {
+    expect(await arms("clozapine and olanzapine", "olanzapine or clozapine")).toEqual({ treatments: ["clozapine", "olanzapine"], comparators: [] })
+    expect(await arms("olanzapine", "olanzapine")).toEqual({ treatments: ["olanzapine"], comparators: [] })
+  })
+  it("still gives the comparators of a treatment the pack does not know, and none of no text", async () => {
+    expect(await arms("a drug nobody listed", "olanzapine")).toEqual({ treatments: [], comparators: ["olanzapine"] })
+    expect(await arms(null, null)).toEqual({ treatments: [], comparators: [] })
   })
 })

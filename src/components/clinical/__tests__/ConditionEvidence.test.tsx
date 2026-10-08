@@ -20,7 +20,7 @@ const study = (n: number, over: Partial<Study> = {}): Study => ({
   kind: "benefit", text: `Text ${n}`, treatment: "Ketamine", severalTreatments: false, tier: "trial", isNew: false, saved: false, ...over,
 })
 const treatment = (key: string, name: string, studies: Study[], over: Partial<TreatmentEvidence> = {}): TreatmentEvidence => ({
-  key, name, papers: studies.length, efficacy: efficacy({ benefit: studies.length }), newPapers: 0, safetyPapers: 0, unreportedPapers: 0, lines: lines(), studies, ...over,
+  key, name, papers: studies.length, efficacy: efficacy({ benefit: studies.length }), newPapers: 0, safetyPapers: 0, unreportedPapers: 0, comparatorPapers: 0, comparedIn: [], lines: lines(), studies, ...over,
 })
 const klass = (key: string, label: string | null, treatments: TreatmentEvidence[], over: Partial<ClassEvidence> = {}): ClassEvidence => ({
   key, label, papers: treatments.reduce((sum, entry) => sum + entry.papers, 0), efficacy: efficacy({ benefit: 1 }), newPapers: 0, treatments, ...over,
@@ -148,7 +148,7 @@ describe("the evidence block of a condition page", () => {
   it("says under the key how a paper is counted, where its direction comes from, and how to see each paper", async () => {
     await show()
     const note = q("[data-bubble-note]")
-    expect(note.textContent).toBe("A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares treatments counts under each of them, with one direction for the paper. Choose a treatment to see each paper.")
+    expect(note.textContent).toBe("A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares two treatments counts for the one it tested; the other shows it as a comparison. Choose a treatment to see each paper.")
     expect(q("[data-bubble-key]").compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(note.compareDocumentPosition(bubble("medicine")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
@@ -247,6 +247,55 @@ describe("the evidence block of a condition page", () => {
     await show()
     await openTreatment("medicine", "ketamine")
     expect(q("[data-unreported]")).toBeNull()
+  })
+
+  // Owner decision 2026-10-09: a paper counts for the treatment it tested; the other arm shows it as a comparison.
+  describe("the papers a treatment was the comparison in", () => {
+    const versus = [
+      study(21, { label: "Kane 2026", treatment: "Esketamine", comparator: "ketamine", text: "Gave more remission.", kind: "benefit" }),
+      study(22, { label: null, treatment: "lithium and quetiapine", comparator: "ketamine", text: null, takeaway: "Did not cut relapse more.", kind: "no-benefit" }),
+      study(23, { label: "Lee 2025", treatment: null, comparator: "ketamine", text: "Eased symptoms", kind: "mixed" }),
+    ]
+    const compared = { ...ketamine, comparatorPapers: 3, comparedIn: versus }
+    const open = async (entry: TreatmentEvidence) => { await show({ ...EVIDENCE, classes: [klass("medicine", null, [entry, lithium])] }); await openTreatment("medicine", "ketamine") }
+    it("are listed under the lines and before the plot, each with its own treatment before its result and its own direction", async () => {
+      await open(compared)
+      const detail = q("[data-treatment-detail]")
+      const block = detail.querySelector("[data-compared-in]") as HTMLElement
+      expect(block.querySelector("[data-compared-count]")!.textContent).toBe("Used as the comparison in 3 papers:")
+      const items = [...block.querySelectorAll("li[data-compared]")] as HTMLElement[]
+      expect(items.map((item) => item.getAttribute("data-compared"))).toEqual(["pmid:21", "pmid:22", "pmid:23"])
+      expect(items.map((item) => { const link = item.querySelector("a")!; return [link.textContent, link.getAttribute("href")] })).toEqual([["Kane 2026", "/paper/paper-21"], ["Headline 22", "/paper/paper-22"], ["Lee 2025", "/paper/paper-23"]])
+      expect(items.map((item) => item.querySelector("[data-compared-result]")!.textContent)).toEqual([
+        "Esketamine: Gave more remission.", "lithium and quetiapine: Did not cut relapse more.", "The treatment it tested: Eased symptoms.",
+      ])
+      expect(items.map((item) => { const label = item.querySelector("[data-kind-label]") as HTMLElement; return [label.textContent, label.style.color] })).toEqual([
+        ["Benefit", "var(--clinical-benefit)"], ["No benefit", "var(--clinical-no-benefit)"], ["Mixed", "var(--text-muted)"],
+      ])
+      const lastLine = qa("[data-treatment-detail] [data-line]").at(-1)!
+      expect(lastLine.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(block.compareDocumentPosition(detail.querySelector("[data-testid=direction-plot]")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+    it("have no dot in the plot, no row in the table and no line of the treatment's own", async () => {
+      await open(compared)
+      expect(qa("[data-testid=direction-plot] a[data-dot]").map((dot) => dot.getAttribute("data-dot"))).toEqual(["pmid:1", "pmid:2"])
+      expect(qa("[data-study]").map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
+      expect(qa("[data-treatment-detail] [data-line]").map((line) => line.textContent).join(" ")).not.toMatch(/remission|relapse/)
+    })
+    it("say paper for one, and are absent when there is none", async () => {
+      await open({ ...ketamine, comparatorPapers: 1, comparedIn: [versus[0]] })
+      expect(q("[data-compared-count]").textContent).toBe("Used as the comparison in 1 paper:")
+      document.body.innerHTML = ""
+      await open(ketamine)
+      expect(q("[data-compared-in]")).toBeNull()
+      expect(container.textContent).not.toContain("Used as the comparison")
+    })
+    it("are marked in words on the bubble of the treatment, only when there are some", async () => {
+      await open(compared)
+      expect(bubble("ketamine").querySelector("[data-compared-mark]")!.textContent).toBe("compared in 3")
+      expect(bubble("ketamine").getAttribute("aria-label")).toContain("the comparison in 3 other papers")
+      expect(bubble("lithium").querySelector("[data-compared-mark]")).toBeNull()
+    })
   })
 
   it("draws the direction plot of the chosen treatment and then the table of its studies", async () => {

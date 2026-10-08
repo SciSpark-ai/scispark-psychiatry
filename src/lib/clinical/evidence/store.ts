@@ -5,7 +5,7 @@ import { paperSlug } from "../../wiki/authoring"
 import type { StoredFeed } from "../feed/stored"
 import { listHistory, loadHistory } from "../history/store"
 import type { Taxonomy } from "../pack/schema"
-import { findNode, findTreatments } from "../pack/taxonomy"
+import { armsOf, findNode } from "../pack/taxonomy"
 import { FINDINGS_PATH, parseFindings } from "./file"
 import { FINDINGS_VERSION, type Finding } from "./schema"
 
@@ -28,8 +28,10 @@ function findingsOf(feed: StoredFeed, taxonomy: Taxonomy): Finding[] {
       // about the topic's condition. A topic with two conditions joined by "or" gives both codes: which of the two
       // the paper matched is not recorded.
       conditionCodes: item.matched === "treatment" ? [] : [codeOf(topic?.condition), codeOf(topic?.condition2)].filter((code): code is string => Boolean(code)),
-      kind: answer?.kind ?? null, treatment, // The first treatment the text names, by its words. The page finds all of them again when it is built.
-      treatmentCode: treatment ? findTreatments(taxonomy, treatment)[0]?.id ?? null : null,
+      // The first treatment the text names, by its words, that is not the paper's comparator. The words are kept as the
+      // model gave them: the page finds the treatments and the comparators again when it is built.
+      kind: answer?.kind ?? null, treatment,
+      treatmentCode: treatment ? armsOf(taxonomy, treatment, answer?.comparator).treatments[0] ?? null : null,
       treatmentClass: answer?.treatmentClass ?? null, researchType: answer?.researchType ?? null, sampleSize: answer?.sampleSize ?? null,
       text: answer?.text ?? null, population: answer?.population ?? null, comparator: answer?.comparator ?? null, outcome: answer?.outcome ?? null,
       firstListedAt: feed.generatedAt, lastListedAt: feed.generatedAt,

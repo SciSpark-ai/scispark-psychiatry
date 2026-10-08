@@ -616,3 +616,80 @@ describe("the treatments added to the pack", () => {
     ])
   })
 })
+
+// Owner decision 2026-10-09: a paper that compares two treatments counts for the one it tested; the other shows it as a comparison.
+describe("a paper that compares two pack treatments", () => {
+  const versus = (n: number, over: Partial<Finding> & { date?: string; authors?: string[] } = {}) => finding(n, { treatment: "clozapine", treatmentCode: "clozapine", comparator: "olanzapine", text: "reduced symptoms more", ...over })
+  const own = (n: number, over: Partial<Finding> & { date?: string } = {}) => finding(n, { treatment: "Olanzapine", treatmentCode: "olanzapine", comparator: "placebo", ...over })
+  const treatmentsOf = (evidence: ReturnType<typeof build>) => evidence.classes.flatMap((entry) => entry.treatments)
+  it("counts as a benefit for the treatment it tested, and gives the other arm no bubble of its own", () => {
+    const evidence = build([versus(1)])
+    expect(evidence.classes.map((entry) => [entry.key, entry.papers, entry.efficacy.benefit])).toEqual([["antipsychotic", 1, 1]])
+    expect(treatmentsOf(evidence).map((treatment) => [treatment.key, treatment.papers, treatment.efficacy.benefit, treatment.comparatorPapers, treatment.comparedIn])).toEqual([["clozapine", 1, 1, 0, []]])
+    const [study] = treatmentsOf(evidence)[0].studies
+    expect([study.key, study.comparator, study.severalTreatments]).toEqual(["pmid:1", "olanzapine", false])
+    expect([evidence.total, evidence.sections]).toEqual([1, { treatments: 1, safety: 0, research: 0 }])
+  })
+  it("is not an efficacy paper of the comparator, which shows it as a comparison beside its own papers", () => {
+    const evidence = build([versus(1, { authors: ["Kane, J"], date: "2026-09-01" }), own(2)])
+    const olanzapine = treatmentsOf(evidence).find((treatment) => treatment.key === "olanzapine")!
+    expect([olanzapine.papers, olanzapine.efficacy, olanzapine.comparatorPapers]).toEqual([1, { benefit: 1, "no-benefit": 0, mixed: 0 }, 1])
+    expect(olanzapine.studies.map((study) => study.key)).toEqual(["pmid:2"])
+    expect(olanzapine.lines.benefit).toEqual([{ text: "reduced symptoms", key: "pmid:2" }])
+    expect(olanzapine.comparedIn.map((study) => [study.key, study.slug, study.label, study.treatment, study.text, study.kind])).toEqual([["pmid:1", "paper-1", "Kane 2026", "clozapine", "reduced symptoms more", "benefit"]])
+    const clozapine = treatmentsOf(evidence).find((treatment) => treatment.key === "clozapine")!
+    expect([clozapine.papers, clozapine.comparatorPapers]).toEqual([1, 0])
+    // The class counts its distinct papers, and the page counts each paper once.
+    expect(evidence.classes[0]).toMatchObject({ key: "antipsychotic", papers: 2, efficacy: { benefit: 2, "no-benefit": 0, mixed: 0 } })
+    expect([evidence.total, evidence.sections.treatments]).toEqual([2, 2])
+  })
+  it("lists the comparisons of a treatment newest first", () => {
+    const evidence = build([own(1), versus(2, { date: "2026-08-01" }), versus(3, { date: "2026-09-15" }), versus(4, { treatment: "paliperidone", treatmentCode: "paliperidone", date: "2026-09-01" })])
+    const olanzapine = treatmentsOf(evidence).find((treatment) => treatment.key === "olanzapine")!
+    expect(olanzapine.comparatorPapers).toBe(3)
+    expect(olanzapine.comparedIn.map((study) => study.key)).toEqual(["pmid:3", "pmid:4", "pmid:2"])
+  })
+  it("fixes a stored answer that names both arms as the treatment, with no migration", () => {
+    const evidence = build([versus(1, { treatment: "clozapine and olanzapine", treatmentCode: "clozapine" }), own(2)])
+    expect(treatmentsOf(evidence).map((treatment) => [treatment.key, treatment.papers, treatment.comparatorPapers])).toEqual([["clozapine", 1, 0], ["olanzapine", 1, 1]])
+    // The row keeps the paper's own words, and is under one treatment only.
+    const [study] = treatmentsOf(evidence)[0].studies
+    expect([study.treatment, study.severalTreatments]).toEqual(["clozapine and olanzapine", false])
+  })
+  it("leaves a stored answer that names both arms with no comparator as it was", () => {
+    const evidence = build([versus(1, { treatment: "clozapine and olanzapine", treatmentCode: "clozapine", comparator: null })])
+    expect(treatmentsOf(evidence).map((treatment) => [treatment.key, treatment.papers, treatment.comparatorPapers])).toEqual([["clozapine", 1, 0], ["olanzapine", 1, 0]])
+  })
+  it("ignores a comparator that is not a pack treatment, and keeps treatments that share one result together", () => {
+    const evidence = build([finding(1, { treatment: "clozapine and olanzapine", treatmentCode: null, comparator: "placebo" }), finding(2, { treatment: "Clozapine", treatmentCode: "clozapine", comparator: "treatment as usual" })])
+    expect(treatmentsOf(evidence).map((treatment) => [treatment.key, treatment.papers, treatment.comparatorPapers])).toEqual([["clozapine", 2, 0], ["olanzapine", 1, 0]])
+  })
+  it("makes no class, no safety group and no research row of a treatment that is only a comparator", () => {
+    const evidence = build([finding(1, { comparator: "olanzapine" }), finding(2, { kind: "safety", comparator: "risperidone" }), finding(3, { kind: "other", comparator: "paliperidone" })])
+    expect(evidence.classes.map((entry) => [entry.key, entry.treatments.map((treatment) => treatment.key)])).toEqual([["medicine", ["ketamine"]]])
+    expect(evidence.safety.map((group) => group.key)).toEqual(["ketamine"])
+    expect(evidence.research.map((group) => [group.type, group.papers])).toEqual([["no-efficacy", 1]])
+    expect(evidence.timeline.series.map((entry) => entry.key)).toEqual(["medicine"])
+    expect([evidence.total, evidence.sections]).toEqual([3, { treatments: 1, safety: 1, research: 1 }])
+    expect(followedConditions([finding(1, { comparator: "olanzapine" })], TAXONOMY, [], NOW)[0].treatments).toEqual([{ key: "medicine", label: null }])
+  })
+  it("counts as a comparison only a paper that reports whether its treatment worked", () => {
+    const evidence = build([own(1), versus(2, { kind: "safety" }), versus(3, { kind: "other" }), versus(4, { kind: "no-benefit", text: "did not reduce symptoms more" })])
+    const olanzapine = treatmentsOf(evidence).find((treatment) => treatment.key === "olanzapine")!
+    expect([olanzapine.comparatorPapers, olanzapine.comparedIn.map((study) => [study.key, study.kind]), olanzapine.safetyPapers, olanzapine.unreportedPapers]).toEqual([1, [["pmid:4", "no-benefit"]], 0, 0])
+    expect(evidence.safety.map((group) => group.key)).toEqual(["clozapine"])
+  })
+  it("does not lose a paper whose every treatment is also named as its comparator", () => {
+    const evidence = build([finding(1, { treatment: "olanzapine", treatmentCode: "olanzapine", comparator: "olanzapine" }), finding(2, { treatment: "clozapine and olanzapine", treatmentCode: null, comparator: "olanzapine, clozapine" })])
+    expect(treatmentsOf(evidence).map((treatment) => [treatment.key, treatment.papers, treatment.comparatorPapers])).toEqual([["olanzapine", 2, 0], ["clozapine", 1, 0]])
+    expect(evidence.total).toBe(2)
+  })
+  it("does not count a paper as a comparison of the treatment its stored code files it under", () => {
+    const evidence = build([finding(1, { treatment: "the older drug", treatmentCode: "olanzapine", comparator: "olanzapine" })])
+    expect(treatmentsOf(evidence).map((treatment) => [treatment.key, treatment.papers, treatment.comparatorPapers])).toEqual([["olanzapine", 1, 0]])
+  })
+  it("counts the comparisons of the scope and the period shown", () => {
+    const evidence = build([own(1), versus(2, { date: "2025-01-10" }), versus(3)], { now: NOW, period: "3m" })
+    expect(treatmentsOf(evidence).find((treatment) => treatment.key === "olanzapine")!.comparedIn.map((study) => study.key)).toEqual(["pmid:3"])
+  })
+})

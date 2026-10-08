@@ -28,11 +28,17 @@ export { tidyOverviewSentence }
  * (docs/psychiatry/first-run-2026-10-06.md). "No benefit" and "mixed" are kept only for an outcome
  * that says in words that something did not work.
  *
+ * Since 2026-10-09 the treatment is only what the finding's direction applies to: in a comparison of two active
+ * treatments, the one that did better or was under test, with the other arm as the comparator. Asked to name both arms,
+ * the model had the page colour both with the one direction of the paper. The check here has no pack, so it leaves the
+ * words as the model gave them: \`armsOf\` (pack/taxonomy.ts) takes a treatment that is also the comparator as the
+ * comparator only, where the finding is stored and where the page is built.
+ *
  * What survives is stored with the list as sentences and the keys of their papers.
  */
 
 /** The version of the overview skill; also part of the key its answers are kept under. */
-export const OVERVIEW_VERSION = "16"
+export const OVERVIEW_VERSION = "17"
 
 export const OVERVIEW_MIN_PAPERS = 1
 // One short answer per paper, so a long list is still one modest call.
@@ -51,7 +57,9 @@ const COMPARATOR_BEFORE = /(?:than|versus|vs|compared with|compared to|against|b
  * Why a treatment name is not accepted, or null. It must be printed, as a phrase, in a paper the
  * finding rests on, and its first word must be in that paper's headline or takeaway: a drug the
  * abstract mentions in passing is not what the paper is about. Nor is the comparator: a name that
- * the headline brings in only after "than", "versus" or "beat".
+ * the headline brings in only after "than", "versus" or "beat". The rule reads the first word of the
+ * name, so it catches an answer that names the comparator alone or first; one that names it after the
+ * treatment tested ("clozapine and olanzapine") passes here and is read by \`armsOf\` with the pack.
  */
 function treatmentFault(treatment: string, cited: Array<{ headline: string; takeaway: string; abstract?: string }>): "treatment-not-in-source" | "treatment-is-comparator" | null {
   const phrase = flat(treatment)
@@ -136,12 +144,12 @@ const SYSTEM_PROMPT = `You sort the new papers on one topic for a psychiatrist, 
 
 Return "sentences": exactly one entry for every paper. Each entry:
 - "sources": a list with the one number of the paper.
-- "treatment": the treatment the paper is about, as its shortest usual name copied from the paper ("ketamine", not "repeated ketamine infusions"; "rTMS"; "exercise", never half a name). A treatment is something given or done to patients to treat or prevent the condition. An exposure (caffeine, antibiotics in early life, pollution), a risk factor, a test, a scale or a prediction model is not a treatment: leave the treatment null and give the research type. When the paper compares two treatments or doses, name both ("methylphenidate and risperidone", "low-dose antipsychotics"). null when the paper is not about a treatment (genetics, prediction models, prevalence, scales).
+- "treatment": the treatment the paper is about, as its shortest usual name copied from the paper ("ketamine", not "repeated ketamine infusions"; "rTMS"; "exercise", never half a name). A treatment is something given or done to patients to treat or prevent the condition. An exposure (caffeine, antibiotics in early life, pollution), a risk factor, a test, a scale or a prediction model is not a treatment: leave the treatment null and give the research type. Name only the treatment or treatments the finding is about, the ones your "kind" applies to. When the paper compares active treatments with each other, the treatment is the one the finding is about (the one that did better, or the one under test) and the other arm goes in "comparator": never list the comparator inside "treatment" ("clozapine" with the comparator "olanzapine", not "clozapine and olanzapine"). Treatments that share one result are still named together: a combination ("lithium and quetiapine augmentation"), or a review that found that several of them did the same ("clozapine, paliperidone and olanzapine"). A comparison of doses of one treatment names that treatment ("low-dose antipsychotics"). null when the paper is not about a treatment (genetics, prediction models, prevalence, scales).
 - "text": what the paper found, at most 14 words, lower case, no full stop.
   - With a treatment: start with a verb and do NOT repeat the treatment name, so that "<treatment> <text>" reads as a sentence: "reduced suicidal thoughts in treatment-resistant depression", "did not reduce symptoms compared with placebo".
   - Without a treatment: a complete short statement: "older age was linked to slower improvement".
 - "kind": decide by what happened to the illness or the clinical outcome in the end, as the abstract reports it:
-  - "benefit": the treatment improved the illness or a clinical outcome, or did better than its comparator. This includes a comparison of two active treatments or two doses in which patients improved: say so ("improved symptoms as much as standard doses", "both reduced ADHD symptoms"). An improvement in one outcome, with nothing said to have failed, is a benefit.
+  - "benefit": the treatment improved the illness or a clinical outcome, or did better than its comparator. This includes a comparison of two active treatments or two doses in which patients improved with the treatment you named: say so ("improved symptoms as much as standard doses", "reduced ADHD symptoms as much as risperidone"). An improvement in one outcome, with nothing said to have failed, is a benefit.
   - "no-benefit": ONLY when the paper says in so many words that the illness or outcome did not improve: no effect, did not improve, not better than placebo or control, the trial failed. In a comparison of two active treatments, only if neither improved the outcome. Your text must contain "not" or "no".
   - "mixed": ONLY when the same treatment improved one clinical outcome AND the paper says it did not improve another. Your text must name both and contain "not" or "no".
   - "safety": the main finding is a harm, adverse effect or risk of a treatment (for example a drug lengthening the QTc interval, weight gain, misuse potential). Name the drug as the treatment.
@@ -149,7 +157,7 @@ Return "sentences": exactly one entry for every paper. Each entry:
   "benefit", "no-benefit" and "mixed" are about the illness and the patient: symptoms, remission, relapse, functioning, survival, adherence. A result on a brain measure, a biomarker, a blood level or a mechanism ("did not alter brain function for reward processing", "lowered C4A levels") is "other", whatever its direction.
   When the abstract does not let you tell whether the outcome improved, choose "other", never "no-benefit".
 - "population": who was studied, in a few words as the paper says it ("adults with treatment-resistant depression"); null if the paper does not say.
-- "comparator": what the treatment was compared with ("placebo", "quetiapine", "usual care"); null when there was no comparison group or the paper does not say.
+- "comparator": what the treatment was compared with ("placebo", "quetiapine", "usual care"). In a comparison of active treatments it is the other treatment, the one you did not name as the treatment. null when there was no comparison group or the paper does not say.
 - "outcome": the main outcome the finding is about ("depressive symptoms at week 8", "relapse"); null if the paper does not say.
 - "treatmentClass": when you named a treatment, what kind it is: "medicine", "psychosocial", "neuromodulation", "digital", "lifestyle" or "other"; null when there is no treatment or the paper does not say.
 - "researchType": when you named no treatment, what kind of research the paper is: "risk-factor", "prediction", "mechanism", "epidemiology", "services" or "other"; null when there is a treatment or the paper does not say.

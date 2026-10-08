@@ -44,6 +44,19 @@ describe("the findings store", () => {
     expect(await stored("low-dose ketamine and lithium")).toMatchObject({ treatment: "low-dose ketamine and lithium", treatmentCode: "ketamine" })
     expect(await stored("yoga")).toMatchObject({ treatment: "yoga", treatmentCode: null })
   })
+  // Owner decision 2026-10-09: the comparator is not what the paper is filed under.
+  it("stores the code of the treatment tested, not of the comparator, and leaves the answer's words as they are", async () => {
+    const taxonomy = TaxonomySchema.parse({ version: "t", nodes: [...TAXONOMY.nodes, { id: "olanzapine", type: "treatment", name: "Olanzapine", modality: "drug" }] })
+    const stored = async (treatment: string, comparator: string) => {
+      const storage = new MemoryVaultStorage()
+      const items = [item(1, { paper: paper({ title: "Paper 1", ids: { pmid: "1" }, abstract: "Olanzapine and ketamine and placebo were given." }) })]
+      await recordFindings(storage, feed(items, { topicOverviews: { w1: [{ text: "reduced symptoms more", sources: ["pmid:1"], kind: "benefit", treatment, comparator }] } }), taxonomy)
+      return (await readFindings(storage))[0]
+    }
+    expect(await stored("olanzapine and ketamine", "olanzapine")).toMatchObject({ treatment: "olanzapine and ketamine", treatmentCode: "ketamine", comparator: "olanzapine" })
+    expect(await stored("olanzapine and ketamine", "placebo")).toMatchObject({ treatmentCode: "olanzapine" })
+    expect(await stored("olanzapine", "olanzapine")).toMatchObject({ treatmentCode: "olanzapine" })
+  })
   it("keeps one finding per listed paper, with its direction, its PICO line and the condition of its topic", async () => {
     const storage = new MemoryVaultStorage()
     expect(await recordFindings(storage, feed([item(1), item(2, { digest: undefined })]), TAXONOMY)).toBe(2)

@@ -370,20 +370,23 @@ export const CLINICAL_COPY = {
     newCount: (count: number) => `+${count} new`,
     /** Under the bubble of a treatment that has safety papers. They are listed under Safety. */
     safetyMark: (count: number) => `${count} safety`,
+    /** Under the bubble of a treatment that other papers used as their comparator. Those papers are not in its number or its colours. */
+    comparedMark: (count: number) => `compared in ${count}`,
     /** The line above the bubbles of the classes; the names of the three colours follow it. */
     bubbleKey: "A bubble counts papers: the more papers, the larger it is. Its colours are what the papers found:",
     /** The line under that one: what a count and a colour do not say. */
-    bubbleNote: "A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares treatments counts under each of them, with one direction for the paper. Choose a treatment to see each paper.",
+    bubbleNote: "A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares two treatments counts for the one it tested; the other shows it as a comparison. Choose a treatment to see each paper.",
     /**
      * What a bubble says to a reader who does not see it. `efficacy` is null for a bubble that has no colours of direction.
-     * What is new and the safety papers are added when there are any.
+     * What is new, the safety papers and the papers it was the comparison in are added when there are any.
      */
-    bubbleLabel: (name: string, papers: number, efficacy: { benefit: number; "no-benefit": number; mixed: number } | null, newPapers: number, safetyPapers: number) =>
+    bubbleLabel: (name: string, papers: number, efficacy: { benefit: number; "no-benefit": number; mixed: number } | null, newPapers: number, safetyPapers: number, comparatorPapers = 0) =>
       [
         `${name}: ${papers} ${papers === 1 ? "paper" : "papers"}`,
         ...(efficacy ? [`${efficacy.benefit} benefit, ${efficacy["no-benefit"]} no benefit, ${efficacy.mixed} mixed`] : []),
         ...(newPapers > 0 ? [`${newPapers} new`] : []),
         ...(safetyPapers > 0 ? [`${safetyPapers} safety`] : []),
+        ...(comparatorPapers > 0 ? [`the comparison in ${comparatorPapers} other ${comparatorPapers === 1 ? "paper" : "papers"}`] : []),
       ].join("; "),
     /** The names of the rows of bubbles, for a screen reader. */
     rows: {
@@ -398,6 +401,12 @@ export const CLINICAL_COPY = {
     lineLabel: (label: string) => `${label}:`,
     lineText: (texts: string[]) => joinFindings(texts),
     unreported: (count: number, name: string) => `${count} more ${count === 1 ? "paper" : "papers"} on ${name} ${count === 1 ? "is" : "are"} not sorted as benefit, no benefit or mixed (see Other research).`,
+    /**
+     * Under the lines of a treatment: the papers of another treatment that used this one as their comparator. The result
+     * of each is of the treatment that paper tested, so it is written after that treatment's name, in the paper's own words.
+     */
+    comparedIn: (count: number) => `Used as the comparison in ${count} ${count === 1 ? "paper" : "papers"}:`,
+    comparedResult: (treatment: string | null, text: string) => `${treatment ?? "The treatment it tested"}: ${joinFindings([text])}`,
     /** The plot of a treatment's papers: a row per tier of design, a dot per paper. */
     plot: {
       label: (name: string) => `Papers on ${name}, by design and by what they found`,

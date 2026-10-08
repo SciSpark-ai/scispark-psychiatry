@@ -103,7 +103,7 @@ function Sections({ evidence }: { evidence: Evidence }) {
                 </p>
                 <BubbleRow label={E.rows.treatments(className)}>
                   {cls.treatments.map((entry) => (
-                    <EvidenceBubble key={entry.key} id={entry.key} name={entry.name} papers={entry.papers} efficacy={entry.efficacy} newPapers={entry.newPapers} safetyPapers={entry.safetyPapers}
+                    <EvidenceBubble key={entry.key} id={entry.key} name={entry.name} papers={entry.papers} efficacy={entry.efficacy} newPapers={entry.newPapers} safetyPapers={entry.safetyPapers} comparatorPapers={entry.comparatorPapers}
                       pressed={entry.key === chosen.treatment} onPick={() => choose({ treatment: entry.key === chosen.treatment ? null : entry.key })} />
                   ))}
                 </BubbleRow>

@@ -451,9 +451,22 @@ describe("the kind of treatment or research and the sample size", () => {
     expect(bullet).not.toContain("intervention or exposure the paper is about")
     expect(bullet).not.toContain("nature exposure")
   })
+  // Owner decision 2026-10-09: the treatment is the arm the direction applies to; the other arm is the comparator.
+  it("asks for the treatment the direction applies to, with the other arm of a comparison as the comparator", async () => {
+    const { topicOverviewSkill } = await import("../digest/topic")
+    let prompt = ""
+    await topicOverviewSkill.run({ llmStructured: async (_tier: unknown, request: { messages: Array<{ content: string }> }) => { prompt = request.messages[0].content; return { sentences: [] } } } as never, { topic: "t", papers: [] })
+    const bullet = prompt.split("\n").find((line) => line.startsWith('- "treatment"')) ?? ""
+    for (const words of ["only the treatment or treatments the finding is about", "compares active treatments with each other", "the one that did better, or the one under test", 'goes in "comparator"', "never list the comparator inside", "share one result", "lithium and quetiapine augmentation", "clozapine, paliperidone and olanzapine"]) expect(bullet, words).toContain(words)
+    expect(bullet).not.toContain("name both")
+    expect(bullet).not.toContain("methylphenidate and risperidone")
+    const comparator = prompt.split("\n").find((line) => line.startsWith('- "comparator"')) ?? ""
+    expect(comparator).toContain("the other treatment")
+    expect(prompt).not.toMatch(/both reduced/)
+  })
   it("asks for the three fields and files the version under a new key", async () => {
     const { OVERVIEW_VERSION, topicOverviewSkill } = await import("../digest/topic")
-    expect(Number(OVERVIEW_VERSION)).toBeGreaterThan(15)
+    expect(Number(OVERVIEW_VERSION)).toBeGreaterThan(16)
     expect(topicOverviewSkill.version).toBe(OVERVIEW_VERSION)
   })
 })

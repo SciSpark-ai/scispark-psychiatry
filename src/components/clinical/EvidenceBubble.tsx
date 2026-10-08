@@ -12,15 +12,18 @@ interface Props {
   /** What the papers found. Without it the bubble is one light disc: it says no direction. */
   efficacy?: Efficacy
   newPapers?: number; safetyPapers?: number
+  /** In how many papers of another treatment this one was the comparator. They are in neither the number nor the colours. */
+  comparatorPapers?: number
   pressed: boolean; onPick: () => void
 }
 
 /**
  * One bubble: a button whose disc grows with its papers, the number in it, and its name under it. With `efficacy` the
  * disc is a ring divided by what the papers found, clockwise from 12 o'clock; a treatment that has safety papers has a
- * ring around it and says so in words, after a small ring of the same colour.
+ * ring around it and says so in words, after a small ring of the same colour. A treatment that papers of another
+ * treatment were compared with says in words how many: they add nothing to the disc.
  */
-export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safetyPapers = 0, pressed, onPick }: Props) {
+export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safetyPapers = 0, comparatorPapers = 0, pressed, onPick }: Props) {
   const radius = bubbleRadius(papers)
   const size = 2 * radius
   const slices = efficacy ? pieSlices(efficacy) : []
@@ -34,7 +37,7 @@ export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safe
   const whole = slices.length === 1 ? slices[0].kind : null
   const plain = slices.length === 0
   return (
-    <button type="button" data-bubble={id} aria-pressed={pressed} aria-label={E.bubbleLabel(name, papers, efficacy ?? null, newPapers, safetyPapers)} onClick={onPick}
+    <button type="button" data-bubble={id} aria-pressed={pressed} aria-label={E.bubbleLabel(name, papers, efficacy ?? null, newPapers, safetyPapers, comparatorPapers)} onClick={onPick}
       className="group flex max-w-[168px] flex-col items-center gap-1.5 rounded-card p-1 text-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">
       <span className={pressed ? "block rounded-full outline-2 outline-offset-4 outline-accent-ink" : "block rounded-full outline-2 outline-offset-4 outline-transparent group-hover:outline-border-warm"}>
         <svg aria-hidden="true" width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="block overflow-visible">
@@ -54,6 +57,7 @@ export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safe
           <span>{E.safetyMark(safetyPapers)}</span>
         </span>
       )}
+      {comparatorPapers > 0 && <span data-compared-mark="true" className="block text-[12px] leading-tight text-secondary-dark">{E.comparedMark(comparatorPapers)}</span>}
     </button>
   )
 }
