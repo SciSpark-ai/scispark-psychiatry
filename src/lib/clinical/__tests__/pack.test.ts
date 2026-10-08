@@ -190,6 +190,24 @@ describe("the arms of a finding", () => {
   it("does not drop a treatment that only a ruled-out comparator names", async () => {
     expect(await arms("clozapine and olanzapine", "no olanzapine")).toEqual({ treatments: ["clozapine", "olanzapine"], comparators: [] })
   })
+  // Review 2026-10-09: the fallback kept the treatments and lost every comparator, also those that are not treatments.
+  it("keeps, when every treatment is also a comparator, the comparators that are not among the treatments", async () => {
+    expect(await arms("low-dose olanzapine", "standard-dose olanzapine or haloperidol")).toEqual({ treatments: ["olanzapine"], comparators: ["haloperidol"] })
+    expect(await arms("clozapine and olanzapine", "olanzapine, clozapine or haloperidol")).toEqual({ treatments: ["clozapine", "olanzapine"], comparators: ["haloperidol"] })
+  })
+  it("reads neither and nor as ruling a treatment out", async () => {
+    expect(await arms("clozapine", "neither olanzapine nor lithium")).toEqual({ treatments: ["clozapine"], comparators: [] })
+    expect(await arms("clozapine", "neither add-on olanzapine nor any lithium")).toEqual({ treatments: ["clozapine"], comparators: [] })
+    expect(await arms("clozapine", "haloperidol, nor olanzapine")).toEqual({ treatments: ["clozapine"], comparators: ["haloperidol"] })
+  })
+  it("takes a treatment named after a control that begins with no", async () => {
+    expect(await arms("clozapine", "no-treatment control and olanzapine")).toEqual({ treatments: ["clozapine"], comparators: ["olanzapine"] })
+  })
+  it("takes a comparator that is one abbreviation in small letters, alone", async () => {
+    expect(await arms("clozapine", "cbt")).toEqual(await arms("clozapine", "CBT"))
+    expect((await arms("clozapine", "cbt")).comparators).toHaveLength(1)
+    expect(await arms("clozapine", "no cbt")).toEqual({ treatments: ["clozapine"], comparators: [] })
+  })
   it("still gives the comparators of a treatment the pack does not know, and none of no text", async () => {
     expect(await arms("a drug nobody listed", "olanzapine")).toEqual({ treatments: [], comparators: ["olanzapine"] })
     expect(await arms(null, null)).toEqual({ treatments: [], comparators: [] })

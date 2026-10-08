@@ -58,7 +58,8 @@ interface Props {
  * `efficacy` the disc is a ring divided by what the papers found; a treatment that has safety papers has a ring around
  * it and says so in words, after a small ring of the same colour. A treatment that papers of another treatment were
  * compared with says in words how many: they add nothing to the disc. The name has room for two lines, so what is
- * under it starts at one height in every tile.
+ * under it starts at one height in every tile. The chosen one has a light ground around its disc and a bold name; the
+ * outline is kept for the keyboard's focus.
  */
 export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safetyPapers = 0, comparatorPapers = 0, discHeight, detail, position, pressed, onPick }: Props) {
   const radius = bubbleRadius(papers)
@@ -66,7 +67,7 @@ export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safe
     <button type="button" data-bubble={id} aria-pressed={pressed} aria-label={E.bubbleLabel(name, papers, efficacy ?? null, newPapers, safetyPapers, comparatorPapers, position ?? null)} onClick={onPick}
       className="group mx-auto flex w-full max-w-[168px] flex-col items-center gap-1 rounded-card p-1 text-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">
       <span data-disc-box="true" className="flex max-w-full items-center justify-center" style={discHeight === undefined ? undefined : { height: discHeight }}>
-        <span className={pressed ? "block max-w-full rounded-full outline-2 outline-offset-4 outline-accent-ink" : "block max-w-full rounded-full outline-2 outline-offset-4 outline-transparent group-hover:outline-border-warm"}>
+        <span data-pressed-ground={pressed ? "true" : undefined} className={pressed ? "block max-w-full rounded-full bg-orange/20 ring-[6px] ring-orange/20" : "block max-w-full rounded-full outline-2 outline-offset-4 outline-transparent group-hover:outline-border-warm"}>
           <BubbleDisc radius={radius} papers={papers} efficacy={efficacy} safetyPapers={safetyPapers} />
         </span>
       </span>

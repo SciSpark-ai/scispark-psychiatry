@@ -162,35 +162,89 @@ describe("the map of treatments", () => {
     expect(qa(`${WIDE} button[data-bubble]`).map((button) => [button.getAttribute("data-bubble"), button.getAttribute("aria-pressed")])).toEqual([["ect", "false"], ["lithium", "true"], ["ketamine", "false"]])
   })
 
-  it("moves bubbles of one date up and down, and writes a name above its bubble where the layout says so", async () => {
+  it("moves bubbles of one date apart, writes a name where the layout says, and draws a line from one moved far", async () => {
     const long = "A rather long name"
     const stacked = [entry("a", { name: long, papers: 4 }), entry("b", { name: long })]
     await show(stacked)
+    const places = layoutMap(items(stacked), MAP_SIZE, TODAY)
     const [a, b] = ["a", "b"].map((key) => q(`${WIDE} button[data-bubble=${key}]`))
-    expect(a.style.left).toBe(b.style.left)
-    expect(parseFloat(b.style.top)).toBeLessThan(parseFloat(a.style.top))
     expect(a.querySelector("[data-label]")!.getAttribute("data-label")).toBe("under")
     expect(a.querySelector("[data-label]")!.className).toContain("top-full")
+    expect(places[1].labelAbove).toBe(true)
     expect(b.querySelector("[data-label]")!.getAttribute("data-label")).toBe("above")
     expect(b.querySelector("[data-label]")!.className).toContain("bottom-full")
-    // No one was moved sideways, so no line is drawn.
-    expect(qa(`${WIDE} [data-leader]`)).toHaveLength(0)
+    // b was moved by more than its radius: a line from where it belongs to where it is, and a dot where it belongs.
+    expect(places.map((place) => place.displaced)).toEqual([false, true])
+    const leaders = qa(`${WIDE} svg[data-map-axes] line[data-leader]`)
+    expect(leaders.map((line) => line.getAttribute("data-leader"))).toEqual(["b"])
+    expect(["x1", "y1", "x2", "y2"].map((name) => num(leaders[0], name))).toEqual([places[1].home.x, places[1].home.y, places[1].x, places[1].y])
+    expect(leaders[0].getAttribute("stroke")).toContain("var(--")
+    const dots = qa(`${WIDE} svg[data-map-axes] circle[data-home]`)
+    expect(dots.map((dot) => [dot.getAttribute("data-home"), num(dot, "cx"), num(dot, "cy")])).toEqual([["b", places[1].home.x, places[1].home.y]])
   })
 
-  it("draws a thin line from a bubble that had to move sideways to where it belongs", async () => {
+  it("draws no line for a bubble moved by less than its radius, and one for each moved further, up or down or sideways", async () => {
+    const close = [entry("a", { papers: 2 }), entry("b", { participants: 160 })]
+    await show(close)
+    const near = layoutMap(items(close), MAP_SIZE, TODAY)
+    expect(near[1].y).not.toBe(near[1].home.y)
+    expect(near[1].displaced).toBe(false)
+    expect(qa(`${WIDE} [data-leader]`)).toHaveLength(0)
+    expect(qa(`${WIDE} [data-home]`)).toHaveLength(0)
+    document.body.innerHTML = ""
     const crowd = Array.from({ length: 4 }, (_, at) => entry(`k${at}`, { participants: null, sized: 0, dates: ["2026-08-20"] }))
     await show(crowd)
-    const places = layoutMap(items(crowd), MAP_SIZE, TODAY)
-    const moved = places.filter((place) => place.displaced)
+    const moved = layoutMap(items(crowd), MAP_SIZE, TODAY).filter((place) => place.displaced)
     expect(moved).toHaveLength(3)
-    const leaders = qa(`${WIDE} svg[data-map-axes] line[data-leader]`)
-    expect(leaders.map((line) => line.getAttribute("data-leader"))).toEqual(moved.map((place) => place.key))
-    for (const line of leaders) {
-      const place = moved.find((each) => each.key === line.getAttribute("data-leader"))!
-      expect(["x1", "y1", "x2", "y2"].map((name) => num(line, name))).toEqual([place.home.x, place.home.y, place.x, place.y])
-      expect(line.getAttribute("stroke")).toContain("var(--")
-    }
+    expect(qa(`${WIDE} svg[data-map-axes] line[data-leader]`).map((line) => line.getAttribute("data-leader"))).toEqual(moved.map((place) => place.key))
     expect(qa(`${WIDE} svg[data-map-axes] circle[data-home]`)).toHaveLength(3)
+  })
+
+  it("shifts a name that would run out of the picture, by the px the layout says", async () => {
+    const edge = [entry("a", { newPapers: 12, safetyPapers: 12, comparatorPapers: 12 }), entry("c", { dates: ["2026-08-20"], participants: 10 })]
+    await show(edge)
+    const places = layoutMap(edge.map((each, at) => ({ ...items(edge)[at], marks: at === 0 ? "+12 new · 12 safety · compared in 12" : undefined })), MAP_SIZE, TODAY)
+    expect(places[0].labelShift).toBeLessThan(0)
+    expect(q(`${WIDE} button[data-bubble=a] [data-label]`).style.marginLeft).toBe(`${places[0].labelShift}px`)
+    expect(q(`${WIDE} button[data-bubble=c] [data-label]`).style.marginLeft).toBe("")
+  })
+
+  it("shows the pressed bubble with a light ground and a bold name, and keeps the outline for the keyboard", async () => {
+    await show(ENTRIES, "medicine")
+    const [pressed, other] = ["medicine", "psychotherapy"].map((key) => q(`${WIDE} button[data-bubble=${key}]`))
+    for (const button of [pressed, other]) {
+      expect(button.className).toContain("focus-visible:outline-accent-ink")
+      expect(button.className.split(" ")).not.toContain("outline-accent-ink")
+    }
+    expect(pressed.className).toContain("bg-orange/20")
+    expect(pressed.className).toContain("ring-orange/20")
+    expect(other.className).not.toContain("bg-orange/20")
+    expect(pressed.querySelector("[data-name]")!.className).toContain("font-semibold")
+    expect(other.querySelector("[data-name]")!.className).not.toContain("font-semibold")
+    // The same in a tile of the grid.
+    const [tile, plain] = ["medicine", "psychotherapy"].map((key) => q(`${NARROW} button[data-bubble=${key}]`))
+    expect(tile.className).toContain("focus-visible:outline-accent-ink")
+    expect(tile.querySelector("[data-pressed-ground]")!.className).toContain("bg-orange/20")
+    expect(tile.innerHTML).not.toMatch(/class="[^"]*(?<!focus-visible:)outline-accent-ink/)
+    expect(plain.querySelector("[data-pressed-ground]")).toBeNull()
+    expect(tile.querySelector("[data-name]")!.className).toContain("font-semibold")
+  })
+
+  it("is the aligned grid in place of the map when more than twenty items are shown", async () => {
+    const many = Array.from({ length: 21 }, (_, at) => entry(`k${at}`))
+    await show(many)
+    expect(q(WIDE)).toBeNull()
+    expect(q(NARROW)).toBeNull()
+    expect(q("svg[data-map-axes]")).toBeNull()
+    expect(q("[data-map-note]")).toBeNull()
+    const only = q('[data-evidence-map="grid"]')
+    expect(only.className).not.toContain("hidden")
+    expect(only.querySelector("[data-bubble-grid]")!.className).toContain("evidence-tiles")
+    expect(qa("button[data-bubble]")).toHaveLength(21)
+    expect(q("button[data-bubble=k0] [data-participants]").textContent).toBe("Oct 2026 · 100 participants")
+    document.body.innerHTML = ""
+    await show(many.slice(0, 20))
+    expect(qa(`${WIDE} button[data-bubble]`)).toHaveLength(20)
   })
 
   it("tells its owner which bubble was pressed, from the map and from the grid", async () => {
@@ -201,9 +255,11 @@ describe("the map of treatments", () => {
     expect(onPick.mock.calls).toEqual([["psychotherapy"], ["medicine"]])
   })
 
-  it("says under the map what across, up and size are, and what a line is", async () => {
+  it("says under the wide map what across, up and size are, and what a line is; the grid of a narrow screen has no such note", async () => {
     await show()
-    expect(q("[data-map-note]").textContent).toBe("Across = when its most recent paper was published; a line reaches back to its earliest. Up = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Size = the number of papers. Bubbles that would overlap are moved up or down a little; a line shows where one that had to move sideways belongs.")
+    expect(qa("[data-map-note]")).toHaveLength(1)
+    expect(q(`${WIDE} [data-map-note]`).textContent).toBe("Across = when its most recent paper was published; a line reaches back to its earliest. Up = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Size = the number of papers. Bubbles that would overlap are moved apart a little; a line shows where one that moved further belongs.")
+    expect(q(NARROW).textContent).not.toMatch(/Across|Up =/)
   })
 
   it("is a grid of two columns of tiles on a narrow screen, each with its month and its participants in words, and only one of the two is shown", async () => {

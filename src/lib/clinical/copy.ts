@@ -401,7 +401,7 @@ export const CLINICAL_COPY = {
       axis: "Total participants across its papers (log scale)",
       /** Under the map: what is across. */
       timeAxis: "Publication date of its most recent paper",
-      note: "Across = when its most recent paper was published; a line reaches back to its earliest. Up = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Size = the number of papers. Bubbles that would overlap are moved up or down a little; a line shows where one that had to move sideways belongs.",
+      note: "Across = when its most recent paper was published; a line reaches back to its earliest. Up = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Size = the number of papers. Bubbles that would overlap are moved apart a little; a line shows where one that moved further belongs.",
       /** The band of the items whose papers state no participants, and the column of those whose papers have no date. */
       notStated: "not stated",
       noDate: "no date",

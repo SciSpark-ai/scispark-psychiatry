@@ -13,9 +13,11 @@ export interface MapItem {
 export interface MapSize { width: number; height: number }
 export interface Placed {
   key: string; x: number; y: number; r: number; labelAbove: boolean
-  /** Where it belongs by the scales. Its `y` may differ from this one's; its `x` does only when it is `displaced`. */
+  /** How far its name is shifted sideways from under its middle, in px, to stay inside the plot. 0 for most. */
+  labelShift: number
+  /** Where it belongs by the scales. */
   home: { x: number; y: number }
-  /** It could not stay at its own date: a line is drawn from it to where it belongs. */
+  /** It was moved from there by more than its radius, up or down or sideways: a line is drawn from it to where it belongs. */
   displaced: boolean
   /** The x of its earliest paper, when it has papers of more than one date: a line reaches back to it. */
   earliestX: number | null
@@ -45,12 +47,12 @@ export const MAP_SIZE: MapSize = { width: 680, height: 400 }
 const [MIN_RADIUS, MAX_RADIUS] = [18, 40]
 /** The least clear space between two bubbles. */
 const GAP = 6
-const STEP = 4
+const STEP = 2
 const [GUTTER, RIGHT, TOP, FOOT, COLUMN] = [60, 8, 12, 24, 88]
 /** The least room kept right of the newest date, so that the name of a bubble there stays by the picture. */
 const RIGHT_ROOM = 44
-/** How far up or down a bubble is moved before it is moved sideways, as a share of the height of the scale's part of the plot. */
-const Y_REACH = 0.25
+/** How far a bubble is moved up or down first, as a share of the height of the scale's part of the plot; then sideways, as a share of the plot's width. */
+const [Y_REACH, X_REACH] = [0.12, 0.06]
 /** The room kept under the lowest bubble for its name, and the size of a name's box. */
 const LABEL_ROOM = 34
 const [LABEL_WIDTH, LABEL_OFFSET, CHAR, MARK_CHAR, NAME_LINE, MARKS_LINE] = [96, 3, 6.2, 5.6, 15, 14]
@@ -151,27 +153,34 @@ function* offsets(first: -1 | 1, reach: number): Generator<number> {
 const boxesMeet = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
 const discMeetsBox = (spot: Spot, r: number, box: Box) => Math.hypot(spot.x - clamp(spot.x, { low: box.left, high: box.right }), spot.y - clamp(spot.y, { low: box.top, high: box.bottom })) < r
 
-/** The boxes the name of `item` would take under and above a bubble of radius `r` at `spot`. A name wraps at the width of a label; the marks are on one line. */
-export function nameBoxes(item: MapItem, spot: Spot, r: number): { under: Box; above: Box } {
+/**
+ * The boxes the name of `item` would take under and above a bubble of radius `r` at `spot`, and how far they are
+ * shifted sideways to stay between `limits`. A name wraps at the width of a label; the marks are on one line.
+ */
+export function nameBoxes(item: MapItem, spot: Spot, r: number, limits: { left: number; right: number }): { under: Box; above: Box; shift: number } {
   const named = CHAR * item.name.length + 8
   const wide = Math.max(Math.min(LABEL_WIDTH, named), item.marks ? MARK_CHAR * item.marks.length + 8 : 0)
   const tall = (named > LABEL_WIDTH ? 2 : 1) * NAME_LINE + (item.marks ? MARKS_LINE : 0)
-  const across = { left: spot.x - wide / 2, right: spot.x + wide / 2 }
+  const centred = { left: spot.x - wide / 2, right: spot.x + wide / 2 }
+  let across = centred
+  if (limits.right < centred.right) across = { left: limits.right - wide, right: limits.right }
+  else if (centred.left < limits.left) across = { left: limits.left, right: limits.left + wide }
   return {
     under: { ...across, top: spot.y + r + LABEL_OFFSET, bottom: spot.y + r + LABEL_OFFSET + tall },
     above: { ...across, top: spot.y - r - LABEL_OFFSET - tall, bottom: spot.y - r - LABEL_OFFSET },
+    shift: tenth(across.left - centred.left),
   }
 }
 
 /**
- * The place of every item. Across it is at the date of its newest paper, and stays there: an item whose own place is
- * taken is moved up or down (up, then down, in small steps), within a quarter of the height of the scale. Only when
- * nothing is free there is it moved sideways, to the nearest free place, and it is then `displaced`. An item that states
- * no participants is in the band, which is one row high, so it is moved sideways at once. An item with no date is in
- * the column: it has no place across to keep, and is moved up or down as far as it takes. Larger bubbles are placed
+ * The place of every item: across, the date of its newest paper; up, its participants. An item whose own place is
+ * taken is moved by the least that fits: first up or down (up, then down, in small steps) within an eighth of the
+ * height of the scale, then sideways within a little of the plot's width, and failing both to the nearest free place
+ * there is. One moved by more than its radius is `displaced`. An item that states no participants is in the band,
+ * which is one row high, and moves sideways only; one with no date stays in the column. Larger bubbles are placed
  * first, so the small ones move. A name goes under its bubble, or above it when a bubble or a name already placed is
- * in the way there; a place where the name fits neither way, or where the bubble would cover a name, is not free
- * while another is. The places are returned in the order of `items`.
+ * in the way there, and is shifted sideways to stay in the plot; a place where the name fits neither way, or where the
+ * bubble would cover a name, is not free while another is. The places are returned in the order of `items`.
  */
 export function layoutMap(items: MapItem[], size: MapSize, today: string): Placed[] {
   const { plot, column, band, bandY, days, x0, x1, participants, yTop, yBottom } = mapScales(items, size, today)
@@ -195,41 +204,52 @@ export function layoutMap(items: MapItem[], size: MapSize, today: string): Place
     }
     const clearance = (spot: Spot) => Math.min(Infinity, ...placed.map((other) => Math.hypot(spot.x - other.x, spot.y - other.y) - other.r - r - GAP))
     const nameFree = (box: Box) => box.top >= 0 && box.bottom <= plot.bottom && !names.some((name) => boxesMeet(box, name)) && !placed.some((other) => discMeetsBox(other, other.r, box))
-    /** Whether the name goes above at `spot`, or null when the bubble or its name would be on something there. */
-    const nameSide = (spot: Spot): boolean | null => {
-      if (names.some((name) => discMeetsBox(spot, r, name))) return null
-      const { under, above } = nameBoxes(item, spot, r)
-      return nameFree(under) ? false : nameFree(above) ? true : null
-    }
-    // Its own date first, up and down. Then, of the places sideways within the same reach up and down, the nearest.
-    // A place is one where the bubble and its name are clear; failing any, where the bubble is; failing that, the clearest.
-    const reach = inBand ? 0 : inColumn ? size.height : Y_REACH * (scaleBottom - plot.top)
+    // Where the bubble is clear of the others, failing a place where its name is too; and the clearest, failing that.
     let clear: Spot | null = null
     let clearest = { spot: home, by: clearance(home) }
-    let found: { spot: Spot; above: boolean; far: number } | null = null
-    for (const dx of offsets(1, size.width)) {
-      if (found !== null && (found.spot.x === home.x || Math.abs(dx) >= found.far)) break
-      const x = home.x + dx
-      if (!within(x, xs)) continue
-      for (const dy of offsets(-1, reach)) {
-        const far = Math.hypot(dx, dy)
-        if (found !== null && far >= found.far) continue
-        const spot = { x, y: home.y + dy }
-        if (!within(spot.y, ys)) continue
-        const by = clearance(spot)
-        if (by > clearest.by) clearest = { spot, by }
-        if (by < 0) continue
-        clear ??= spot
-        const above = nameSide(spot)
-        if (above === null) continue
-        found = { spot, above, far }
-        if (dx === 0) break
+    /** Whether the name goes above at `spot`, or null when the place is not free: out of bounds, or the bubble or its name on something. */
+    const sideAt = (spot: Spot): boolean | null => {
+      if (!within(spot.x, xs) || !within(spot.y, ys)) return null
+      const by = clearance(spot)
+      if (by > clearest.by) clearest = { spot, by }
+      if (by < 0) return null
+      clear ??= spot
+      if (names.some((name) => discMeetsBox(spot, r, name))) return null
+      const { under, above } = nameBoxes(item, spot, r, plot)
+      return nameFree(under) ? false : nameFree(above) ? true : null
+    }
+    let found: { spot: Spot; above: boolean } | null = null
+    const first = [
+      ...[...offsets(-1, inBand ? 0 : Y_REACH * (scaleBottom - plot.top))].map((dy) => ({ x: home.x, y: home.y + dy })),
+      ...[...offsets(1, X_REACH * (plot.right - plot.left))].map((dx) => ({ x: home.x + dx, y: home.y })),
+    ]
+    for (const spot of first) {
+      const above = sideAt(spot)
+      if (above !== null) { found = { spot, above }; break }
+    }
+    if (found === null) {
+      // The nearest free place there is.
+      let nearest = Infinity
+      for (const dx of offsets(1, size.width)) {
+        if (Math.abs(dx) >= nearest) break
+        for (const dy of offsets(-1, size.height)) {
+          if (Math.abs(dy) >= nearest) break
+          const far = Math.hypot(dx, dy)
+          if (far >= nearest) continue
+          const spot = { x: home.x + dx, y: home.y + dy }
+          const above = sideAt(spot)
+          if (above !== null) { found = { spot, above }; nearest = far }
+        }
       }
     }
     const at = found?.spot ?? clear ?? clearest.spot
     const labelAbove = found?.above ?? false
-    placed.push({ key: item.key, x: at.x, y: at.y, r, labelAbove, home, displaced: !inColumn && at.x !== home.x, earliestX: dated.length > 0 && earliest < newest ? xOf(earliest) : null })
-    const boxes = nameBoxes(item, at, r)
+    const boxes = nameBoxes(item, at, r, plot)
+    placed.push({
+      key: item.key, x: at.x, y: at.y, r, labelAbove, labelShift: boxes.shift, home,
+      displaced: Math.abs(at.x - home.x) > r || Math.abs(at.y - home.y) > r,
+      earliestX: dated.length > 0 && earliest < newest ? xOf(earliest) : null,
+    })
     names.push(labelAbove ? boxes.above : boxes.under)
   }
   const byKey = new Map(placed.map((entry) => [entry.key, entry]))

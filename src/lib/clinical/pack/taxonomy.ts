@@ -100,8 +100,8 @@ function search({ matchers, nodeOf }: TreatmentIndex, text: string): TaxonomyNod
   return [...first.values()].filter((entry) => !ancestors.has(entry.node.id)).sort((a, b) => a.start - b.start).map((entry) => entry.node)
 }
 
-/** A negation among the three words before a term, with no comma and no "or" or "and" between: "no ketamine", "without add-on lithium". */
-const RULED_OUT_BEFORE = /(?<![\p{L}\p{N}])(?:no|non|not|without|absence of)[\s-]+(?:(?!(?:or|and)\s)[\p{L}\p{N}'-]+\s+){0,2}$/iu
+/** A negation among the three words before a term, with no comma and no "or" or "and" between: "no ketamine", "without add-on lithium", "neither olanzapine nor lithium". */
+const RULED_OUT_BEFORE = /(?<![\p{L}\p{N}])(?:no|non|not|without|absence of|neither|nor)[\s-]+(?:(?!(?:or|and)\s)[\p{L}\p{N}'-]+\s+){0,2}$/iu
 /** What says after a term that it was not given: "antipsychotic-naive", "lithium naive", "lithium-free". */
 const RULED_OUT_AFTER = /^(?:[\s-]*na[iï]ve|-free)(?![\p{L}\p{N}])/iu
 
@@ -129,13 +129,14 @@ function comparatorTreatments(taxonomy: Taxonomy, text: string): string[] {
  * A comparison that is not with a pack treatment (placebo, sham, usual care, a waiting list) gives no comparator, nor
  * does a treatment the comparator rules out ("no ketamine-class agent", "without lithium", "antipsychotic-naive"). When
  * every treatment named is also named as the comparator the answer cannot be read: the treatments stand as they were
- * given, with no comparator, so the paper is not lost.
+ * given, so the paper is not lost, and only the comparators that are not among them are kept ("low-dose olanzapine"
+ * against "standard-dose olanzapine or haloperidol" is olanzapine compared with haloperidol).
  */
 export function armsOf(taxonomy: Taxonomy, treatment: string | null | undefined, comparator: string | null | undefined): { treatments: string[]; comparators: string[] } {
   const named = treatment ? findTreatments(taxonomy, treatment).map((node) => node.id) : []
   const against = comparator ? comparatorTreatments(taxonomy, comparator) : []
   const tested = named.filter((id) => !against.includes(id))
-  if (named.length > 0 && tested.length === 0) return { treatments: named, comparators: [] }
+  if (named.length > 0 && tested.length === 0) return { treatments: named, comparators: against.filter((id) => !named.includes(id)) }
   return { treatments: tested, comparators: against }
 }
 

@@ -19,7 +19,11 @@ export interface MapEntry {
 }
 
 const percent = (value: number, of: number) => `${Number(((value / of) * 100).toFixed(2))}%`
-const BUTTON = "group absolute aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full outline-2 outline-offset-2 transition-all duration-200 focus-visible:outline-accent-ink"
+const BUTTON = "group absolute aspect-square -translate-x-1/2 -translate-y-1/2 rounded-full outline-2 outline-offset-2 outline-transparent transition-all duration-200 focus-visible:outline-accent-ink"
+/** The chosen bubble has a light ground around it; the outline is the keyboard's. */
+const PRESSED = "z-10 bg-orange/20 ring-[6px] ring-orange/20"
+/** Over this many items a map is a crowd: they are drawn side by side on the grid. */
+const MOST_MAPPED = 20
 const LABEL = "pointer-events-none absolute left-1/2 w-max -translate-x-1/2 rounded-sm bg-page-bg/70 px-0.5 text-center"
 const TITLE = "max-w-[680px] text-[12px] text-muted-text"
 
@@ -28,8 +32,8 @@ const TITLE = "max-w-[680px] text-[12px] text-muted-text"
  * with a thin line back to its earliest and a column at the left for those with no date; up, the participants their
  * papers state, added up, on a log scale, with a band along the bottom for those that state none. A bubble is a
  * button over the picture of the axes; its size is its papers and its colours what they found. Bubbles that would
- * overlap are moved up or down at their own date; one that had to move sideways has a thin line to where it belongs.
- * On a narrow screen the same bubbles are a grid of two columns, with the month and the participants in words.
+ * overlap are moved apart by the least that fits; one moved by more than its radius has a thin line to where it belongs.
+ * On a narrow screen, and for more than twenty items, the same bubbles are a grid, with the month and the participants in words.
  * `today` is the day the time scale ends at. Dates, counts and stated sizes: nothing is pooled.
  */
 export function EvidenceMap({ label, entries, chosen, onPick, today }: { label: string; entries: MapEntry[]; chosen: string | null; onPick: (key: string) => void; today: string }) {
@@ -54,7 +58,7 @@ export function EvidenceMap({ label, entries, chosen, onPick, today }: { label: 
     <EvidenceBubble key={entry.key} id={entry.key} name={entry.name} papers={entry.papers} efficacy={entry.efficacy} newPapers={entry.newPapers} safetyPapers={entry.safetyPapers} comparatorPapers={entry.comparatorPapers}
       discHeight={boxHeight} detail={line} position={position} pressed={pressed} onPick={() => onPick(entry.key)} />
   ))
-  if (entries.length === 0) return <div data-evidence-map="grid"><BubbleGrid label={label}>{tiles}</BubbleGrid></div>
+  if (entries.length === 0 || entries.length > MOST_MAPPED) return <div data-evidence-map="grid"><BubbleGrid label={label}>{tiles}</BubbleGrid></div>
 
   const { width, height } = MAP_SIZE
   const items = drawn.map(({ entry, marks }) => ({ key: entry.key, name: entry.name, papers: entry.papers, participants: entry.participants, dates: entry.dates, marks: marks || undefined }))
@@ -65,7 +69,7 @@ export function EvidenceMap({ label, entries, chosen, onPick, today }: { label: 
   const bubbles = drawn
     .map((each, at) => ({ ...each, at: places[at] }))
     .sort((a, b) => a.at.x - b.at.x || a.at.y - b.at.y || (a.entry.key < b.entry.key ? -1 : 1))
-    .map((each) => ({ ...each, style: { left: percent(each.at.x, width), top: percent(each.at.y, height), width: percent(2 * each.at.r, width) } }))
+    .map((each) => ({ ...each, shift: each.at.labelShift === 0 ? undefined : { marginLeft: each.at.labelShift }, style: { left: percent(each.at.x, width), top: percent(each.at.y, height), width: percent(2 * each.at.r, width) } }))
   const leaders = places.filter((place) => place.displaced)
   const spans = places.flatMap((place) => (place.earliestX === null ? [] : [{ key: place.key, from: place.earliestX, to: place.x, y: place.y }]))
   const months = scales.ticksX.map((tick) => ({ id: `${tick.year}-${tick.month}`, x: tick.x, text: tick.labelled ? M.when(tick.year, tick.month) : null }))
@@ -102,11 +106,11 @@ export function EvidenceMap({ label, entries, chosen, onPick, today }: { label: 
             {leaders.map((place) => <line key={place.key} data-leader={place.key} x1={place.home.x} y1={place.home.y} x2={place.x} y2={place.y} stroke={AXIS_TEXT_COLOUR} strokeWidth={1} strokeDasharray="2 2" />)}
             {leaders.map((place) => <circle key={place.key} data-home={place.key} cx={place.home.x} cy={place.home.y} r={2.5} fill={AXIS_TEXT_COLOUR} />)}
           </svg>
-          {bubbles.map(({ entry, marks, says, at, pressed, style }) => (
+          {bubbles.map(({ entry, marks, says, at, pressed, style, shift }) => (
             <button key={entry.key} type="button" data-bubble={entry.key} aria-pressed={pressed} aria-label={says} title={says} onClick={() => onPick(entry.key)} style={style}
-              className={pressed ? `${BUTTON} z-10 outline-accent-ink` : `${BUTTON} outline-transparent hover:outline-border-warm`}>
+              className={pressed ? `${BUTTON} ${PRESSED}` : `${BUTTON} hover:outline-border-warm`}>
               <BubbleDisc radius={at.r} papers={entry.papers} efficacy={entry.efficacy} safetyPapers={entry.safetyPapers} fluid />
-              <span data-label={at.labelAbove ? "above" : "under"} className={at.labelAbove ? `${LABEL} bottom-full mb-[3px]` : `${LABEL} top-full mt-[3px]`}>
+              <span data-label={at.labelAbove ? "above" : "under"} style={shift} className={at.labelAbove ? `${LABEL} bottom-full mb-[3px]` : `${LABEL} top-full mt-[3px]`}>
                 <span data-name="true" className={pressed ? "mx-auto block max-w-[96px] text-[12px] font-semibold leading-[15px] text-espresso" : "mx-auto block max-w-[96px] text-[12px] leading-[15px] text-secondary-dark"}>{entry.name}</span>
                 {marks !== "" && <span data-marks="true" className="block whitespace-nowrap text-[11px] leading-[14px] text-muted-text">{marks}</span>}
               </span>
@@ -114,11 +118,11 @@ export function EvidenceMap({ label, entries, chosen, onPick, today }: { label: 
           ))}
         </div>
         <p data-axis-title="x" className={`${TITLE} pl-[60px] text-center`}>{M.timeAxis}</p>
+        <p data-map-note="true" className="mt-2 max-w-[720px] text-[12px] text-muted-text">{M.note}</p>
       </div>
       <div data-evidence-map="narrow" className="sm:hidden">
         <BubbleGrid label={label} columns="two">{tiles}</BubbleGrid>
       </div>
-      <p data-map-note="true" className="mt-2 max-w-[720px] text-[12px] text-muted-text">{M.note}</p>
     </div>
   )
 }
