@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest"
-import { benefitShare, layoutMap, MAP_SIZE, mapRadius, mapScales, nameBoxes, type Box, type MapItem, type Placed } from "../evidence-map"
+import { dayOf, layoutMap, MAP_SIZE, mapRadius, mapScales, nameBoxes, newestDate, type Box, type MapItem, type Placed } from "../evidence-map"
 
-const item = (key: string, over: Partial<MapItem> = {}): MapItem => ({ key, name: key, papers: 1, share: 0.5, participants: 100, ...over })
+const TODAY = "2026-10-08"
+const DAY = 86400000
+const utc = (year: number, month: number, day: number) => Date.UTC(year, month - 1, day) / DAY
+const item = (key: string, over: Partial<MapItem> = {}): MapItem => ({ key, name: key, papers: 1, participants: 100, dates: [TODAY], ...over })
 const byKey = (placed: Placed[]) => new Map(placed.map((entry) => [entry.key, entry]))
-const one = (over: Partial<MapItem>) => layoutMap([item("a", over)], MAP_SIZE)[0]
-/** The participants that the x scale of `items` draws at `x`. */
-const participantsAt = (x: number, items: MapItem[]) => {
-  const { x0, x1, domain } = mapScales(items, MAP_SIZE)
-  return 10 ** (1 + ((x - x0) / (x1 - x0)) * (Math.log10(domain.max) - 1))
+const scalesOf = (items: MapItem[]) => mapScales(items, MAP_SIZE, TODAY)
+const layout = (items: MapItem[]) => layoutMap(items, MAP_SIZE, TODAY)
+const one = (over: Partial<MapItem>) => layout([item("a", over)])[0]
+const inside = (placed: Placed[], items: MapItem[]) => {
+  const { plot } = scalesOf(items)
+  return placed.every((entry) => entry.x - entry.r >= plot.left && entry.x + entry.r <= plot.right && entry.y - entry.r >= plot.top && entry.y + entry.r <= plot.bottom)
 }
+const overlaps = (placed: Placed[]) => placed.flatMap((a, at) => placed.slice(at + 1).filter((b) => Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r + 6 - 1e-9).map((b) => `${a.key}/${b.key}`))
 
 describe("the map of the evidence summary", () => {
   it("sizes a bubble of the map by the square root of its papers, never over 40", () => {
@@ -19,168 +24,235 @@ describe("the map of the evidence summary", () => {
     expect(mapRadius(400)).toBe(40)
   })
 
-  it("reads the share of benefit as benefit plus half of mixed over the papers", () => {
-    expect(benefitShare({ benefit: 4, "no-benefit": 0, mixed: 0 }, 4)).toBe(1)
-    expect(benefitShare({ benefit: 0, "no-benefit": 3, mixed: 0 }, 3)).toBe(0)
-    expect(benefitShare({ benefit: 1, "no-benefit": 1, mixed: 2 }, 4)).toBe(0.5)
-    expect(benefitShare({ benefit: 3, "no-benefit": 1, mixed: 0 }, 4)).toBe(0.75)
-    // Nothing to divide by: the middle.
-    expect(benefitShare({ benefit: 0, "no-benefit": 0, mixed: 0 }, 0)).toBe(0.5)
+  it("reads a day as that day, a month as its 15th, a year as its first of July, and nothing else", () => {
+    expect(dayOf("2026-09-28")).toBe(utc(2026, 9, 28))
+    expect(dayOf("2026-09")).toBe(utc(2026, 9, 15))
+    expect(dayOf("2026")).toBe(utc(2026, 7, 1))
+    expect(dayOf("September 2026")).toBeNull()
+    expect(dayOf("2026-13-01")).toBeNull()
+    expect(dayOf("")).toBeNull()
   })
 
-  it("runs the x scale from 10 to the next power of ten at or above the largest, and to 1,000 at least", () => {
-    const ticks = (values: (number | null)[]) => mapScales(values.map((participants, at) => item(`k${at}`, { participants })), MAP_SIZE).ticks.map((tick) => tick.value)
+  it("takes the newest of an item's dates, as it is printed", () => {
+    expect(newestDate(["2026-03", "2026-09-28", "2025"])).toBe("2026-09-28")
+    expect(newestDate(["2026", "2026-03-01"])).toBe("2026")
+    expect(newestDate(["soon", "2024-05"])).toBe("2024-05")
+    expect(newestDate(["soon"])).toBeNull()
+    expect(newestDate([])).toBeNull()
+  })
+
+  it("runs the x scale from the earliest paper of all the items to today, and puts an item at its newest paper", () => {
+    const items = [item("a", { dates: ["2026-03-10", "2026-06-15", "2026-08"] }), item("b", { dates: ["2026-10-08"], participants: 1000 }), item("c", { dates: ["2026-03-10"], participants: 10 })]
+    const scales = scalesOf(items)
+    expect(scales.days).toEqual({ from: utc(2026, 3, 10), to: utc(2026, 10, 8) })
+    const placed = byKey(layout(items))
+    const xOf = (day: number) => scales.x0 + ((day - scales.days.from) / (scales.days.to - scales.days.from)) * (scales.x1 - scales.x0)
+    expect(placed.get("a")!.x).toBeCloseTo(xOf(utc(2026, 8, 15)), 9)
+    expect(placed.get("b")!.x).toBe(scales.x1)
+    expect(placed.get("c")!.x).toBe(scales.x0)
+    expect(scales.x0).toBeLessThan(scales.x1)
+    expect(placed.get("a")!.home.x).toBe(placed.get("a")!.x)
+    expect(placed.get("a")!.displaced).toBe(false)
+  })
+
+  it("widens the x scale to ninety days at least, and to a paper dated after today", () => {
+    const recent = scalesOf([item("a", { dates: ["2026-10-01"] })])
+    expect(recent.days).toEqual({ from: utc(2026, 10, 8) - 90, to: utc(2026, 10, 8) })
+    expect(one({ dates: ["2026-10-01"] }).x).toBeCloseTo(recent.x0 + (83 / 90) * (recent.x1 - recent.x0), 9)
+    expect(scalesOf([item("a", { dates: ["2026-01-01", "2026-11"] })]).days).toEqual({ from: utc(2026, 1, 1), to: utc(2026, 11, 15) })
+  })
+
+  it("says where the earliest paper of an item is, only when it has papers of more than one date", () => {
+    const items = [item("a", { dates: ["2026-03-10", "2026-06-15", "2026-08"] }), item("b", { dates: ["2026-10-08"] }), item("c", { dates: ["2026-05", "2026-05"], participants: 10 }), item("d", { dates: [], participants: 1000 })]
+    const scales = scalesOf(items)
+    const placed = byKey(layout(items))
+    expect(placed.get("a")!.earliestX).toBe(scales.x0)
+    expect(placed.get("a")!.earliestX!).toBeLessThan(placed.get("a")!.x)
+    expect(placed.get("b")!.earliestX).toBeNull()
+    expect(placed.get("c")!.earliestX).toBeNull()
+    expect(placed.get("d")!.earliestX).toBeNull()
+  })
+
+  it("keeps a narrow column at the far left for the items none of whose papers has a date, and has none when all have", () => {
+    expect(scalesOf([item("a")]).column).toBeNull()
+    const items = [item("a", { dates: [] }), item("b", { dates: ["never"], participants: 1000 }), item("c", { dates: ["2026-01-01"], participants: 10 })]
+    const scales = scalesOf(items)
+    const column = scales.column!
+    expect(column.left).toBe(scales.plot.left)
+    expect(column.right).toBeLessThan(scales.x0)
+    expect((column.right - column.left) / (scales.plot.right - scales.plot.left)).toBeLessThan(0.16)
+    // The scale is of the dated papers only.
+    expect(scales.days.from).toBe(utc(2026, 1, 1))
+    const placed = byKey(layout(items))
+    for (const key of ["a", "b"]) {
+      const entry = placed.get(key)!
+      expect(entry.x).toBe((column.left + column.right) / 2)
+      expect(entry.x + entry.r).toBeLessThanOrEqual(column.right)
+      expect(entry.displaced).toBe(false)
+    }
+    // Each at the height of its participants.
+    expect(placed.get("a")!.y).toBe(scales.yMiddle)
+    expect(placed.get("b")!.y).toBe(scales.yTop)
+    expect(placed.get("c")!.x - placed.get("c")!.r).toBeGreaterThanOrEqual(column.right)
+  })
+
+  it("runs the y scale from 10 at the bottom to the next power of ten at or above the largest, and to 1,000 at least", () => {
+    const ticks = (values: (number | null)[]) => scalesOf(values.map((participants, at) => item(`k${at}`, { participants }))).ticksY.map((tick) => tick.value)
     expect(ticks([100, 900])).toEqual([10, 100, 1000])
     expect(ticks([40])).toEqual([10, 100, 1000])
     expect(ticks([1000])).toEqual([10, 100, 1000])
     expect(ticks([1001])).toEqual([10, 100, 1000, 10000])
     expect(ticks([10000, null])).toEqual([10, 100, 1000, 10000])
     expect(ticks([250000])).toEqual([10, 100, 1000, 10000, 100000, 1000000])
-    const scales = mapScales([item("a", { participants: 5000 })], MAP_SIZE)
-    expect(scales.domain).toEqual({ min: 10, max: 10000 })
-    expect(scales.ticks[0].x).toBe(scales.x0)
-    expect(scales.ticks.at(-1)!.x).toBe(scales.x1)
+    const scales = scalesOf([item("a", { participants: 5000 })])
+    expect(scales.participants).toEqual({ min: 10, max: 10000 })
+    expect(scales.ticksY[0].y).toBe(scales.yBottom)
+    expect(scales.ticksY.at(-1)!.y).toBe(scales.yTop)
+    // More participants are higher.
+    expect(scales.yTop).toBeLessThan(scales.yBottom)
   })
 
-  it("draws a known value at its place: 100 of 10 to 1,000 in the middle, all benefit at the top, none at the bottom", () => {
-    const scales = mapScales([item("a")], MAP_SIZE)
-    const middleX = (scales.x0 + scales.x1) / 2
-    const middleY = (scales.yTop + scales.yBottom) / 2
-    expect(one({ participants: 100, share: 0.5 })).toMatchObject({ key: "a", x: middleX, y: middleY, r: 18 })
-    expect(one({ participants: 10, share: 1 })).toMatchObject({ x: scales.x0, y: scales.yTop })
-    expect(one({ participants: 1000, share: 0 })).toMatchObject({ x: scales.x1, y: scales.yBottom })
-    expect(scales.yTop).toBeLessThan(scales.yBottom)
-    expect(scales.yMiddle).toBe(middleY)
-    // A value below 10 is drawn at 10.
-    expect(one({ participants: 3 }).x).toBe(scales.x0)
+  it("draws a known number of participants at its height: 100 of 10 to 1,000 in the middle, and under 10 at 10", () => {
+    const scales = scalesOf([item("a")])
+    expect(scales.yMiddle).toBe((scales.yTop + scales.yBottom) / 2)
+    expect(one({ participants: 100 })).toMatchObject({ key: "a", y: scales.yMiddle, r: 18 })
+    expect(one({ participants: 1000 }).y).toBe(scales.yTop)
+    expect(one({ participants: 10 }).y).toBe(scales.yBottom)
+    expect(one({ participants: 3 }).y).toBe(scales.yBottom)
     expect(one({ participants: 100, papers: 9 }).r).toBe(30)
   })
 
-  it("keeps a column at the far left for the items that state no participants, and has none when all state them", () => {
-    const stated = mapScales([item("a")], MAP_SIZE)
-    expect(stated.column).toBeNull()
-    const items = [item("a", { participants: null }), item("b", { participants: 10 })]
-    const scales = mapScales(items, MAP_SIZE)
-    const column = scales.column!
-    expect(column.left).toBe(scales.plot.left)
-    expect(column.right).toBeLessThan(scales.x0)
-    const placed = byKey(layoutMap(items, MAP_SIZE))
+  it("keeps a band along the bottom for the items that state no participants, one row of bubbles and their names high", () => {
+    expect(scalesOf([item("a")]).band).toBeNull()
+    const items = [item("a", { participants: null, papers: 4, dates: ["2026-08-01"] }), item("b", { participants: 10, dates: ["2026-08-01"] })]
+    const scales = scalesOf(items)
+    const band = scales.band!
+    expect(band.bottom).toBe(scales.plot.bottom)
+    // A bubble of radius 24, and room for a name of two lines and its marks.
+    expect(band.bottom - band.top).toBeGreaterThanOrEqual(2 * 24 + 30 + 14)
+    expect(band.bottom - band.top).toBeLessThan(0.35 * (scales.plot.bottom - scales.plot.top))
+    const placed = byKey(layout(items))
     const a = placed.get("a")!
-    expect(a.x).toBe((column.left + column.right) / 2)
-    expect(a.x - a.r).toBeGreaterThanOrEqual(column.left)
-    expect(a.x + a.r).toBeLessThanOrEqual(column.right)
-    expect(placed.get("b")!.x - placed.get("b")!.r).toBeGreaterThanOrEqual(column.right)
+    expect(a.y).toBe(scales.bandY)
+    expect(a.y - a.r).toBeGreaterThanOrEqual(band.top)
+    expect(a.y + a.r).toBeLessThanOrEqual(band.bottom)
+    expect(a.labelAbove).toBe(false)
+    // The scale of the others ends above the band.
+    expect(scales.yBottom + 18).toBeLessThan(band.top)
+    expect(placed.get("b")!.y).toBe(scales.yBottom)
+    expect(a.x).toBe(placed.get("b")!.x)
   })
 
-  const inside = (placed: Placed[], items: MapItem[]) => {
-    const { plot } = mapScales(items, MAP_SIZE)
-    return placed.every((entry) => entry.x - entry.r >= plot.left && entry.x + entry.r <= plot.right && entry.y - entry.r >= plot.top && entry.y + entry.r <= plot.bottom)
-  }
-  const overlaps = (placed: Placed[]) => placed.flatMap((a, at) => placed.slice(at + 1).filter((b) => Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r + 6 - 1e-9).map((b) => `${a.key}/${b.key}`))
-
-  it("moves apart ten items that belong at the same point sideways, so their height stays their share", () => {
-    const items = Array.from({ length: 10 }, (_, at) => item(`k${at}`, { papers: 1 + (at % 3) }))
-    const placed = layoutMap(items, MAP_SIZE)
+  it("moves apart ten items of one date and one size up and down, and sideways only when that is not enough", () => {
+    const items = Array.from({ length: 10 }, (_, at) => item(`k${at}`, { dates: ["2026-08-20"] }))
+    const placed = layout(items)
     expect(placed.map((entry) => entry.key)).toEqual(items.map((entry) => entry.key))
     expect(overlaps(placed)).toEqual([])
     expect(inside(placed, items)).toBe(true)
-    const scales = mapScales(items, MAP_SIZE)
-    const middle = (scales.x0 + scales.x1) / 2
-    // Where each belongs is kept with it, and an item is at that height unless it says it was displaced.
-    expect(placed.every((entry) => entry.home.x === middle && entry.home.y === scales.yMiddle)).toBe(true)
-    expect(placed.every((entry) => entry.displaced === (entry.y !== scales.yMiddle))).toBe(true)
-    // The largest, and of those the first by key, keeps its place; the next goes to its right, the third to its left.
-    const of = byKey(placed)
-    expect([of.get("k2")!.x, of.get("k2")!.y, of.get("k2")!.displaced]).toEqual([middle, scales.yMiddle, false])
-    expect(of.get("k5")!.x).toBeGreaterThan(middle)
-    expect(of.get("k8")!.x).toBeLessThan(middle)
-    expect([of.get("k5")!.y, of.get("k8")!.y]).toEqual([scales.yMiddle, scales.yMiddle])
-    // Five fit on the line within a quarter of the plot either way; no one is moved sideways further than that.
-    expect(placed.filter((entry) => !entry.displaced).map((entry) => entry.key).sort()).toEqual(["k1", "k2", "k4", "k5", "k8"])
-    const reach = 0.25 * (scales.plot.right - scales.plot.left)
-    expect(placed.every((entry) => Math.abs(entry.x - middle) <= reach)).toBe(true)
+    const scales = scalesOf(items)
+    const home = placed[0].home
+    expect(placed.every((entry) => entry.home.x === home.x && entry.home.y === scales.yMiddle)).toBe(true)
+    // An item is at its date unless it says it was displaced.
+    expect(placed.every((entry) => entry.displaced === (entry.x !== home.x))).toBe(true)
+    // The first keeps its place; the next goes up, the third down, at the same date.
+    expect([placed[0].x, placed[0].y, placed[0].displaced]).toEqual([home.x, scales.yMiddle, false])
+    expect([placed[1].x, placed[1].displaced]).toEqual([home.x, false])
+    expect(placed[1].y).toBeLessThan(scales.yMiddle)
+    expect([placed[2].x, placed[2].displaced]).toEqual([home.x, false])
+    expect(placed[2].y).toBeGreaterThan(scales.yMiddle)
+    // No one is moved up or down by more than a quarter of the height of the scale's part of the plot.
+    const reach = 0.25 * (scales.plot.bottom - scales.plot.top)
+    expect(placed.every((entry) => Math.abs(entry.y - scales.yMiddle) <= reach)).toBe(true)
+    expect(placed.filter((entry) => entry.displaced).length).toBeGreaterThan(0)
+    // The first that does not fit at the date goes to the nearest free place: beside the first, not at the end of the reach.
+    expect(placed[3].displaced).toBe(true)
+    expect(Math.hypot(placed[3].x - home.x, placed[3].y - scales.yMiddle)).toBeLessThanOrEqual(48)
   })
 
-  it("sets four items that state no participants and all report benefit side by side at the top of the column", () => {
-    const items = ["clozapine", "olanzapine", "paliperidone", "zuclopenthixol"].map((key) => item(key, { name: key, participants: null, share: 1, marks: "+1 new" }))
-    const placed = layoutMap(items, MAP_SIZE)
-    const scales = mapScales(items, MAP_SIZE)
-    const column = scales.column!
-    // The column is wide enough for four: over a fifth of the plot.
-    expect((column.right - column.left) / (scales.plot.right - scales.plot.left)).toBeGreaterThan(0.2)
-    expect((column.right - column.left) / (scales.plot.right - scales.plot.left)).toBeLessThan(0.3)
-    expect(placed.map((entry) => [entry.y, entry.displaced])).toEqual(Array(4).fill([scales.yTop, false]))
-    expect(new Set(placed.map((entry) => entry.x)).size).toBe(4)
-    expect(overlaps(placed)).toEqual([])
-    expect(placed.every((entry) => entry.x - entry.r >= column.left && entry.x + entry.r <= column.right)).toBe(true)
-  })
-
-  it("moves an item up or down only when its line is full, by the least that fits, and says it is displaced", () => {
-    const items = Array.from({ length: 7 }, (_, at) => item(`k${at}`, { participants: null, share: 1 }))
-    const placed = layoutMap(items, MAP_SIZE)
-    const scales = mapScales(items, MAP_SIZE)
-    const column = scales.column!
-    expect(placed.slice(0, 4).map((entry) => [entry.y, entry.displaced])).toEqual(Array(4).fill([scales.yTop, false]))
-    const moved = placed.slice(4)
-    expect(moved.every((entry) => entry.displaced && entry.y !== scales.yTop && entry.home.y === scales.yTop)).toBe(true)
-    // The least that fits: under the names of the first line, not at the bottom of the plot.
-    expect(Math.max(...moved.map((entry) => entry.y))).toBeLessThan(scales.yMiddle)
+  it("moves the items of the band apart sideways, at the one height of the band, and says they are displaced", () => {
+    const items = Array.from({ length: 3 }, (_, at) => item(`k${at}`, { participants: null, dates: ["2026-08-20"] }))
+    const placed = layout(items)
+    const scales = scalesOf(items)
+    expect(placed.map((entry) => entry.y)).toEqual(Array(3).fill(scales.bandY))
+    expect(placed.map((entry) => entry.displaced)).toEqual([false, true, true])
+    expect(placed[1].x - placed[0].x).toBe(44)
+    expect(placed[2].x - placed[0].x).toBe(-44)
+    expect(placed.every((entry) => entry.home.x === placed[0].x && entry.home.y === scales.bandY)).toBe(true)
     expect(overlaps(placed)).toEqual([])
     expect(inside(placed, items)).toBe(true)
-    expect(placed.every((entry) => entry.x - entry.r >= column.left && entry.x + entry.r <= column.right)).toBe(true)
   })
 
-  it("moves the items of the column apart too, without leaving the column", () => {
-    const items = Array.from({ length: 4 }, (_, at) => item(`k${at}`, { participants: null }))
-    const placed = layoutMap(items, MAP_SIZE)
-    const column = mapScales(items, MAP_SIZE).column!
+  it("moves the items of the column apart up and down, and never calls them displaced", () => {
+    const items = Array.from({ length: 6 }, (_, at) => item(`k${at}`, { dates: [] }))
+    const placed = layout(items)
+    const column = scalesOf(items).column!
     expect(overlaps(placed)).toEqual([])
     expect(inside(placed, items)).toBe(true)
-    expect(placed.every((entry) => entry.x - entry.r >= column.left && entry.x + entry.r <= column.right)).toBe(true)
+    expect(placed.every((entry) => entry.x - entry.r >= column.left && entry.x + entry.r <= column.right && !entry.displaced)).toBe(true)
   })
 
-  it("keeps a bubble in the plot at the corners of the scales", () => {
-    const items = [item("a", { participants: 10, share: 1, papers: 40 }), item("b", { participants: 1000, share: 0, papers: 40 }), item("c", { participants: null, share: 1, papers: 40 }), item("d", { participants: null, share: 0, papers: 40 })]
-    expect(inside(layoutMap(items, MAP_SIZE), items)).toBe(true)
+  it("keeps a bubble in the plot at the corners", () => {
+    const items = [
+      item("a", { dates: ["2026-01-01"], participants: 1000, papers: 40 }), item("b", { participants: 10, papers: 40 }), item("c", { dates: [], participants: null, papers: 40 }),
+      item("d", { participants: null, papers: 40 }), item("e", { dates: [], participants: 1000, papers: 40 }), item("f", { dates: ["2026-01-01"], participants: null }),
+    ]
+    expect(inside(layout(items), items)).toBe(true)
+    expect(overlaps(layout(items))).toEqual([])
+  })
+
+  it("has a tick a month, named where there is room, over eighteen months or less, and a tick a year over more", () => {
+    const short = scalesOf([item("a", { dates: ["2026-03-10"] })])
+    expect(short.ticksX.map((tick) => [tick.year, tick.month, tick.labelled])).toEqual([[2026, 4, true], [2026, 5, true], [2026, 6, true], [2026, 7, true], [2026, 8, true], [2026, 9, true], [2026, 10, true]])
+    const first = short.ticksX[0]
+    expect(first.x).toBeCloseTo(short.x0 + ((utc(2026, 4, 1) - short.days.from) / (short.days.to - short.days.from)) * (short.x1 - short.x0), 9)
+    // Seventeen months: a name every other month, so that two do not meet.
+    const longer = scalesOf([item("a", { dates: ["2025-05-08"] })])
+    expect(longer.ticksX).toHaveLength(17)
+    expect(longer.ticksX.every((tick) => tick.month !== null)).toBe(true)
+    expect(longer.ticksX.map((tick) => tick.labelled)).toEqual(Array.from({ length: 17 }, (_, at) => at % 2 === 0))
+    const years = scalesOf([item("a", { dates: ["2023-01-20"] })])
+    expect(years.ticksX.map((tick) => [tick.year, tick.month, tick.labelled])).toEqual([[2024, null, true], [2025, null, true], [2026, null, true]])
+    // Ninety days: three months.
+    expect(scalesOf([item("a")]).ticksX.map((tick) => tick.month)).toEqual([8, 9, 10])
   })
 
   it("gives the same places for the same items, in whatever order they come", () => {
-    const items = Array.from({ length: 12 }, (_, at) => item(`k${at}`, { papers: 1 + (at % 4), participants: at % 5 === 0 ? null : 60 + 15 * at, share: (at % 3) / 2 }))
-    const once = layoutMap(items, MAP_SIZE)
-    expect(layoutMap(items, MAP_SIZE)).toEqual(once)
-    const reversed = layoutMap([...items].reverse(), MAP_SIZE)
-    expect(byKey(reversed)).toEqual(byKey(once))
+    const items = Array.from({ length: 12 }, (_, at) => item(`k${at}`, {
+      papers: 1 + (at % 4), participants: at % 5 === 0 ? null : 60 + 15 * at, dates: at % 6 === 1 ? [] : [`2026-0${1 + (at % 3) * 4}-10`, "2026-01-02"],
+    }))
+    const once = layout(items)
+    expect(layout(items)).toEqual(once)
+    expect(byKey(layout([...items].reverse()))).toEqual(byKey(once))
     expect(overlaps(once)).toEqual([])
+    expect(inside(once, items)).toBe(true)
   })
 
-  it("writes a name under its bubble, and above it when the name of a larger one is already on that line", () => {
+  it("writes a name under its bubble, and above it when the name of another is already on that line", () => {
     const long = "A rather long name"
-    const scales = mapScales([item("a")], MAP_SIZE)
-    const middle = (scales.x0 + scales.x1) / 2
-    // 44 px apart: far enough for two bubbles of radius 18, too near for their names.
-    const near = [item("a", { name: long, participants: participantsAt(middle, [item("a")]) }), item("b", { name: long, participants: participantsAt(middle + 44, [item("a")]) })]
-    const placed = byKey(layoutMap(near, MAP_SIZE))
-    expect(placed.get("b")!.x - placed.get("a")!.x).toBeCloseTo(44, 6)
+    const scales = scalesOf([item("a", { dates: ["2026-01-01"] })])
+    // Six days are 44 px wide here or more: far enough for two bubbles of radius 18, too near for their names.
+    const days = Math.ceil(44 / ((scales.x1 - scales.x0) / (scales.days.to - scales.days.from)))
+    const near = [item("a", { name: long, dates: ["2026-01-01", "2026-06-01"] }), item("b", { name: long, dates: ["2026-01-01", new Date((utc(2026, 6, 1) + days) * DAY).toISOString().slice(0, 10)] })]
+    const placed = byKey(layout(near))
     expect(placed.get("a")!.y).toBe(placed.get("b")!.y)
+    expect(placed.get("b")!.x).toBeGreaterThan(placed.get("a")!.x)
     expect([placed.get("a")!.labelAbove, placed.get("b")!.labelAbove]).toEqual([false, true])
-    // Far apart: both under.
-    const far = layoutMap([item("a", { name: long, participants: 20 }), item("b", { name: long, participants: 900 })], MAP_SIZE)
+    expect([placed.get("a")!.displaced, placed.get("b")!.displaced]).toEqual([false, false])
+    const far = layout([item("a", { name: long, dates: ["2026-01-01"] }), item("b", { name: long })])
     expect(far.map((entry) => entry.labelAbove)).toEqual([false, false])
-    expect(one({}).labelAbove).toBe(false)
   })
 
-  it("keeps every name clear of the other names and of the other bubbles, in a crowd near the top", () => {
-    // Seen in the owner's vault: five classes whose papers all report benefit, within one power of ten of each other.
+  it("keeps every name clear of the other names and of the other bubbles, in a crowd of recent papers", () => {
     const items = [
-      item("other", { name: "Other treatments", participants: null, share: 1, marks: "+1 new" }),
-      item("neuromodulation", { name: "Neuromodulation", participants: 30, share: 1, marks: "+1 new" }),
-      item("psychotherapy", { name: "Psychotherapy", papers: 3, participants: 110, share: 1, marks: "+3 new" }),
-      item("lifestyle", { name: "Lifestyle", papers: 3, participants: 160, share: 0.67, marks: "+3 new" }),
-      item("antipsychotics", { name: "Antipsychotics", papers: 3, participants: 420, share: 0.67, marks: "+3 new · 2 safety" }),
-      item("medicine", { name: "Medicines", participants: 600, share: 1 }),
-      item("digital", { name: "Digital tools", papers: 2, participants: 2100, share: 1, marks: "+2 new" }),
+      item("other", { name: "Other treatments", participants: null, dates: ["2026-09-30"], marks: "+1 new" }),
+      item("neuromodulation", { name: "Neuromodulation", participants: 30, dates: ["2026-09-28"], marks: "+1 new" }),
+      item("psychotherapy", { name: "Psychotherapy", papers: 3, participants: 110, dates: ["2026-10-01", "2026-08-11", "2026-09"], marks: "+3 new" }),
+      item("lifestyle", { name: "Lifestyle", papers: 3, participants: 160, dates: ["2026-10-02", "2026-09-12"], marks: "+3 new" }),
+      item("antipsychotics", { name: "Antipsychotics", papers: 3, participants: 420, dates: ["2026-10-03", "2026-07-20"], marks: "+3 new · 2 safety" }),
+      item("medicine", { name: "Medicines", participants: 600, dates: ["2026-09-29"] }),
+      item("digital", { name: "Digital tools", papers: 2, participants: 2100, dates: ["2026-10-05", "2026-10-01"], marks: "+2 new" }),
     ]
-    const placed = layoutMap(items, MAP_SIZE)
+    const placed = layout(items)
     const names: Box[] = placed.map((entry, at) => nameBoxes(items[at], entry, entry.r)[entry.labelAbove ? "above" : "under"])
     const meet = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
     const nearest = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
@@ -190,19 +262,7 @@ describe("the map of the evidence summary", () => {
     expect(overlaps(placed)).toEqual([])
     expect(inside(placed, items)).toBe(true)
     expect(names.every((box) => box.top >= 0 && box.bottom <= MAP_SIZE.height)).toBe(true)
-    // The first of the largest keeps its own place.
-    const scales = mapScales(items, MAP_SIZE)
-    expect(byKey(placed).get("antipsychotics")!.y).toBeCloseTo(scales.yTop + 0.33 * (scales.yBottom - scales.yTop), 6)
-    // No one is moved up or down: every height is the share of benefit.
-    expect(placed.filter((entry) => entry.displaced || entry.y !== entry.home.y).map((entry) => entry.key)).toEqual([])
-  })
-
-  it("sets a smaller bubble beside a larger one that is at its place, at the same height", () => {
-    const items = [item("a", { papers: 4 }), item("b", { papers: 1 })]
-    const placed = byKey(layoutMap(items, MAP_SIZE))
-    expect(placed.get("b")!.y).toBe(placed.get("a")!.y)
-    expect(placed.get("b")!.x - placed.get("a")!.x).toBe(48)
-    expect([placed.get("a")!.displaced, placed.get("b")!.displaced]).toEqual([false, false])
-    expect(placed.get("b")!.home).toEqual({ x: placed.get("a")!.x, y: placed.get("a")!.y })
+    // Every one is at its date unless it says it is not.
+    expect(placed.every((entry) => entry.displaced === (entry.x !== entry.home.x))).toBe(true)
   })
 })

@@ -2,6 +2,9 @@
 const joinFindings = (texts: string[]) => `${texts.map((text) => text.trim().replace(/\.+$/, "")).join("; ")}.`
 
 /** All clinical-edition wording lives here, so a later language layer and legal review touch one file. */
+/** The short names of the months, for an axis of time. */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
 export const CLINICAL_COPY = {
   appName: "SciSpark Psychiatry",
   /** The small word under the SciSpark wordmark. */
@@ -390,24 +393,30 @@ export const CLINICAL_COPY = {
         ...(position ? [position] : []),
       ].join("; "),
     /**
-     * The map of treatments: across, the participants the papers of a class or of a treatment state, added up, on a
-     * log scale; up, the share of its papers that report benefit. Nothing is pooled: these are counts and stated sizes.
+     * The map of treatments: across, when the newest paper of a class or of a treatment was published; up, the
+     * participants its papers state, added up, on a log scale. Nothing is pooled: these are dates, counts and stated sizes.
      */
     map: {
+      /** Over the map: what is up. */
       axis: "Total participants across its papers (log scale)",
-      note: "Across = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Up = the share of its papers reporting benefit. Size = the number of papers. Bubbles that would overlap are moved sideways; a line shows where one that had to move up or down belongs.",
-      /** The column of the items whose papers state no participants. */
+      /** Under the map: what is across. */
+      timeAxis: "Publication date of its most recent paper",
+      note: "Across = when its most recent paper was published; a line reaches back to its earliest. Up = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Size = the number of papers. Bubbles that would overlap are moved up or down a little; a line shows where one that had to move sideways belongs.",
+      /** The band of the items whose papers state no participants, and the column of those whose papers have no date. */
       notStated: "not stated",
-      /** Up the side: the top, the middle and the bottom. */
-      shares: { all: "All benefit", split: "Split", none: "No benefit" },
+      noDate: "no date",
       tick: (value: number) => value.toLocaleString("en-US"),
-      /** Under a name in the grid of a narrow screen. */
-      participants: (count: number | null) => (count === null ? "participants not stated" : `${count.toLocaleString("en-US")} ${count === 1 ? "participant" : "participants"}`),
-      /** The last part of what a bubble of the map says to a reader who does not see it. `sized` of its `papers` state their participants. */
-      position: (count: number | null, sized: number, papers: number) =>
-        count === null ? "participants not stated" : `${count.toLocaleString("en-US")} ${count === 1 ? "participant" : "participants"} in ${sized} of ${papers} ${papers === 1 ? "paper" : "papers"}`,
-      /** In place of the map, over a plain grid of the bubbles. */
-      noneStated: "None of these papers states its participants, so they are shown side by side, not on a map.",
+      /** A month of a year, or a year alone, on the axis and in the grid of a narrow screen. `month` is 1 to 12. */
+      when: (year: number, month: number | null) => (month === null ? `${year}` : `${MONTHS[month - 1]} ${year}`),
+      /** Under a name in the grid of a narrow screen: when its newest paper was published, then its participants. */
+      tileLine: (when: string | null, count: number | null) =>
+        `${when ?? "no date"} · ${count === null ? "participants not stated" : `${count.toLocaleString("en-US")} ${count === 1 ? "participant" : "participants"}`}`,
+      /** The last parts of what a bubble of the map says to a reader who does not see it. `newest` is the date as the paper prints it; `sized` of its `papers` state their participants. */
+      position: (newest: string | null, count: number | null, sized: number, papers: number) =>
+        [
+          newest === null ? "no publication date" : `most recent paper ${newest}`,
+          count === null ? "participants not stated" : `${count.toLocaleString("en-US")} ${count === 1 ? "participant" : "participants"} in ${sized} of ${papers} ${papers === 1 ? "paper" : "papers"}`,
+        ].join("; "),
       /** Between two marks on the one line under a name. */
       markGap: " · ",
     },

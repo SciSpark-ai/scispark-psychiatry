@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { loadConditionEvidenceRemote } from "@/lib/clinical/evidence/client"
-import type { ConditionEvidence as Evidence, Period, Scope } from "@/lib/clinical/evidence/build"
+import type { ClassEvidence, ConditionEvidence as Evidence, Period, Scope, Study } from "@/lib/clinical/evidence/build"
 import { BubbleGrid, discBoxHeight } from "./BubbleGrid"
 import { EvidenceBubble } from "./EvidenceBubble"
 import { EvidenceMap, type MapEntry } from "./EvidenceMap"
@@ -36,6 +36,11 @@ function stillThere(chosen: Chosen, evidence: Evidence): Chosen {
   }
   return next.classKey === chosen.classKey && next.treatment === chosen.treatment && next.safety === chosen.safety && next.research === chosen.research ? chosen : next
 }
+
+/** The publication dates of `studies` that have one, as they are printed. */
+const datesOf = (studies: Study[]): string[] => studies.flatMap((study) => (study.date === null ? [] : [study.date]))
+/** The dates of the papers of a class: a paper under two of its treatments is one paper. */
+const classDates = (cls: ClassEvidence): string[] => datesOf([...new Map(cls.treatments.flatMap((entry) => entry.studies).map((study) => [study.key, study])).values()])
 
 /** One of the three stacked sections: its name and how many distinct papers it has, then its bubbles. */
 function Section({ name, count, children }: { name: SectionName; count: number; children: ReactNode }) {
@@ -73,6 +78,8 @@ function BubbleKey() {
  */
 function Sections({ evidence }: { evidence: Evidence }) {
   const [picked, setPicked] = useState<Chosen>(NOTHING)
+  // The day the map's time scale ends at: read once, when the sections are first drawn.
+  const [today] = useState(() => new Date().toISOString().slice(0, 10))
   // Another scope or period can take away what was chosen: it is then dropped for good, not kept for when it comes back.
   const chosen = stillThere(picked, evidence)
   if (chosen !== picked) setPicked(chosen)
@@ -82,9 +89,9 @@ function Sections({ evidence }: { evidence: Evidence }) {
   const harms = evidence.safety.find((group) => group.key === chosen.safety) ?? null
   const className = cls ? classNameOf(cls.key, cls.label) : null
   // The one map of the section: the classes, or the treatments of the chosen class.
-  const classEntries: MapEntry[] = evidence.classes.map((entry) => ({ key: entry.key, name: classNameOf(entry.key, entry.label), papers: entry.papers, efficacy: entry.efficacy, newPapers: entry.newPapers, participants: entry.participants, sized: entry.sized }))
+  const classEntries: MapEntry[] = evidence.classes.map((entry) => ({ key: entry.key, name: classNameOf(entry.key, entry.label), papers: entry.papers, efficacy: entry.efficacy, newPapers: entry.newPapers, participants: entry.participants, sized: entry.sized, dates: classDates(entry) }))
   const treatmentEntries: MapEntry[] = (cls?.treatments ?? []).map((entry) => ({
-    key: entry.key, name: entry.name, papers: entry.papers, efficacy: entry.efficacy, newPapers: entry.newPapers, safetyPapers: entry.safetyPapers, comparatorPapers: entry.comparatorPapers, participants: entry.participants, sized: entry.sized,
+    key: entry.key, name: entry.name, papers: entry.papers, efficacy: entry.efficacy, newPapers: entry.newPapers, safetyPapers: entry.safetyPapers, comparatorPapers: entry.comparatorPapers, participants: entry.participants, sized: entry.sized, dates: datesOf(entry.studies),
   }))
   const safetyBox = discBoxHeight(evidence.safety.map((group) => group.papers))
   // Back from a class, the keyboard is put on the bubble of that class: its own button is gone with the treatments.
@@ -112,12 +119,12 @@ function Sections({ evidence }: { evidence: Evidence }) {
                   <span aria-hidden="true">{E.crumbGap}</span>
                   <span aria-current="true" className="font-semibold text-espresso">{className}</span>
                 </p>
-                <EvidenceMap label={E.rows.treatments(className)} entries={treatmentEntries} chosen={chosen.treatment} onPick={(key) => choose({ treatment: key === chosen.treatment ? null : key })} />
+                <EvidenceMap label={E.rows.treatments(className)} entries={treatmentEntries} chosen={chosen.treatment} today={today} onPick={(key) => choose({ treatment: key === chosen.treatment ? null : key })} />
                 {treatment && <TreatmentDetail key={treatment.key} treatment={treatment} />}
               </div>
             ) : (
               <div data-classes="true">
-                <EvidenceMap label={E.rows.classes} entries={classEntries} chosen={null} onPick={(key) => choose({ classKey: key, treatment: null })} />
+                <EvidenceMap label={E.rows.classes} entries={classEntries} chosen={null} today={today} onPick={(key) => choose({ classKey: key, treatment: null })} />
               </div>
             )}
           </div>
