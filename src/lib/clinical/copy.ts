@@ -344,7 +344,7 @@ export const CLINICAL_COPY = {
     safetyEmpty: "No safety findings among these papers.",
     /** Class names by their key, for classes the pack does not name. */
     classLabels: { medicine: "Medicines", psychotherapy: "Psychotherapy", neuromodulation: "Neuromodulation", digital: "Digital tools", lifestyle: "Lifestyle", other: "Other treatments" },
-    researchTypes: { "risk-factor": "Risk factors", prediction: "Prediction and biomarkers", mechanism: "Mechanisms", epidemiology: "Epidemiology", services: "Services and policy", other: "Other" },
+    researchTypes: { "risk-factor": "Risk factors", prediction: "Prediction and biomarkers", mechanism: "Mechanisms", epidemiology: "Epidemiology", services: "Services and policy", "no-efficacy": "Treatment studied, no efficacy result", other: "Other" },
     noTreatment: "No treatment named",
     /** A review or an editorial is not a study, so papers are counted. */
     papers: (count: number) => `${count} ${count === 1 ? "paper" : "papers"}`,

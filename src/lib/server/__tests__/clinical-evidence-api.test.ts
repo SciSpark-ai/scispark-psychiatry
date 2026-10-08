@@ -39,6 +39,18 @@ describe("/api/clinical/evidence", () => {
     expect((await get("?condition=depression&period=2y")).status).toBe(400)
     expect((await get("?period=2y")).status).toBe(400)
   })
+  it("passes the scope through, all when none is given, and answers 400 for one it does not know", async () => {
+    await storage.write("wiki/papers/paper-2.md", "---\ntype: paper\ntitle: Paper 2\ncreated: 2026-10-07\nupdated: 2026-10-07\ntags: []\nrelated: []\nsources: []\n---\n")
+    const all = (await (await get("?condition=depression")).json()).result
+    expect([all.scope, all.total, all.collected, all.savedCount]).toEqual(["all", 1, 1, 0])
+    expect(all.sections).toEqual({ treatments: 1, safety: 0, research: 0 })
+    const saved = (await (await get("?condition=depression&scope=saved")).json()).result
+    expect([saved.scope, saved.total, saved.collected, saved.savedCount, saved.classes]).toEqual(["saved", 0, 1, 0, []])
+    const mine = (await (await get("?condition=schizophrenia&scope=saved&period=3m")).json()).result
+    expect([mine.scope, mine.period, mine.total, mine.savedCount]).toEqual(["saved", "3m", 1, 1])
+    expect((await get("?condition=depression&scope=mine")).status).toBe(400)
+    expect((await get("?scope=mine")).status).toBe(400)
+  })
   it("answers 404 for a condition the pack lacks and 400 for a malformed id", async () => {
     expect((await get("?condition=no-such-condition")).status).toBe(404)
     expect((await get("?condition=../etc")).status).toBe(400)

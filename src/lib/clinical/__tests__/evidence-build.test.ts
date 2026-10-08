@@ -102,10 +102,10 @@ describe("the class of a treatment", () => {
     expect(classKeys(evidence)).toEqual(["medicine", "digital", "lifestyle", "other"])
     expect(evidence.classes.at(-1)).toMatchObject({ key: "other", label: null, papers: 3 })
   })
-  it("keeps an uncoded treatment of kind other under its class", () => {
+  it("has no class for an uncoded treatment whose only paper reports no efficacy result", () => {
     const evidence = build([uncoded(1, "Yoga", { kind: "other", treatmentClass: "lifestyle" })])
-    expect(evidence.classes[0].treatments[0]).toMatchObject({ key: "name:yoga", name: "Yoga" })
-    expect(evidence.research).toEqual([])
+    expect(evidence.classes).toEqual([])
+    expect(evidence.research.map((group) => [group.type, group.studies.map((study) => study.treatment)])).toEqual([["no-efficacy", ["Yoga"]]])
   })
 })
 
@@ -160,34 +160,37 @@ describe("the treatments of a class", () => {
     expect(evidence.classes[0].treatments).toHaveLength(1)
     expect(evidence.classes[0].treatments[0]).toMatchObject({ key: "name:yoga", name: "Yoga", papers: 2 })
   })
-  it("give did from benefit findings and watch from safety, no-benefit and mixed ones, each with its paper", () => {
+  it("give one line per paper under its kind, each with its paper, and the safety lines from the safety papers of the same treatment", () => {
     const evidence = build([
       finding(1, { text: "lifted mood", date: "2026-09-01" }), finding(2, { kind: "safety", text: "caused dissociation", date: "2026-09-10" }),
       finding(3, { kind: "no-benefit", text: "did not beat placebo", date: "2026-09-05" }), finding(4, { kind: "mixed", text: "helped some", date: "2026-09-02" }), finding(5, { kind: "other", text: "ignored" }),
+      finding(6, { kind: "safety", text: "raised agranulocytosis risk", treatment: "Clozapine", treatmentCode: "clozapine" }),
     ])
+    expect(evidence.classes[0].treatments[0].lines).toEqual({
+      benefit: [{ text: "lifted mood", key: "pmid:1" }], "no-benefit": [{ text: "did not beat placebo", key: "pmid:3" }],
+      mixed: [{ text: "helped some", key: "pmid:4" }], safety: [{ text: "caused dissociation", key: "pmid:2" }],
+    })
+  })
+  it("get no line from a finding with no text, and at most four of each kind, newest first", () => {
+    const six = (kind: Finding["kind"], from: number) => [0, 1, 2, 3, 4, 5].map((at) => finding(from + at, { kind, text: `did ${from + at}`, date: `2026-09-0${at + 2}` }))
+    const evidence = build([finding(1, { text: null }), finding(2, { text: "  " }), ...six("benefit", 10), ...six("no-benefit", 20), ...six("mixed", 30), ...six("safety", 40)])
     const ketamine = evidence.classes[0].treatments[0]
-    expect(ketamine.did).toEqual([{ text: "lifted mood", key: "pmid:1" }])
-    expect(ketamine.watch).toEqual([
-      { text: "caused dissociation", key: "pmid:2", kind: "safety" }, { text: "did not beat placebo", key: "pmid:3", kind: "no-benefit" }, { text: "helped some", key: "pmid:4", kind: "mixed" },
-    ])
+    expect(ketamine.lines.benefit.map((entry) => entry.key)).toEqual(["pmid:15", "pmid:14", "pmid:13", "pmid:12"])
+    expect(ketamine.lines["no-benefit"].map((entry) => entry.key)).toEqual(["pmid:25", "pmid:24", "pmid:23", "pmid:22"])
+    expect(ketamine.lines.mixed.map((entry) => entry.key)).toEqual(["pmid:35", "pmid:34", "pmid:33", "pmid:32"])
+    expect(ketamine.lines.safety.map((entry) => entry.key)).toEqual(["pmid:45", "pmid:44", "pmid:43", "pmid:42"])
+    expect([ketamine.papers, ketamine.safetyPapers]).toEqual([20, 6])
   })
-  it("get nothing from a finding with no text, and at most four of each, newest first", () => {
-    const evidence = build([
-      finding(1, { text: null }), ...[2, 3, 4, 5, 6, 7].map((n) => finding(n, { text: `did ${n}`, date: `2026-09-0${n}` })),
-    ])
-    const { did } = evidence.classes[0].treatments[0]
-    expect(did.map((entry) => entry.key)).toEqual(["pmid:7", "pmid:6", "pmid:5", "pmid:4"])
-    expect(evidence.classes[0].treatments[0].papers).toBe(7)
-  })
-  it("count each of their papers once, as the class counts each of its papers once: the same sums while no paper names two treatments", () => {
+  it("count each of their efficacy papers once, as the class does: the same sums while no paper names two treatments", () => {
     const evidence = build([finding(1), finding(2, { kind: "safety" }), finding(3, { treatment: "Clozapine", treatmentCode: "clozapine", kind: null }), finding(4, { treatment: "Clozapine", treatmentCode: "clozapine", kind: "mixed" }), uncoded(5, "Pill", { treatmentClass: "medicine", kind: "no-benefit" })])
     const medicine = evidence.classes.find((entry) => entry.key === "medicine")!
-    expect(medicine.counts).toEqual({ benefit: 1, "no-benefit": 1, mixed: 0, safety: 1, other: 0, unsorted: 0 })
+    expect([medicine.papers, medicine.efficacy]).toEqual([2, { benefit: 1, "no-benefit": 1, mixed: 0 }])
     for (const entry of evidence.classes) {
-      for (const kind of Object.keys(entry.counts) as Array<keyof typeof entry.counts>) expect(entry.counts[kind]).toBe(entry.treatments.reduce((sum, treatment) => sum + treatment.counts[kind], 0))
+      for (const kind of ["benefit", "no-benefit", "mixed"] as const) expect(entry.efficacy[kind]).toBe(entry.treatments.reduce((sum, treatment) => sum + treatment.efficacy[kind], 0))
       expect(entry.papers).toBe(entry.treatments.reduce((sum, treatment) => sum + treatment.papers, 0))
+      expect(entry.papers).toBe(entry.efficacy.benefit + entry.efficacy["no-benefit"] + entry.efficacy.mixed)
     }
-    expect(evidence.classes.find((entry) => entry.key === "antipsychotic")!.counts).toMatchObject({ unsorted: 1, mixed: 1 })
+    expect(evidence.classes.find((entry) => entry.key === "antipsychotic")).toMatchObject({ papers: 1, efficacy: { benefit: 0, "no-benefit": 0, mixed: 1 } })
   })
   it("are ordered by papers then name, the classes by papers then label, other last", () => {
     const evidence = build([
@@ -211,21 +214,21 @@ describe("a paper that names several treatments", () => {
     expect(evidence.classes).toHaveLength(1)
     const [cls] = evidence.classes
     expect(cls).toMatchObject({ key: "antipsychotic", label: "Antipsychotics", papers: 1, newPapers: 1 })
-    expect(cls.counts).toEqual({ benefit: 0, "no-benefit": 0, mixed: 1, safety: 0, other: 0, unsorted: 0 })
-    expect(cls.treatments.map((treatment) => [treatment.key, treatment.name, treatment.papers, treatment.newPapers, treatment.counts.mixed])).toEqual([
+    expect(cls.efficacy).toEqual({ benefit: 0, "no-benefit": 0, mixed: 1 })
+    expect(cls.treatments.map((treatment) => [treatment.key, treatment.name, treatment.papers, treatment.newPapers, treatment.efficacy.mixed])).toEqual([
       ["clozapine", "Clozapine", 1, 1, 1], ["olanzapine", "Olanzapine", 1, 1, 1], ["paliperidone", "Paliperidone", 1, 1, 1],
     ])
     for (const treatment of cls.treatments) {
       expect(treatment.studies.map((study) => [study.key, study.treatment, study.severalTreatments])).toEqual([["pmid:1", "clozapine, paliperidone, and olanzapine", true]])
-      expect(treatment.watch).toEqual([{ text: "eased symptoms but not relapse", key: "pmid:1", kind: "mixed" }])
+      expect(treatment.lines.mixed).toEqual([{ text: "eased symptoms but not relapse", key: "pmid:1" }])
     }
-    expect([evidence.total, evidence.treatmentPapers]).toEqual([1, 1])
+    expect([evidence.total, evidence.sections]).toEqual([1, { treatments: 1, safety: 0, research: 0 }])
   })
   it("counts the distinct papers of a class, not the sum of its treatments", () => {
-    const evidence = build([three(1), finding(2, { treatment: "Clozapine", treatmentCode: "clozapine", kind: "safety" }), finding(3, { treatment: "olanzapine", treatmentCode: null, date: daysAgo(2) })])
+    const evidence = build([three(1), finding(2, { treatment: "Clozapine", treatmentCode: "clozapine", kind: "no-benefit" }), finding(3, { treatment: "olanzapine", treatmentCode: null, date: daysAgo(2) })])
     const [cls] = evidence.classes
     expect([cls.papers, cls.newPapers]).toEqual([3, 1])
-    expect(cls.counts).toMatchObject({ benefit: 2, safety: 1 })
+    expect(cls.efficacy).toEqual({ benefit: 2, "no-benefit": 1, mixed: 0 })
     expect(cls.treatments.map((treatment) => [treatment.key, treatment.papers])).toEqual([["clozapine", 2], ["olanzapine", 2], ["paliperidone", 1]])
     expect(cls.treatments.reduce((sum, treatment) => sum + treatment.papers, 0)).toBe(5)
   })
@@ -235,12 +238,12 @@ describe("a paper that names several treatments", () => {
       ["antipsychotic", 1, [["risperidone", 1]]], ["medicine", 1, [["methylphenidate", 1]]],
     ])
     expect(evidence.total).toBe(2)
-    expect(evidence.treatmentPapers).toBe(1)
+    expect(evidence.sections).toEqual({ treatments: 1, safety: 0, research: 1 })
   })
   it("gives the total of the treatments tab as distinct papers", () => {
     const evidence = build([three(1), finding(2, { treatment: "methylphenidate and risperidone", treatmentCode: null }), finding(3), none(4), uncoded(5, "Yoga")])
     expect(evidence.classes.reduce((sum, entry) => sum + entry.papers, 0)).toBe(5)
-    expect(evidence.treatmentPapers).toBe(4)
+    expect(evidence.sections.treatments).toBe(4)
     expect(evidence.total).toBe(5)
   })
   it("does not give a pack treatment the one class the paper named for all of them", () => {
@@ -251,8 +254,21 @@ describe("a paper that names several treatments", () => {
     const evidence = build([finding(1, { treatment: "methylphenidate and risperidone", treatmentCode: null })])
     expect(evidence.timeline.series.map((entry) => [entry.key, entry.counts.reduce((sum, count) => sum + count, 0)])).toEqual([["antipsychotic", 1], ["medicine", 1]])
   })
-  it("keeps the paper once in the safety list", () => {
-    expect(build([three(1, { kind: "safety" })]).safety.map((study) => study.key)).toEqual(["pmid:1"])
+  it("is in the safety group of each of three antipsychotics when it is a safety paper, and counted once in the section", () => {
+    const evidence = build([three(1, { kind: "safety" })])
+    expect(evidence.safety.map((group) => [group.key, group.name, group.classKey, group.papers, group.studies.map((study) => [study.key, study.severalTreatments])])).toEqual([
+      ["clozapine", "Clozapine", "antipsychotic", 1, [["pmid:1", true]]], ["olanzapine", "Olanzapine", "antipsychotic", 1, [["pmid:1", true]]], ["paliperidone", "Paliperidone", "antipsychotic", 1, [["pmid:1", true]]],
+    ])
+    expect(evidence.sections).toEqual({ treatments: 0, safety: 1, research: 0 })
+    expect([evidence.total, evidence.classes]).toEqual([1, []])
+  })
+  it("is once in the no-efficacy group when it reports no efficacy result, and marks each treatment it names", () => {
+    const evidence = build([three(1, { kind: "other" }), finding(2, { treatment: "Clozapine", treatmentCode: "clozapine" })])
+    expect(evidence.research.map((group) => [group.type, group.papers, group.studies.map((study) => [study.key, study.treatment, study.severalTreatments])])).toEqual([
+      ["no-efficacy", 1, [["pmid:1", "clozapine, paliperidone, and olanzapine", true]]],
+    ])
+    expect(evidence.classes[0].treatments.map((treatment) => [treatment.key, treatment.papers, treatment.unreportedPapers])).toEqual([["clozapine", 1, 1]])
+    expect(evidence.sections).toEqual({ treatments: 1, safety: 0, research: 1 })
   })
 })
 
@@ -286,10 +302,130 @@ describe("findings with no treatment, and safety findings", () => {
     // A finding with both a treatment and a research type goes under Treatments.
     expect(evidence.classes[0].treatments[0].studies.map((study) => study.key)).toEqual(["pmid:5"])
   })
-  it("lists every safety finding, newest first, and keeps it under its treatment", () => {
-    const evidence = build([finding(1, { kind: "safety", date: "2026-09-01" }), none(2, { kind: "safety", date: "2026-09-10" }), finding(3)])
-    expect(evidence.safety.map((study) => study.key)).toEqual(["pmid:2", "pmid:1"])
-    expect(evidence.classes[0].treatments[0].studies.map((study) => study.key)).toContain("pmid:1")
+  it("puts a safety finding with no treatment under Other research, other", () => {
+    const evidence = build([none(2, { kind: "safety", date: "2026-09-10" }), finding(3)])
+    expect(evidence.safety).toEqual([])
+    expect(evidence.research.map((group) => [group.type, group.studies.map((study) => study.key)])).toEqual([["other", ["pmid:2"]]])
+    expect(evidence.sections).toEqual({ treatments: 1, safety: 0, research: 1 })
+  })
+})
+
+// Owner decision 2026-10-08: efficacy only in a treatment's bubble; safety and the papers with no efficacy result apart.
+describe("the section of a finding", () => {
+  const clozapine = (n: number, over: Partial<Finding> & { date?: string } = {}) => finding(n, { treatment: "Clozapine", treatmentCode: "clozapine", ...over })
+  it("is Treatments for a benefit, a no-benefit and a mixed finding", () => {
+    const evidence = build([finding(1), finding(2, { kind: "no-benefit" }), finding(3, { kind: "mixed" })])
+    expect(evidence.classes[0].treatments[0]).toMatchObject({ key: "ketamine", papers: 3, efficacy: { benefit: 1, "no-benefit": 1, mixed: 1 }, safetyPapers: 0, unreportedPapers: 0 })
+    expect(evidence.classes[0].treatments[0].studies.map((study) => study.kind).sort()).toEqual(["benefit", "mixed", "no-benefit"])
+    expect([evidence.safety, evidence.research]).toEqual([[], []])
+    expect(evidence.sections).toEqual({ treatments: 3, safety: 0, research: 0 })
+  })
+  it("is Safety, in the group of its treatment, for a safety finding", () => {
+    const evidence = build([finding(1, { kind: "safety", date: daysAgo(3) }), finding(2, { kind: "safety", date: "2026-08-01" })])
+    expect(evidence.safety).toHaveLength(1)
+    expect(evidence.safety[0]).toMatchObject({ key: "ketamine", name: "Ketamine", classKey: "medicine", papers: 2, newPapers: 1 })
+    expect(evidence.safety[0].studies.map((study) => study.key)).toEqual(["pmid:1", "pmid:2"])
+    expect([evidence.classes, evidence.research]).toEqual([[], []])
+  })
+  it("is Other research, in the one no-efficacy group, for a treatment finding of kind other or of no kind", () => {
+    const evidence = build([finding(1, { kind: "other", date: "2026-09-02" }), clozapine(2, { kind: null, date: "2026-09-12" }), none(3, { researchType: "mechanism" })])
+    expect(evidence.research.map((group) => [group.type, group.papers, group.studies.map((study) => [study.key, study.treatment])])).toEqual([
+      ["no-efficacy", 2, [["pmid:2", "Clozapine"], ["pmid:1", "Ketamine"]]], ["mechanism", 1, [["pmid:3", null]]],
+    ])
+    expect([evidence.classes, evidence.safety]).toEqual([[], []])
+    expect(evidence.sections).toEqual({ treatments: 0, safety: 0, research: 3 })
+  })
+  it("gives a treatment with one benefit, one safety and one other paper a bubble of 1 with a mark for each of the others", () => {
+    const evidence = build([finding(1), finding(2, { kind: "safety" }), finding(3, { kind: "other" })])
+    expect(evidence.classes).toHaveLength(1)
+    expect(evidence.classes[0]).toMatchObject({ key: "medicine", papers: 1, efficacy: { benefit: 1, "no-benefit": 0, mixed: 0 } })
+    const ketamine = evidence.classes[0].treatments[0]
+    expect(ketamine).toMatchObject({ papers: 1, safetyPapers: 1, unreportedPapers: 1 })
+    expect(ketamine.studies.map((study) => study.key)).toEqual(["pmid:1"])
+    expect(evidence.safety.map((group) => [group.key, group.studies.map((study) => study.key)])).toEqual([["ketamine", ["pmid:2"]]])
+    expect(evidence.research.map((group) => [group.type, group.studies.map((study) => study.key)])).toEqual([["no-efficacy", ["pmid:3"]]])
+    expect([evidence.total, evidence.sections]).toEqual([3, { treatments: 1, safety: 1, research: 1 }])
+  })
+  it("gives a treatment with only a safety paper no class bubble and one safety group", () => {
+    const evidence = build([clozapine(1, { kind: "safety" }), finding(2)])
+    expect(classKeys(evidence)).toEqual(["medicine"])
+    expect(evidence.safety.map((group) => [group.key, group.classKey, group.papers])).toEqual([["clozapine", "antipsychotic", 1]])
+  })
+  it("gives a treatment with only a paper of kind other the no-efficacy group only", () => {
+    const evidence = build([clozapine(1, { kind: "other" })])
+    expect([evidence.classes, evidence.safety]).toEqual([[], []])
+    expect(evidence.research.map((group) => group.type)).toEqual(["no-efficacy"])
+  })
+  it("gives a safety group the class of its treatment by the same rules as a bubble", () => {
+    const evidence = build([uncoded(1, "Yoga", { kind: "safety" }), uncoded(2, "Yoga", { treatmentClass: "lifestyle", kind: "other" }), finding(3, { treatment: "exercise", treatmentCode: "exercise", kind: "safety" }), uncoded(4, "Thing", { kind: "safety" })])
+    expect(evidence.safety.map((group) => [group.key, group.name, group.classKey])).toEqual([["exercise", "Exercise", "lifestyle"], ["name:thing", "Thing", "other"], ["name:yoga", "Yoga", "lifestyle"]])
+  })
+  it("orders the safety groups by papers then name", () => {
+    const evidence = build([finding(1, { kind: "safety" }), clozapine(2, { kind: "safety" }), clozapine(3, { kind: "safety" }), uncoded(4, "Aspirin", { kind: "safety" })])
+    expect(evidence.safety.map((group) => [group.name, group.papers])).toEqual([["Clozapine", 2], ["Aspirin", 1], ["Ketamine", 1]])
+  })
+  it("counts the distinct efficacy papers of a class, its directions and what is new", () => {
+    const two = (n: number, over: Partial<Finding> & { date?: string } = {}) => finding(n, { treatment: "clozapine and olanzapine", treatmentCode: null, ...over })
+    const evidence = build([two(1, { kind: "mixed", date: daysAgo(2) }), two(2, { kind: "safety", date: daysAgo(2) }), two(3, { kind: "other", date: daysAgo(2) }), clozapine(4, { kind: "no-benefit", date: "2026-08-01" })])
+    const [cls] = evidence.classes
+    expect(cls).toMatchObject({ key: "antipsychotic", papers: 2, newPapers: 1, efficacy: { benefit: 0, "no-benefit": 1, mixed: 1 } })
+    expect(cls.treatments.map((treatment) => [treatment.key, treatment.papers, treatment.newPapers, treatment.safetyPapers, treatment.unreportedPapers])).toEqual([["clozapine", 2, 1, 1, 1], ["olanzapine", 1, 1, 1, 1]])
+    expect(evidence.sections).toEqual({ treatments: 2, safety: 1, research: 1 })
+    expect(evidence.total).toBe(4)
+  })
+  it("orders the research groups by papers, then by the list of types with no-efficacy before other", () => {
+    const evidence = build([
+      none(1), finding(2, { kind: "other" }), none(3, { researchType: "services" }), none(4, { researchType: "risk-factor" }),
+      none(5, { researchType: "epidemiology" }), none(6, { researchType: "epidemiology" }), none(7, { researchType: "mechanism" }), none(8, { researchType: "prediction" }),
+    ])
+    expect(evidence.research.map((group) => group.type)).toEqual(["epidemiology", "risk-factor", "prediction", "mechanism", "services", "no-efficacy", "other"])
+  })
+  it("counts what is new in a research group", () => {
+    const evidence = build([finding(1, { kind: "other", date: daysAgo(2) }), finding(2, { kind: null, date: "2026-08-01" })])
+    expect(evidence.research.map((group) => [group.type, group.papers, group.newPapers])).toEqual([["no-efficacy", 2, 1]])
+  })
+})
+
+describe("the tier of a study's design", () => {
+  it("is synthesis for a review of trials or a guideline, trial for a trial, observational for everything else", () => {
+    const tierOf = (design: Finding["design"]) => build([finding(1, { design })]).classes[0].treatments[0].studies[0].tier
+    expect((["systematic-review", "meta-analysis", "guideline"] as const).map(tierOf)).toEqual(["synthesis", "synthesis", "synthesis"])
+    expect((["randomized-trial", "clinical-trial"] as const).map(tierOf)).toEqual(["trial", "trial"])
+    for (const design of ["cohort", "review", "case-report", "editorial", "erratum", "retraction", "protocol", "preclinical", "other", "unknown"] as const) expect(tierOf(design), design).toBe("observational")
+  })
+})
+
+describe("the scope", () => {
+  const findings = [finding(1, { date: daysAgo(10) }), finding(2, { kind: "safety", date: daysAgo(10) }), finding(3, { date: daysAgo(300) }), none(4, { date: daysAgo(10) }), finding(5, { conditionCodes: ["schizophrenia"] })]
+  const saved = new Set(["paper-1", "paper-3", "paper-5"])
+  it("is all unless it is asked for, and says how many of the condition's papers are saved", () => {
+    const evidence = build(findings, { now: NOW, savedSlugs: saved })
+    expect([evidence.scope, evidence.total, evidence.collected, evidence.savedCount]).toEqual(["all", 4, 4, 2])
+    expect(build(findings).savedCount).toBe(0)
+  })
+  it("keeps only the saved papers when it is saved, while collected still counts all of them", () => {
+    const evidence = build(findings, { now: NOW, savedSlugs: saved, scope: "saved" })
+    expect([evidence.scope, evidence.total, evidence.collected, evidence.savedCount]).toEqual(["saved", 2, 4, 2])
+    expect(evidence.classes[0].treatments[0]).toMatchObject({ papers: 2, safetyPapers: 0 })
+    expect([evidence.safety, evidence.research]).toEqual([[], []])
+    expect(evidence.sections).toEqual({ treatments: 2, safety: 0, research: 0 })
+    expect(evidence.timeline.series.flatMap((entry) => entry.counts).reduce((sum, count) => sum + count, 0)).toBe(2)
+  })
+  it("is empty when nothing is saved, and still says what is collected", () => {
+    for (const savedSlugs of [undefined, new Set<string>(), new Set(["paper-5"])]) {
+      const evidence = build(findings, { now: NOW, savedSlugs, scope: "saved" })
+      expect([evidence.total, evidence.collected, evidence.savedCount, evidence.classes, evidence.safety, evidence.research]).toEqual([0, 4, 0, [], [], []])
+      expect(evidence.since).toBe("2026-10-01")
+    }
+  })
+  it("is applied before the period", () => {
+    const evidence = build(findings, { now: NOW, savedSlugs: saved, scope: "saved", period: "3m" })
+    expect([evidence.period, evidence.scope, evidence.total, evidence.collected, evidence.savedCount]).toEqual(["3m", "saved", 1, 4, 2])
+    expect(evidence.classes[0].treatments[0].studies.map((study) => study.key)).toEqual(["pmid:1"])
+  })
+  it("does not change the class of a treatment whose class comes from a paper outside it", () => {
+    const yoga = [uncoded(1, "Yoga"), uncoded(2, "Yoga", { treatmentClass: "lifestyle" })]
+    expect(build(yoga, { now: NOW, savedSlugs: new Set(["paper-1"]), scope: "saved" }).classes.map((entry) => [entry.key, entry.papers])).toEqual([["lifestyle", 1]])
   })
 })
 
@@ -433,6 +569,11 @@ describe("the timeline and the condition", () => {
     expect(evidence.timeline.series[0].label).toBe("Antipsychotics")
     expect(evidence.timeline.series.flatMap((entry) => entry.counts).reduce((sum, count) => sum + count, 0)).toBe(4)
   })
+  it("draws every paper that names a treatment in its class, whatever its kind, and the others in the rest", () => {
+    const clozapine = (n: number, kind: Finding["kind"]) => finding(n, { treatment: "Clozapine", treatmentCode: "clozapine", kind })
+    const evidence = build([clozapine(1, "safety"), clozapine(2, "other"), clozapine(3, null), finding(4), none(5)])
+    expect(evidence.timeline.series.map((entry) => [entry.key, entry.label, entry.counts.reduce((sum, count) => sum + count, 0)])).toEqual([["antipsychotic", "Antipsychotics", 3], ["medicine", null, 1], ["other", null, 1]])
+  })
   it("knows no condition the pack does not have, and counts the subtypes", () => {
     expect(buildConditionEvidence([finding(1)], TAXONOMY, "nothing", { now: NOW })).toBeNull()
     expect(buildConditionEvidence([finding(1)], TAXONOMY, "ketamine", { now: NOW })).toBeNull()
@@ -452,6 +593,12 @@ describe("the conditions the reader follows", () => {
     expect(list.map((entry) => [entry.code, entry.total, entry.recent])).toEqual([["depression", 6, 1], ["schizophrenia", 1, 0], ["trd", 0, 0]])
     expect(list[0].treatments).toEqual([{ key: "antipsychotic", label: "Antipsychotics" }, { key: "lifestyle", label: null }, { key: "medicine", label: null }])
     expect(list[2].treatments).toEqual([])
+  })
+  it("names the three largest classes by their efficacy papers", () => {
+    const clozapine = (n: number, kind: Finding["kind"]) => finding(n, { treatment: "Clozapine", treatmentCode: "clozapine", kind })
+    const list = followedConditions([clozapine(1, "safety"), clozapine(2, "safety"), clozapine(3, "other"), finding(4), finding(5, { treatment: "CBT", treatmentCode: "cbt" }), finding(6, { treatment: "CBT", treatmentCode: "cbt" })], TAXONOMY, [], NOW)
+    expect(list[0]).toMatchObject({ code: "depression", total: 6 })
+    expect(list[0].treatments).toEqual([{ key: "psychotherapy", label: "Psychotherapy" }, { key: "medicine", label: null }])
   })
 })
 

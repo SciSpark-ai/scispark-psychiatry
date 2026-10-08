@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
-import type { ClassEvidence, ConditionEvidence as Evidence, Counts, Study, TreatmentEvidence } from "@/lib/clinical/evidence/build"
+import type { ClassEvidence, ConditionEvidence as Evidence, Efficacy, SafetyGroup, Study, TreatmentEvidence } from "@/lib/clinical/evidence/build"
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -12,30 +12,33 @@ vi.mock("@/lib/clinical/evidence/client", () => client)
 import { ConditionEvidence } from "../ConditionEvidence"
 import { clinicalFence } from "../clinical-fence"
 
-const counts = (over: Partial<Counts> = {}): Counts => ({ benefit: 0, "no-benefit": 0, mixed: 0, safety: 0, other: 0, unsorted: 0, ...over })
+const efficacy = (over: Partial<Efficacy> = {}): Efficacy => ({ benefit: 0, "no-benefit": 0, mixed: 0, ...over })
+const lines = (over: Partial<TreatmentEvidence["lines"]> = {}): TreatmentEvidence["lines"] => ({ benefit: [], "no-benefit": [], mixed: [], safety: [], ...over })
 const study = (n: number, over: Partial<Study> = {}): Study => ({
   key: `pmid:${n}`, slug: `paper-${n}`, headline: `Headline ${n}`, takeaway: `Takeaway ${n}.`, label: `Smith 2026`, venue: "A Journal", date: "2026-09-20",
   design: "randomized-trial", designNamed: true, population: "adults with depression", sampleSize: 120, comparator: "placebo", outcome: "depressive symptoms",
-  kind: "benefit", text: `Text ${n}`, treatment: "Ketamine", severalTreatments: false, isNew: false, saved: false, ...over,
+  kind: "benefit", text: `Text ${n}`, treatment: "Ketamine", severalTreatments: false, tier: "trial", isNew: false, saved: false, ...over,
 })
 const treatment = (key: string, name: string, studies: Study[], over: Partial<TreatmentEvidence> = {}): TreatmentEvidence => ({
-  key, name, papers: studies.length, counts: counts({ benefit: studies.length }), newPapers: 0, did: [], watch: [], studies, ...over,
+  key, name, papers: studies.length, efficacy: efficacy({ benefit: studies.length }), newPapers: 0, safetyPapers: 0, unreportedPapers: 0, lines: lines(), studies, ...over,
 })
 const klass = (key: string, label: string | null, treatments: TreatmentEvidence[], over: Partial<ClassEvidence> = {}): ClassEvidence => ({
-  key, label, papers: treatments.reduce((sum, entry) => sum + entry.papers, 0), counts: counts({ benefit: 1 }), newPapers: 0, treatments, ...over,
+  key, label, papers: treatments.reduce((sum, entry) => sum + entry.papers, 0), efficacy: efficacy({ benefit: 1 }), newPapers: 0, treatments, ...over,
 })
 const ketamine = treatment("ketamine", "Ketamine", [study(1), study(2, { kind: "no-benefit", text: "No better than placebo", sampleSize: null })], {
-  counts: counts({ benefit: 1, "no-benefit": 1 }), did: [{ text: "Eased symptoms within a day", key: "pmid:1" }], watch: [{ text: "No better than placebo", key: "pmid:2", kind: "no-benefit" }],
+  efficacy: efficacy({ benefit: 1, "no-benefit": 1 }), lines: lines({ benefit: [{ text: "Eased symptoms within a day", key: "pmid:1" }], "no-benefit": [{ text: "No better than placebo", key: "pmid:2" }] }),
 })
-const lithium = treatment("lithium", "Lithium", [study(3, { treatment: "Lithium", text: "Cut relapse" })], { did: [{ text: "Cut relapse", key: "pmid:3" }] })
+const lithium = treatment("lithium", "Lithium", [study(3, { treatment: "Lithium", text: "Cut relapse" })], { lines: lines({ benefit: [{ text: "Cut relapse", key: "pmid:3" }] }) })
 const sertraline = treatment("sertraline", "Sertraline", [study(7, { treatment: "Sertraline", kind: "safety", text: "Raised bleeding risk" })], {
-  counts: counts({ safety: 1 }), watch: [{ text: "Raised bleeding risk", key: "pmid:7", kind: "safety" }],
+  papers: 0, efficacy: efficacy(), safetyPapers: 1, lines: lines({ safety: [{ text: "Raised bleeding risk", key: "pmid:7" }] }),
 })
-const med = klass("medicine", null, [ketamine, lithium], { papers: 4, newPapers: 2, counts: counts({ benefit: 3, "no-benefit": 1 }) })
-const ect = klass("neuromodulation", "Neuromodulation", [treatment("ect", "ECT", [study(4, { treatment: "ECT" })])], { papers: 1, counts: counts({ benefit: 1 }) })
+const safetyGroup = (key: string, name: string, studies: Study[]): SafetyGroup => ({ key, name, classKey: "medicine", papers: studies.length, newPapers: 0, studies })
+const med = klass("medicine", null, [ketamine, lithium], { papers: 4, newPapers: 2, efficacy: efficacy({ benefit: 3, "no-benefit": 1 }) })
+const ect = klass("neuromodulation", "Neuromodulation", [treatment("ect", "ECT", [study(4, { treatment: "ECT" })])], { papers: 1, efficacy: efficacy({ benefit: 1 }) })
 const EVIDENCE: Evidence = {
-  condition: { code: "depression", name: "Major depressive disorder" }, period: "all", total: 5, collected: 5, treatmentPapers: 5, since: "2026-03-02",
-  classes: [med, ect], safety: [study(7, { kind: "safety", treatment: "Sertraline" })],
+  condition: { code: "depression", name: "Major depressive disorder" }, period: "all", scope: "all", total: 8, collected: 8, savedCount: 0, since: "2026-03-02",
+  sections: { treatments: 5, safety: 1, research: 2 },
+  classes: [med, ect], safety: [safetyGroup("sertraline", "Sertraline", [study(7, { kind: "safety", treatment: "Sertraline" })])],
   research: [
     { type: "mechanism", papers: 1, newPapers: 0, studies: [study(5, { treatment: null, kind: null, takeaway: "Inflammation tracks severity." })] },
     { type: "risk-factor", papers: 1, newPapers: 0, studies: [study(6, { treatment: null, kind: null })] },
@@ -61,8 +64,8 @@ beforeEach(() => { document.body.innerHTML = ""; client.loadConditionEvidenceRem
 describe("the evidence block of a condition page", () => {
   it("says what it is built from, with and without a period", async () => {
     await show()
-    expect(client.loadConditionEvidenceRemote).toHaveBeenCalledWith("depression", "all")
-    expect(q("[data-testid=evidence-basis]").textContent).toBe("From the 5 papers your feed has listed on Major depressive disorder since 2026-03-02. Not all the evidence on it; papers are counted, nothing is pooled.")
+    expect(client.loadConditionEvidenceRemote).toHaveBeenCalledWith("depression", { period: "all", scope: "all" })
+    expect(q("[data-testid=evidence-basis]").textContent).toBe("From the 8 papers your feed has listed on Major depressive disorder since 2026-03-02. Not all the evidence on it; papers are counted, nothing is pooled.")
     document.body.innerHTML = ""
     await show({ ...EVIDENCE, period: "6m", total: 3, collected: 5 })
     expect(q("[data-testid=evidence-basis]").textContent).toContain("3 of 5 papers")
@@ -80,7 +83,7 @@ describe("the evidence block of a condition page", () => {
       select.value = "6m"
       select.dispatchEvent(new Event("change", { bubbles: true }))
     })
-    expect(client.loadConditionEvidenceRemote).toHaveBeenLastCalledWith("depression", "6m")
+    expect(client.loadConditionEvidenceRemote).toHaveBeenLastCalledWith("depression", { period: "6m", scope: "all" })
     expect(q("[data-class=medicine]")).not.toBeNull()
     expect(q("[data-testid=condition-evidence]").getAttribute("aria-busy")).toBe("true")
     await act(async () => { answer({ ...EVIDENCE, period: "6m", total: 1, collected: 5, classes: [ect] }) })
@@ -142,17 +145,18 @@ describe("the evidence block of a condition page", () => {
     expect(entries.map((entry) => [entry.getAttribute("data-key-kind"), entry.textContent])).toEqual([["benefit", "Benefit"], ["no-benefit", "No benefit"]])
     expect((entries[0].querySelector("[data-swatch]") as HTMLElement).style.backgroundColor).toBe("var(--clinical-benefit)")
     document.body.innerHTML = ""
-    const every = klass("medicine", null, [ketamine], { counts: counts({ benefit: 1, "no-benefit": 1, mixed: 1, safety: 1, other: 1, unsorted: 1 }) })
+    const every = klass("medicine", null, [ketamine], { efficacy: efficacy({ benefit: 1, "no-benefit": 1, mixed: 1 }) })
     await show({ ...EVIDENCE, classes: [every] })
-    expect(qa("[data-key-kind]").map((entry) => entry.textContent)).toEqual(["Benefit", "No benefit", "Mixed", "Safety", "Other", "Not sorted"])
+    expect(qa("[data-key-kind]").map((entry) => entry.textContent)).toEqual(["Benefit", "No benefit", "Mixed"])
     document.body.innerHTML = ""
     await show({ ...EVIDENCE, classes: [] })
     expect(q("[data-bar-key]")).toBeNull()
   })
 
   // Final review M8: the border colour on a border-coloured track could not be seen.
-  it("fills the other and not-sorted parts of a bar with a colour that is not the track's", async () => {
-    await show({ ...EVIDENCE, classes: [klass("medicine", null, [ketamine], { counts: counts({ other: 1, unsorted: 1 }) })] })
+  // rewritten in Task 4: a bar is divided by the efficacy results only, so it has no other or not-sorted part.
+  it.skip("fills the other and not-sorted parts of a bar with a colour that is not the track's", async () => {
+    await show({ ...EVIDENCE, classes: [klass("medicine", null, [ketamine], { efficacy: efficacy() })] })
     const colours = ["other", "unsorted"].map((kind) => (classRow("medicine").querySelector(`[data-bar] [data-kind=${kind}]`) as HTMLElement).style.backgroundColor)
     for (const colour of colours) {
       expect(colour).toContain("var(--text-muted)")
@@ -184,7 +188,7 @@ describe("the evidence block of a condition page", () => {
 
   it("joins several texts with a semicolon, and shows a single benefit text plain but a single caution labelled", async () => {
     const many = treatment("ketamine", "Ketamine", [study(1), study(2), study(8, { kind: "safety" })], {
-      did: [{ text: "Eased symptoms.", key: "a" }, { text: "Worked fast.", key: "b" }], watch: [{ text: "Dissociation. ", key: "c", kind: "safety" }, { text: "Faded by week 6", key: "d", kind: "mixed" }],
+      lines: lines({ benefit: [{ text: "Eased symptoms.", key: "a" }, { text: "Worked fast.", key: "b" }], safety: [{ text: "Dissociation. ", key: "c" }], mixed: [{ text: "Faded by week 6", key: "d" }] }),
     })
     await show({ ...EVIDENCE, classes: [klass("medicine", null, [many, lithium, sertraline])] })
     await openClass("medicine")
@@ -234,7 +238,7 @@ describe("the evidence block of a condition page", () => {
     expect(q('[data-study="pmid:12"] [data-named]')).toBeNull()
   })
   it("counts the treatments tab by distinct papers, not by the sum of the classes", async () => {
-    await show({ ...EVIDENCE, treatmentPapers: 3 })
+    await show({ ...EVIDENCE, sections: { ...EVIDENCE.sections, treatments: 3 } })
     expect(qa('[role="tab"]')[0].querySelector("[data-tab-count]")!.textContent).toBe("3")
   })
 
@@ -267,6 +271,12 @@ describe("the evidence block of a condition page", () => {
     expect(qa("table th").map((head) => head.textContent)).toEqual(["Treatment", "Study", "Design", "Population", "n", "Compared with", "Outcome", "Result"])
     expect(qa("[data-study]")).toHaveLength(1)
     expect(q("[data-study] [data-cell=treatment]").textContent).toBe("Sertraline")
+    // A paper in the safety group of each treatment it names is one row.
+    document.body.innerHTML = ""
+    const both = study(8, { kind: "safety", treatment: "sertraline and lithium", severalTreatments: true, date: "2026-09-25" })
+    await show({ ...EVIDENCE, safety: [safetyGroup("sertraline", "Sertraline", [both, study(7, { kind: "safety", treatment: "Sertraline" })]), safetyGroup("lithium", "Lithium", [both])] })
+    await click(qa('[role="tab"]')[1])
+    expect(qa("[data-study]").map((row) => row.getAttribute("data-study"))).toEqual(["pmid:8", "pmid:7"])
     document.body.innerHTML = ""
     await show({ ...EVIDENCE, safety: [] })
     await click(qa('[role="tab"]')[1])

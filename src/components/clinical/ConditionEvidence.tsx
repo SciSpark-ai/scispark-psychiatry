@@ -3,7 +3,7 @@
 import { useEffect, useId, useState } from "react"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { loadConditionEvidenceRemote } from "@/lib/clinical/evidence/client"
-import type { ConditionEvidence as Evidence, Period } from "@/lib/clinical/evidence/build"
+import type { ConditionEvidence as Evidence, Period, Study } from "@/lib/clinical/evidence/build"
 import { parseEvidenceQuery } from "@/lib/clinical/records/query"
 import { EvidenceTimeline } from "./EvidenceTimeline"
 import { ResearchList } from "./ResearchList"
@@ -27,14 +27,18 @@ function PeriodSelect({ period, onChange }: { period: Period; onChange: (period:
   )
 }
 
+/** The studies of the safety groups, each paper once (a paper is in the group of every treatment it names), newest first. */
+function safetyStudies(evidence: Evidence): Study[] {
+  const byKey = new Map<string, Study>()
+  for (const group of evidence.safety) for (const study of group.studies) byKey.set(study.key, study)
+  return [...byKey.values()].sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || a.key.localeCompare(b.key))
+}
+
 function Tabs({ evidence, tab, onPick }: { evidence: Evidence; tab: Tab; onPick: (tab: Tab) => void }) {
   const id = useId()
-  const totals: Record<Tab, number> = {
-    // Distinct papers: one under two classes is counted once.
-    treatments: evidence.treatmentPapers,
-    safety: evidence.safety.length,
-    research: evidence.research.reduce((sum, group) => sum + group.papers, 0),
-  }
+  // Distinct papers: a paper is in one section, however many treatments it names.
+  const totals: Record<Tab, number> = evidence.sections
+  const safety = safetyStudies(evidence)
   return (
     <div className="mt-4">
       <div role="tablist" aria-label={E.tabsLabel} className="flex gap-1 border-b border-border-warm">
@@ -48,7 +52,7 @@ function Tabs({ evidence, tab, onPick }: { evidence: Evidence; tab: Tab; onPick:
       </div>
       <div role="tabpanel" id={`${id}-panel`} aria-labelledby={`${id}-${tab}`} className="pt-2">
         {tab === "treatments" && <TreatmentList classes={evidence.classes} />}
-        {tab === "safety" && (evidence.safety.length > 0 ? <StudyTable studies={evidence.safety} kind="safety" /> : <p className="py-3 text-[14px] text-muted-text">{E.safetyEmpty}</p>)}
+        {tab === "safety" && (safety.length > 0 ? <StudyTable studies={safety} kind="safety" /> : <p className="py-3 text-[14px] text-muted-text">{E.safetyEmpty}</p>)}
         {tab === "research" && <ResearchList groups={evidence.research} />}
       </div>
     </div>
@@ -70,7 +74,7 @@ export function ConditionEvidence({ body }: { body: string }) {
   useEffect(() => {
     if (!condition) return
     let cancelled = false
-    loadConditionEvidenceRemote(condition, period)
+    loadConditionEvidenceRemote(condition, { period, scope: "all" })
       .then((next) => { if (!cancelled) setLoaded({ condition, period, evidence: next, error: null }) })
       .catch((failure) => { if (!cancelled) setLoaded({ condition, period, evidence: null, error: failure instanceof Error ? failure.message : String(failure) }) })
     return () => { cancelled = true }
