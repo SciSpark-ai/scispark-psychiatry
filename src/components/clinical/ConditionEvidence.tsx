@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useId, useState, type ReactNode } from "react"
+import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { loadConditionEvidenceRemote } from "@/lib/clinical/evidence/client"
 import type { ConditionEvidence as Evidence, Period, Scope } from "@/lib/clinical/evidence/build"
-import { BubbleRow } from "./BubbleRow"
+import { BubbleGrid, discBoxHeight } from "./BubbleGrid"
 import { EvidenceBubble } from "./EvidenceBubble"
+import { EvidenceMap, type MapEntry } from "./EvidenceMap"
 import { classNameOf } from "./evidence-labels"
 import { EFFICACY_KINDS, KIND_COLOUR } from "./evidence-shapes"
 import { EvidenceTimeline } from "./EvidenceTimeline"
@@ -67,7 +68,8 @@ function BubbleKey() {
 
 /**
  * Treatments, Safety and Other research, one under the other. Nothing is chosen at first, so no study is listed until
- * the reader presses a bubble. What is chosen in one section does not change another.
+ * the reader presses a bubble. Treatments is one map: of the classes, and once a class is pressed of its treatments, with
+ * a crumb back to the classes. What is chosen in one section does not change another.
  */
 function Sections({ evidence }: { evidence: Evidence }) {
   const [picked, setPicked] = useState<Chosen>(NOTHING)
@@ -79,49 +81,57 @@ function Sections({ evidence }: { evidence: Evidence }) {
   const treatment = cls?.treatments.find((entry) => entry.key === chosen.treatment) ?? null
   const harms = evidence.safety.find((group) => group.key === chosen.safety) ?? null
   const className = cls ? classNameOf(cls.key, cls.label) : null
+  // The one map of the section: the classes, or the treatments of the chosen class.
+  const classEntries: MapEntry[] = evidence.classes.map((entry) => ({ key: entry.key, name: classNameOf(entry.key, entry.label), papers: entry.papers, efficacy: entry.efficacy, newPapers: entry.newPapers, participants: entry.participants, sized: entry.sized }))
+  const treatmentEntries: MapEntry[] = (cls?.treatments ?? []).map((entry) => ({
+    key: entry.key, name: entry.name, papers: entry.papers, efficacy: entry.efficacy, newPapers: entry.newPapers, safetyPapers: entry.safetyPapers, comparatorPapers: entry.comparatorPapers, participants: entry.participants, sized: entry.sized,
+  }))
+  const safetyBox = discBoxHeight(evidence.safety.map((group) => group.papers))
+  // Back from a class, the keyboard is put on the bubble of that class: its own button is gone with the treatments.
+  const treatments = useRef<HTMLDivElement>(null)
+  const backFrom = useRef<string | null>(null)
+  useEffect(() => {
+    const key = backFrom.current
+    if (key === null || chosen.classKey !== null) return
+    backFrom.current = null
+    const buttons = [...(treatments.current?.querySelectorAll<HTMLElement>("button[data-bubble]") ?? [])].filter((button) => button.getAttribute("data-bubble") === key)
+    ;(buttons.find((button) => button.offsetParent !== null) ?? buttons[0])?.focus()
+  }, [chosen.classKey])
+  const leaveClass = () => { backFrom.current = chosen.classKey; choose({ classKey: null, treatment: null }) }
   return (
     <>
       <Section name="treatments" count={evidence.sections.treatments}>
         {evidence.classes.length === 0 ? <p data-empty="true" className={EMPTY}>{E.treatmentsEmpty}</p> : (
-          <>
+          <div ref={treatments}>
             <BubbleKey />
             <p data-bubble-note="true" className="mt-1 max-w-[720px] text-[12px] text-muted-text">{E.bubbleNote}</p>
-            <div data-classes="true">
-              <BubbleRow label={E.rows.classes}>
-                {evidence.classes.map((entry) => (
-                  <EvidenceBubble key={entry.key} id={entry.key} name={classNameOf(entry.key, entry.label)} papers={entry.papers} efficacy={entry.efficacy} newPapers={entry.newPapers}
-                    pressed={entry.key === chosen.classKey} onPick={() => choose({ classKey: entry.key === chosen.classKey ? null : entry.key, treatment: null })} />
-                ))}
-              </BubbleRow>
-            </div>
-            {cls && className && (
-              <div data-treatments={cls.key} className="mt-2 border-t border-border-warm/60 pt-2">
+            {cls && className ? (
+              <div data-treatments={cls.key} className="mt-2">
                 <p data-crumb="true" className="text-[13px] text-secondary-dark">
-                  <button type="button" onClick={() => choose({ classKey: null, treatment: null })} className="text-accent-ink underline-offset-2 hover:underline">{E.allClasses}</button>
+                  <button type="button" autoFocus onClick={leaveClass} className="text-accent-ink underline-offset-2 hover:underline">{E.allClasses}</button>
                   <span aria-hidden="true">{E.crumbGap}</span>
-                  <span className="font-semibold text-espresso">{className}</span>
+                  <span aria-current="true" className="font-semibold text-espresso">{className}</span>
                 </p>
-                <BubbleRow label={E.rows.treatments(className)}>
-                  {cls.treatments.map((entry) => (
-                    <EvidenceBubble key={entry.key} id={entry.key} name={entry.name} papers={entry.papers} efficacy={entry.efficacy} newPapers={entry.newPapers} safetyPapers={entry.safetyPapers} comparatorPapers={entry.comparatorPapers}
-                      pressed={entry.key === chosen.treatment} onPick={() => choose({ treatment: entry.key === chosen.treatment ? null : entry.key })} />
-                  ))}
-                </BubbleRow>
+                <EvidenceMap label={E.rows.treatments(className)} entries={treatmentEntries} chosen={chosen.treatment} onPick={(key) => choose({ treatment: key === chosen.treatment ? null : key })} />
                 {treatment && <TreatmentDetail key={treatment.key} treatment={treatment} />}
               </div>
+            ) : (
+              <div data-classes="true">
+                <EvidenceMap label={E.rows.classes} entries={classEntries} chosen={null} onPick={(key) => choose({ classKey: key, treatment: null })} />
+              </div>
             )}
-          </>
+          </div>
         )}
       </Section>
       <Section name="safety" count={evidence.sections.safety}>
         {evidence.safety.length === 0 ? <p className={EMPTY}>{E.safetyEmpty}</p> : (
           <>
-            <BubbleRow label={E.rows.safety}>
+            <BubbleGrid label={E.rows.safety}>
               {evidence.safety.map((group) => (
-                <EvidenceBubble key={group.key} id={group.key} name={group.name} papers={group.papers} newPapers={group.newPapers}
+                <EvidenceBubble key={group.key} id={group.key} name={group.name} papers={group.papers} newPapers={group.newPapers} discHeight={safetyBox}
                   pressed={group.key === chosen.safety} onPick={() => choose({ safety: group.key === chosen.safety ? null : group.key })} />
               ))}
-            </BubbleRow>
+            </BubbleGrid>
             {harms && <div className="pt-1"><StudyTable key={harms.key} studies={harms.studies} kind="safety" caption={harms.name} /></div>}
           </>
         )}
@@ -142,8 +152,8 @@ function basisOf(evidence: Evidence, phrase: string | null): string {
 }
 
 /**
- * The evidence the reader's feed has seen on one condition (spec D53): the classes of treatment as bubbles,
- * the treatments of a chosen class, and for a chosen treatment what its papers found, a dot per paper and the
+ * The evidence the reader's feed has seen on one condition (spec D53): the classes of treatment as bubbles on a map,
+ * the treatments of a chosen class on the same map, and for a chosen treatment what its papers found, a dot per paper and the
  * table of them; the safety papers and the other research, as bubbles with their tables; and, folded away,
  * when the papers came out. Counted on the server from the stored findings.
  * Papers are counted, never pooled. Which papers (`scope`) and of what time (`period`) is the caller's to

@@ -380,15 +380,38 @@ export const CLINICAL_COPY = {
      * What a bubble says to a reader who does not see it. `efficacy` is null for a bubble that has no colours of direction.
      * What is new, the safety papers and the papers it was the comparison in are added when there are any.
      */
-    bubbleLabel: (name: string, papers: number, efficacy: { benefit: number; "no-benefit": number; mixed: number } | null, newPapers: number, safetyPapers: number, comparatorPapers = 0) =>
+    bubbleLabel: (name: string, papers: number, efficacy: { benefit: number; "no-benefit": number; mixed: number } | null, newPapers: number, safetyPapers: number, comparatorPapers = 0, position: string | null = null) =>
       [
         `${name}: ${papers} ${papers === 1 ? "paper" : "papers"}`,
         ...(efficacy ? [`${efficacy.benefit} benefit, ${efficacy["no-benefit"]} no benefit, ${efficacy.mixed} mixed`] : []),
         ...(newPapers > 0 ? [`${newPapers} new`] : []),
         ...(safetyPapers > 0 ? [`${safetyPapers} safety`] : []),
         ...(comparatorPapers > 0 ? [`the comparison in ${comparatorPapers} other ${comparatorPapers === 1 ? "paper" : "papers"}`] : []),
+        ...(position ? [position] : []),
       ].join("; "),
-    /** The names of the rows of bubbles, for a screen reader. */
+    /**
+     * The map of treatments: across, the participants the papers of a class or of a treatment state, added up, on a
+     * log scale; up, the share of its papers that report benefit. Nothing is pooled: these are counts and stated sizes.
+     */
+    map: {
+      axis: "Total participants across its papers (log scale)",
+      note: "Across = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Up = the share of its papers reporting benefit. Size = the number of papers.",
+      /** The column of the items whose papers state no participants. */
+      notStated: "not stated",
+      /** Up the side: the top, the middle and the bottom. */
+      shares: { all: "All benefit", split: "Split", none: "No benefit" },
+      tick: (value: number) => value.toLocaleString("en-US"),
+      /** Under a name in the grid of a narrow screen. */
+      participants: (count: number | null) => (count === null ? "participants not stated" : `${count.toLocaleString("en-US")} ${count === 1 ? "participant" : "participants"}`),
+      /** The last part of what a bubble of the map says to a reader who does not see it. `sized` of its `papers` state their participants. */
+      position: (count: number | null, sized: number, papers: number) =>
+        count === null ? "participants not stated" : `${count.toLocaleString("en-US")} ${count === 1 ? "participant" : "participants"} in ${sized} of ${papers} ${papers === 1 ? "paper" : "papers"}`,
+      /** In place of the map, over a plain grid of the bubbles. */
+      noneStated: "None of these papers states its participants, so they are shown side by side, not on a map.",
+      /** Between two marks on the one line under a name. */
+      markGap: " · ",
+    },
+    /** The names of the groups of bubbles, for a screen reader. */
     rows: {
       classes: "Classes of treatment", treatments: (className: string) => `Treatments in ${className}`,
       safety: "Safety papers, by treatment", research: "Other research, by kind",

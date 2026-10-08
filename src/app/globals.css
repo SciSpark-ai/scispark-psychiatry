@@ -310,3 +310,8 @@
   padding: 0.1rem 0.3rem;
   vertical-align: middle;
 }
+
+/* The bubbles of the evidence summary (clinical): equal tiles, as many columns as fit. */
+@utility evidence-tiles {
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}

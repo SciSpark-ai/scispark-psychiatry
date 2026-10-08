@@ -19,6 +19,10 @@ export const KIND_TEXT_COLOUR: Record<Kind, string> = { ...KIND_COLOUR, mixed: "
 /** The disc of a bubble that has no direction: the accent, as light as a badge's ground. */
 export const LIGHT_FILL = "color-mix(in srgb, var(--accent) 18%, transparent)"
 export const LIGHT_EDGE = "color-mix(in srgb, var(--accent) 45%, transparent)"
+/** The ground of the map's column of items that state no participants, and its lines. */
+export const COLUMN_FILL = "color-mix(in srgb, var(--text-muted) 9%, transparent)"
+export const AXIS_COLOUR = "var(--border)"
+export const AXIS_TEXT_COLOUR = "var(--text-muted)"
 /** The centre of a pie, where its number is read, and the number. */
 export const CENTRE_FILL = "var(--surface-light)"
 export const NUMBER_COLOUR = "var(--text-primary)"

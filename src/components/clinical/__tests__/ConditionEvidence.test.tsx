@@ -63,6 +63,12 @@ const section = (name: string) => q(`section[data-section="${name}"]`)
 const pick = (key: string, within = "") => click(bubble(key, within))
 /** Opens a class and one of its treatments. */
 const openTreatment = async (classKey: string, key: string) => { await pick(classKey, "[data-classes]"); await pick(key, "[data-treatments]") }
+const WIDE = '[data-evidence-map="wide"]'
+const NARROW = '[data-evidence-map="narrow"]'
+/** The same evidence with the participants stated, so the Treatments section is a map. */
+const sizedKetamine: TreatmentEvidence = { ...ketamine, participants: 120, sized: 1, safetyPapers: 2, comparatorPapers: 1 }
+const sizedLithium: TreatmentEvidence = { ...lithium, participants: 2400, sized: 1 }
+const SIZED: Evidence = { ...EVIDENCE, classes: [{ ...med, participants: 2520, sized: 2, treatments: [sizedKetamine, sizedLithium] }, { ...ect, participants: 60, sized: 1 }] }
 const heads = () => qa("table thead th").map((head) => head.textContent)
 beforeEach(() => { document.body.innerHTML = ""; client.loadConditionEvidenceRemote.mockReset() })
 
@@ -161,7 +167,11 @@ describe("the evidence block of a condition page", () => {
     expect(bubbles[0].querySelector("[data-number]")!.textContent).toBe("4")
     expect(bubbles[0].querySelector("[data-name]")!.textContent).toBe("Medicines")
     expect(bubbles[0].querySelector("[data-new]")!.textContent).toBe("+2 new")
-    expect(bubbles[0].getAttribute("aria-label")).toBe("Medicines: 4 papers; 3 benefit, 1 no benefit, 0 mixed; 2 new")
+    expect(bubbles[0].getAttribute("aria-label")).toBe("Medicines: 4 papers; 3 benefit, 1 no benefit, 0 mixed; 2 new; participants not stated")
+    // No paper of this evidence states its participants: the classes are side by side on a grid, and a line says why.
+    expect(row.querySelector('[data-evidence-map="grid"] [data-map-none]')!.textContent).toContain("None of these papers states its participants")
+    expect(row.querySelector("[data-bubble-grid]")!.getAttribute("aria-label")).toBe("Classes of treatment")
+    expect(row.querySelector("svg[data-map-axes]")).toBeNull()
     expect(bubbles[1].querySelector("[data-name]")!.textContent).toBe("Neuromodulation")
     expect(bubbles[1].querySelector("[data-new]")).toBeNull()
     // 4 papers: radius 36; 1 paper: radius 27.
@@ -180,33 +190,106 @@ describe("the evidence block of a condition page", () => {
     expect(q("table")).toBeNull()
   })
 
-  it("opens a class to a crumb and its treatments' bubbles, and the crumb closes it", async () => {
+  it("opens a class to a crumb and its treatments' bubbles in place of the classes, and the crumb goes back", async () => {
     await show()
     await pick("medicine")
-    expect(bubble("medicine").getAttribute("aria-pressed")).toBe("true")
-    expect(bubble("neuromodulation").getAttribute("aria-pressed")).toBe("false")
+    // The same place now draws the treatments of the class: the bubbles of the classes are gone.
+    expect(q("[data-classes]")).toBeNull()
+    expect(bubble("medicine")).toBeNull()
+    expect(bubble("neuromodulation")).toBeNull()
     const crumb = q("[data-crumb]")
     expect(crumb.textContent).toBe("All classes › Medicines")
     expect(crumb.querySelector("button")!.textContent).toBe("All classes")
-    expect(q("[data-classes]").compareDocumentPosition(crumb) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(q("[data-treatments]").getAttribute("data-treatments")).toBe("medicine")
+    expect(q("[data-treatments] [data-bubble-grid]").getAttribute("aria-label")).toBe("Treatments in Medicines")
     const treatments = [...q("[data-treatments]").querySelectorAll("button[data-bubble]")] as HTMLElement[]
     expect(treatments.map((entry) => entry.getAttribute("data-bubble"))).toEqual(["ketamine", "lithium"])
-    expect(treatments[0].getAttribute("aria-label")).toBe("Ketamine: 2 papers; 1 benefit, 1 no benefit, 0 mixed")
+    expect(crumb.compareDocumentPosition(treatments[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(treatments[0].getAttribute("aria-label")).toBe("Ketamine: 2 papers; 1 benefit, 1 no benefit, 0 mixed; participants not stated")
     expect(treatments.map((entry) => entry.querySelector("svg")!.getAttribute("width"))).toEqual([String(2 * Number((18 + 9 * Math.sqrt(2)).toFixed(1))), "54"])
     expect(qa("[data-study]")).toHaveLength(0)
     await click(crumb.querySelector("button"))
     expect(q("[data-treatments]")).toBeNull()
     expect(q("[data-crumb]")).toBeNull()
+    expect(q("[data-classes]")).not.toBeNull()
     expect(bubble("medicine").getAttribute("aria-pressed")).toBe("false")
   })
 
-  it("shows the one bubble of a class with one treatment, and closes a class pressed again", async () => {
+  it("puts the keyboard on the crumb when a class opens, and back on the bubble of that class when it closes", async () => {
+    await show()
+    await pick("neuromodulation")
+    expect(document.activeElement).toBe(q("[data-crumb] button"))
+    await click(q("[data-crumb] button"))
+    expect(document.activeElement).toBe(bubble("neuromodulation"))
+  })
+
+  it("shows the one bubble of a class with one treatment", async () => {
     await show()
     await pick("neuromodulation")
     expect([...q("[data-treatments]").querySelectorAll("button[data-bubble]")].map((entry) => entry.getAttribute("data-bubble"))).toEqual(["ect"])
     expect(qa("[data-study]")).toHaveLength(0)
-    await pick("neuromodulation", "[data-classes]")
-    expect(q("[data-treatments]")).toBeNull()
+  })
+
+  describe("when the papers state their participants", () => {
+    it("draws the classes on a map, and on a narrow screen as a grid of the same bubbles", async () => {
+      await show(SIZED)
+      expect(q(`[data-classes] ${WIDE}`).className).toContain("sm:block")
+      expect(q(`[data-classes] ${NARROW}`).className).toContain("sm:hidden")
+      expect(qa(`[data-classes] ${WIDE} button[data-bubble]`).map((entry) => entry.getAttribute("data-bubble"))).toEqual(["neuromodulation", "medicine"])
+      expect(qa(`[data-classes] ${NARROW} button[data-bubble]`).map((entry) => entry.getAttribute("data-bubble"))).toEqual(["medicine", "neuromodulation"])
+      expect(q(`${WIDE} [data-map-box]`).getAttribute("aria-label")).toBe("Classes of treatment")
+      expect(qa(`${WIDE} [data-tick]`).map((tick) => tick.textContent)).toEqual(["10", "100", "1,000", "10,000"])
+      const medicine = bubble("medicine", WIDE)
+      expect(medicine.getAttribute("aria-label")).toBe("Medicines: 4 papers; 3 benefit, 1 no benefit, 0 mixed; 2 new; 2,520 participants in 2 of 4 papers")
+      expect(medicine.querySelector("[data-name]")!.textContent).toBe("Medicines")
+      expect(medicine.querySelector("[data-marks]")!.textContent).toBe("+2 new")
+      expect(medicine.style.left).toMatch(/^\d+(\.\d+)?%$/)
+      expect(medicine.style.top).toMatch(/^\d+(\.\d+)?%$/)
+      expect(q(`${NARROW} button[data-bubble=medicine] [data-participants]`).textContent).toBe("2,520 participants")
+      expect(q("[data-map-note]").textContent).toContain("Size = the number of papers.")
+      expect(q("[data-bubble-note]").compareDocumentPosition(q(WIDE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it("redraws the same map with the treatments of the pressed class, under the crumb, and goes back by the crumb", async () => {
+      await show(SIZED)
+      await pick("medicine", WIDE)
+      expect(q("[data-classes]")).toBeNull()
+      expect(qa(WIDE)).toHaveLength(1)
+      expect(q("[data-crumb]").textContent).toBe("All classes › Medicines")
+      expect(q(`[data-treatments] ${WIDE} [data-map-box]`).getAttribute("aria-label")).toBe("Treatments in Medicines")
+      expect(q("[data-crumb]").compareDocumentPosition(q(WIDE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // Ketamine has 120 participants, lithium 2,400: ketamine is to the left.
+      expect(qa(`${WIDE} button[data-bubble]`).map((entry) => entry.getAttribute("data-bubble"))).toEqual(["ketamine", "lithium"])
+      expect(parseFloat(bubble("ketamine", WIDE).style.left)).toBeLessThan(parseFloat(bubble("lithium", WIDE).style.left))
+      // Half of ketamine's papers report benefit, all of lithium's: lithium is higher.
+      expect(parseFloat(bubble("lithium", WIDE).style.top)).toBeLessThan(parseFloat(bubble("ketamine", WIDE).style.top))
+      expect(bubble("ketamine", WIDE).querySelector("[data-marks]")!.textContent).toBe("2 safety · compared in 1")
+      expect(bubble("ketamine", WIDE).getAttribute("aria-label")).toBe("Ketamine: 2 papers; 1 benefit, 1 no benefit, 0 mixed; 2 safety; the comparison in 1 other paper; 120 participants in 1 of 2 papers")
+      await click(q("[data-crumb] button"))
+      expect(q("[data-treatments]")).toBeNull()
+      expect(qa(`[data-classes] ${WIDE} button[data-bubble]`)).toHaveLength(2)
+      expect(document.activeElement!.getAttribute("data-bubble")).toBe("medicine")
+    })
+
+    it("opens the detail of a treatment under the map, from the map or from the grid, and closes it when pressed again", async () => {
+      await show(SIZED)
+      await pick("medicine", WIDE)
+      expect(q("[data-treatment-detail]")).toBeNull()
+      await pick("ketamine", WIDE)
+      expect(bubble("ketamine", WIDE).getAttribute("aria-pressed")).toBe("true")
+      expect(bubble("ketamine", NARROW).getAttribute("aria-pressed")).toBe("true")
+      expect(bubble("lithium", WIDE).getAttribute("aria-pressed")).toBe("false")
+      const detail = q("[data-treatment-detail]")
+      expect(detail.getAttribute("data-treatment-detail")).toBe("ketamine")
+      expect(q("[data-map-note]").compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(detail.querySelector("[data-testid=direction-plot]")).not.toBeNull()
+      expect(qa("[data-study]").map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
+      await pick("lithium", NARROW)
+      expect(q("[data-treatment-detail]").getAttribute("data-treatment-detail")).toBe("lithium")
+      await pick("lithium", WIDE)
+      expect(q("[data-treatment-detail]")).toBeNull()
+      expect(q("[data-treatments]")).not.toBeNull()
+    })
   })
 
   it("marks a treatment that has safety papers in words under its bubble", async () => {
@@ -391,21 +474,30 @@ describe("the evidence block of a condition page", () => {
     expect(q('[data-study="pmid:10"]').textContent).not.toContain("saved")
   })
 
-  it("clears the chosen treatment when another class is chosen", async () => {
+  it("clears the chosen treatment when the reader goes back to the classes and opens one again", async () => {
     await show()
     await openTreatment("medicine", "ketamine")
     expect(q("[data-treatment-detail]")).not.toBeNull()
-    await pick("neuromodulation", "[data-classes]")
+    await click(q("[data-crumb] button"))
     expect(q("[data-treatment-detail]")).toBeNull()
+    await pick("neuromodulation", "[data-classes]")
     expect(qa("[data-treatments] button[data-bubble]").map((entry) => entry.getAttribute("aria-pressed"))).toEqual(["false"])
+    await click(q("[data-crumb] button"))
     await pick("medicine", "[data-classes]")
     expect(q("[data-treatment-detail]")).toBeNull()
+    expect(qa("[data-treatments] button[data-bubble]").map((entry) => entry.getAttribute("aria-pressed"))).toEqual(["false", "false"])
   })
 
   it("draws a light bubble per safety group, opens one to the table of its studies, and says so when there are none", async () => {
     const both = study(8, { kind: "safety", treatment: "sertraline and lithium", severalTreatments: true, date: "2026-09-25" })
     await show({ ...EVIDENCE, safety: [safetyGroup("sertraline", "Sertraline", [both, study(7, { kind: "safety", treatment: "Sertraline" })]), { ...safetyGroup("lithium", "Lithium", [both]), newPapers: 1 }] })
     const bubbles = [...section("safety").querySelectorAll("button[data-bubble]")] as HTMLElement[]
+    // On a grid of equal tiles: every disc in a box of one height, the height of the largest.
+    const grid = section("safety").querySelector("[data-bubble-grid]") as HTMLElement
+    expect([grid.getAttribute("role"), grid.getAttribute("aria-label")]).toEqual(["group", "Safety papers, by treatment"])
+    expect(grid.className).toContain("evidence-tiles")
+    expect(bubbles.map((entry) => entry.parentElement)).toEqual([grid, grid])
+    expect(bubbles.map((entry) => (entry.querySelector("[data-disc-box]") as HTMLElement).style.height)).toEqual(Array(2).fill(`${2 * Number((18 + 9 * Math.sqrt(2)).toFixed(1)) + 8}px`))
     expect(bubbles.map((entry) => [entry.getAttribute("data-bubble"), entry.querySelector("[data-number]")!.textContent, entry.querySelector("[data-name]")!.textContent])).toEqual([["sertraline", "2", "Sertraline"], ["lithium", "1", "Lithium"]])
     expect(bubbles[0].getAttribute("aria-label")).toBe("Sertraline: 2 papers")
     expect(bubbles[1].getAttribute("aria-label")).toBe("Lithium: 1 paper; 1 new")
@@ -432,6 +524,11 @@ describe("the evidence block of a condition page", () => {
     const unreported = study(15, { kind: "other", treatment: "Ketamine", takeaway: "Ketamine changed sleep." })
     await show({ ...EVIDENCE, research: [{ ...EVIDENCE.research[0], papers: 3, newPapers: 2 }, EVIDENCE.research[1], { type: "no-efficacy", papers: 1, newPapers: 0, studies: [unreported] }] })
     const bubbles = [...section("research").querySelectorAll("button[data-bubble]")] as HTMLElement[]
+    const grid = section("research").querySelector("[data-bubble-grid]") as HTMLElement
+    expect([grid.getAttribute("role"), grid.getAttribute("aria-label")]).toEqual(["group", "Other research, by kind"])
+    expect(grid.className).toContain("evidence-tiles")
+    // Three papers at the most: a radius of 33.6, so every disc is in a box of 75.2.
+    expect(bubbles.map((entry) => (entry.querySelector("[data-disc-box]") as HTMLElement).style.height)).toEqual(Array(3).fill("75.2px"))
     expect(bubbles.map((entry) => [entry.getAttribute("data-bubble"), entry.querySelector("[data-name]")!.textContent, entry.querySelector("[data-number]")!.textContent]))
       .toEqual([["mechanism", "Mechanisms", "3"], ["risk-factor", "Risk factors", "1"], ["no-efficacy", "Treatment studied, not sorted by result", "1"]])
     expect(bubbles[0].querySelector("[data-new]")!.textContent).toBe("+2 new")
@@ -490,7 +587,8 @@ describe("the evidence block of a condition page", () => {
     client.loadConditionEvidenceRemote.mockResolvedValue({ ...EVIDENCE, period: "6m", classes: [{ ...med, treatments: [lithium] }], safety: [] })
     await again(<ConditionEvidence condition="depression" period="6m" />)
     await act(async () => {})
-    expect(bubble("medicine").getAttribute("aria-pressed")).toBe("true")
+    expect(q("[data-treatments]").getAttribute("data-treatments")).toBe("medicine")
+    expect(q("[data-crumb]").textContent).toBe("All classes › Medicines")
     expect(q("[data-treatment-detail]")).toBeNull()
     expect(qa("[data-study]")).toHaveLength(0)
     // Back again: it is not chosen any more.
@@ -506,6 +604,7 @@ describe("the evidence block of a condition page", () => {
     await act(async () => {})
     expect(q("[data-treatments]")).toBeNull()
     expect(q("[data-crumb]")).toBeNull()
+    expect(qa("[data-classes] button[data-bubble]").map((entry) => entry.getAttribute("data-bubble"))).toEqual(["neuromodulation"])
   })
 
   it("says so in a section that has no paper", async () => {

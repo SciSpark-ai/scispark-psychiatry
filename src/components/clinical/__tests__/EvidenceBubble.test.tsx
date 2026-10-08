@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
-import { BubbleRow } from "../BubbleRow"
+import { BubbleGrid, discBoxHeight } from "../BubbleGrid"
 import { EvidenceBubble } from "../EvidenceBubble"
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -103,17 +103,51 @@ describe("a bubble of the evidence summary", () => {
   it("says when it is the chosen one, and tells its owner when it is pressed", async () => {
     const onPick = vi.fn()
     await render(
-      <BubbleRow label="Classes of treatment">
+      <BubbleGrid label="Classes of treatment">
         <EvidenceBubble id="a" name="A" papers={1} pressed onPick={onPick} />
         <EvidenceBubble id="b" name="B" papers={1} pressed={false} onPick={() => {}} />
-      </BubbleRow>,
+      </BubbleGrid>,
     )
-    const row = q("[data-bubble-row]")
-    expect(row.getAttribute("role")).toBe("group")
-    expect(row.getAttribute("aria-label")).toBe("Classes of treatment")
-    expect(row.className).toContain("flex-wrap")
+    const grid = q("[data-bubble-grid]")
+    expect(grid.getAttribute("role")).toBe("group")
+    expect(grid.getAttribute("aria-label")).toBe("Classes of treatment")
     expect(qa("button").map((button) => button.getAttribute("aria-pressed"))).toEqual(["true", "false"])
     await act(async () => { q("button[data-bubble=a]").click() })
     expect(onPick).toHaveBeenCalledTimes(1)
+  })
+
+  it("sits on a grid of equal tiles: as many columns as fit, or two, and never a wrapping row", async () => {
+    await render(<BubbleGrid label="Safety papers, by treatment"><EvidenceBubble id="a" name="A" papers={1} pressed={false} onPick={() => {}} /></BubbleGrid>)
+    expect(q("[data-bubble-grid]").className).toContain("grid")
+    expect(q("[data-bubble-grid]").className).toContain("evidence-tiles")
+    expect(q("[data-bubble-grid]").className).toContain("items-start")
+    expect(q("[data-bubble-grid]").className).not.toContain("flex-wrap")
+    document.body.innerHTML = ""
+    await render(<BubbleGrid label="Classes of treatment" columns="two"><EvidenceBubble id="a" name="A" papers={1} pressed={false} onPick={() => {}} /></BubbleGrid>)
+    expect(q("[data-bubble-grid]").className).toContain("grid-cols-2")
+    expect(q("[data-bubble-grid]").className).not.toContain("evidence-tiles")
+  })
+
+  it("centres its disc in a box of the height it is given, keeps two lines for its name, and writes a small line under it when given one", async () => {
+    // The largest of 1, 4 and 40 papers has a radius of 72: a box of 144 and room for the ring.
+    expect(discBoxHeight([1, 4, 40])).toBe(152)
+    expect(discBoxHeight([1])).toBe(62)
+    await render(
+      <BubbleGrid label="Classes of treatment">
+        <EvidenceBubble id="a" name="A" papers={1} discHeight={152} detail="48 participants" position="48 participants in 1 of 1 paper" pressed={false} onPick={() => {}} />
+        <EvidenceBubble id="b" name="B" papers={40} discHeight={152} pressed={false} onPick={() => {}} />
+      </BubbleGrid>,
+    )
+    const boxes = qa("button [data-disc-box]")
+    expect(boxes.map((box) => box.style.height)).toEqual(["152px", "152px"])
+    expect(boxes.every((box) => box.className.includes("items-center") && box.className.includes("justify-center"))).toBe(true)
+    expect(boxes.map((box) => box.querySelector("svg")!.getAttribute("width"))).toEqual(["54", "144"])
+    expect(qa("button").every((button) => button.className.includes("w-full"))).toBe(true)
+    expect(qa("[data-name]").every((name) => name.className.includes("min-h-8") && name.className.includes("leading-4"))).toBe(true)
+    expect(q("button[data-bubble=a] [data-participants]").textContent).toBe("48 participants")
+    expect(q("button[data-bubble=a]").getAttribute("aria-label")).toBe("A: 1 paper; 48 participants in 1 of 1 paper")
+    expect(q("button[data-bubble=b] [data-participants]")).toBeNull()
+    // A disc is never wider than its tile.
+    expect(q("button[data-bubble=b] svg").getAttribute("class")).toContain("max-w-full")
   })
 })
