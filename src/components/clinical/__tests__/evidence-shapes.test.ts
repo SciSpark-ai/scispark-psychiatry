@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { arcPath, bubbleRadius, dotRadius, pieSlices } from "../evidence-shapes"
+import { arcPath, bubbleRadius, dotRadius, KIND_TEXT_COLOUR, pieSlices, SAFETY_COLOUR } from "../evidence-shapes"
 
 describe("the shapes of the evidence summary", () => {
+  it("writes the word Safety in the colour of text, and keeps the violet for the ring", () => {
+    expect(KIND_TEXT_COLOUR.safety).toBe("var(--text-primary)")
+    expect(SAFETY_COLOUR).toBe("var(--viz-cat-3)")
+  })
+
   it("sizes a bubble by the square root of its papers, never over 72", () => {
     expect(bubbleRadius(1)).toBe(27)
     expect(bubbleRadius(4)).toBe(36)

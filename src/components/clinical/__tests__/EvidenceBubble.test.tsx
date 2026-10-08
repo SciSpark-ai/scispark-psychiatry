@@ -61,6 +61,12 @@ describe("a bubble of the evidence summary", () => {
   it("marks the safety papers of a treatment with a ring and with words", async () => {
     await render(<EvidenceBubble id="ketamine" name="Ketamine" papers={2} efficacy={{ benefit: 2, "no-benefit": 0, mixed: 0 }} safetyPapers={3} pressed={false} onPick={() => {}} />)
     expect(q("[data-safety-mark]").textContent).toBe("3 safety")
+    // The words are in the colour of text; the violet of the ring is on a small ring before them.
+    expect(q("[data-safety-mark]").style.color).toBe("var(--text-primary)")
+    const swatch = q("[data-safety-mark] [data-safety-swatch]")
+    expect(swatch.style.borderColor).toBe("var(--viz-cat-3)")
+    expect(swatch.getAttribute("aria-hidden")).toBe("true")
+    expect(swatch.textContent).toBe("")
     expect(q("svg [data-safety-ring]").getAttribute("stroke")).toBe("var(--viz-cat-3)")
     expect(q("svg [data-safety-ring]").getAttribute("fill")).toBe("none")
     expect(q("button").getAttribute("aria-label")).toBe("Ketamine: 2 papers; 2 benefit, 0 no benefit, 0 mixed; 3 safety")

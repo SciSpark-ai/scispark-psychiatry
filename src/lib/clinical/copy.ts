@@ -365,13 +365,15 @@ export const CLINICAL_COPY = {
     researchEmpty: "No other research among these papers.",
     /** Class names by their key, for classes the pack does not name. */
     classLabels: { medicine: "Medicines", psychotherapy: "Psychotherapy", neuromodulation: "Neuromodulation", digital: "Digital tools", lifestyle: "Lifestyle", other: "Other treatments" },
-    researchTypes: { "risk-factor": "Risk factors", prediction: "Prediction and biomarkers", mechanism: "Mechanisms", epidemiology: "Epidemiology", services: "Services and policy", "no-efficacy": "Treatment studied, no efficacy result", other: "Other" },
+    researchTypes: { "risk-factor": "Risk factors", prediction: "Prediction and biomarkers", mechanism: "Mechanisms", epidemiology: "Epidemiology", services: "Services and policy", "no-efficacy": "Treatment studied, not sorted by result", other: "Other" },
     /** A review or an editorial is not a study, so papers are counted. */
     newCount: (count: number) => `+${count} new`,
     /** Under the bubble of a treatment that has safety papers. They are listed under Safety. */
     safetyMark: (count: number) => `${count} safety`,
     /** The line above the bubbles of the classes; the names of the three colours follow it. */
     bubbleKey: "A bubble counts papers: the more papers, the larger it is. Its colours are what the papers found:",
+    /** The line under that one: what a count and a colour do not say. */
+    bubbleNote: "A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares treatments counts under each of them, with one direction for the paper. Choose a treatment to see each paper.",
     /**
      * What a bubble says to a reader who does not see it. `efficacy` is null for a bubble that has no colours of direction.
      * What is new and the safety papers are added when there are any.
@@ -395,13 +397,15 @@ export const CLINICAL_COPY = {
     /** A line of a treatment: what its papers found, in each paper's few words. Each text loses its own full stop; the line ends with one. */
     lineLabel: (label: string) => `${label}:`,
     lineText: (texts: string[]) => joinFindings(texts),
-    unreported: (count: number, name: string) => `${count} more ${count === 1 ? "paper" : "papers"} on ${name} did not report whether it worked (see Other research).`,
+    unreported: (count: number, name: string) => `${count} more ${count === 1 ? "paper" : "papers"} on ${name} ${count === 1 ? "is" : "are"} not sorted as benefit, no benefit or mixed (see Other research).`,
     /** The plot of a treatment's papers: a row per tier of design, a dot per paper. */
     plot: {
       label: (name: string) => `Papers on ${name}, by design and by what they found`,
       tiers: { synthesis: "Reviews and meta-analyses", trial: "Trials", observational: "Observational and other" },
-      dot: (label: string, direction: string, text: string | null, size: number | null) => `${label}: ${direction}${text ? ` (${text})` : ""}, n = ${size ?? "not stated"}`,
-      key: "Each dot is one paper. Larger dots have more participants.",
+      /** `treatments`: the paper's own words for its treatments, when it has several: its one direction is not of this treatment alone. */
+      dot: (label: string, direction: string, text: string | null, size: number | null, treatments: string | null = null) =>
+        `${label}${treatments ? ` (${treatments})` : ""}: ${direction}${text ? ` (${text})` : ""}, n = ${size ?? "not stated"}`,
+      key: "Each dot is one paper. Larger dots have more participants. A hollow dot: participants not stated.",
     },
     columns: { study: "Study", design: "Design", population: "Population", comparator: "Compared with", outcome: "Outcome", result: "Result", finding: "Finding", details: "Details" },
     /** The design of a study and its participants, as the paper prints them: either, both, or a dash. */

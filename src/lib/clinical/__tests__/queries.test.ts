@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { loadPsychiatryPack } from "../pack/load"
 import {
-  deterministicPlan, domainClause, entryQuery, isPlausiblePubmedQuery, journalQueries, resolveFacet, windowClause,
+  deterministicPlan, domainClause, entryQuery, facetClause, isPlausiblePubmedQuery, journalQueries, resolveFacet, windowClause,
   type DateWindow,
 } from "../plan/queries"
 import type { WatchEntry } from "../types"
@@ -31,6 +31,14 @@ describe("resolveFacet", () => {
     const words = resolveFacet(pack, "psychotherapy", "treatment").words.map((word) => word.toLowerCase())
     for (const bad of ["act", "ba", "pe", "ipt", "mst", "tbs"]) expect(words).not.toContain(bad)
     expect(words).toContain("cbt")
+  })
+  it("keeps the bare abbreviations EPA and DHA out of the text words of omega-3", async () => {
+    const pack = await loadPsychiatryPack()
+    const facet = resolveFacet(pack, "omega-3", "treatment")
+    const words = facet.words.map((word) => word.toLowerCase())
+    for (const bad of ["epa", "dha"]) expect(words).not.toContain(bad)
+    expect(words).toEqual(expect.arrayContaining(["omega-3", "fish oil", "polyunsaturated fatty acids"]))
+    expect(facetClause(facet)).not.toMatch(/"(EPA|DHA)"\[Title\/Abstract\]/)
   })
   it("keeps an unknown label as a plain text word", async () => {
     const pack = await loadPsychiatryPack()

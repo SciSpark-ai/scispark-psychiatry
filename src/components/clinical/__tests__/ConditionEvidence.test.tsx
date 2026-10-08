@@ -145,6 +145,14 @@ describe("the evidence block of a condition page", () => {
     expect(key.compareDocumentPosition(bubble("medicine")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
+  it("says under the key how a paper is counted, where its direction comes from, and how to see each paper", async () => {
+    await show()
+    const note = q("[data-bubble-note]")
+    expect(note.textContent).toBe("A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares treatments counts under each of them, with one direction for the paper. Choose a treatment to see each paper.")
+    expect(q("[data-bubble-key]").compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(note.compareDocumentPosition(bubble("medicine")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it("draws a bubble per class with its number, its name and what is new, naming the classes the pack does not", async () => {
     await show()
     const row = q("[data-classes]")
@@ -221,7 +229,7 @@ describe("the evidence block of a condition page", () => {
     expect(shown.map((line) => [line.getAttribute("data-line"), line.textContent])).toEqual([
       ["benefit", "Benefit: Eased symptoms; Worked fast."], ["no-benefit", "No benefit: No better than placebo."], ["mixed", "Mixed: Faded by week 6."], ["safety", "Safety: Dissociation."],
     ])
-    expect(shown.map((line) => (line.querySelector("[data-line-label]") as HTMLElement).style.color)).toEqual(["var(--clinical-benefit)", "var(--clinical-no-benefit)", "var(--text-muted)", "var(--viz-cat-3)"])
+    expect(shown.map((line) => (line.querySelector("[data-line-label]") as HTMLElement).style.color)).toEqual(["var(--clinical-benefit)", "var(--clinical-no-benefit)", "var(--text-muted)", "var(--text-primary)"])
     expect(container.textContent).not.toMatch(/Watch|Did:/)
     await pick("lithium", "[data-treatments]")
     expect(bubble("ketamine").getAttribute("aria-pressed")).toBe("false")
@@ -229,12 +237,12 @@ describe("the evidence block of a condition page", () => {
     expect(container.textContent).not.toMatch(/Watch|Did:/)
   })
 
-  it("says how many more papers on the treatment did not report whether it worked, only when there are some", async () => {
+  it("says how many more papers on the treatment are not sorted by what they found, only when there are some", async () => {
     await show({ ...EVIDENCE, classes: [klass("medicine", null, [{ ...ketamine, unreportedPapers: 3 }, { ...lithium, unreportedPapers: 1 }])] })
     await openTreatment("medicine", "ketamine")
-    expect(q("[data-unreported]").textContent).toBe("3 more papers on Ketamine did not report whether it worked (see Other research).")
+    expect(q("[data-unreported]").textContent).toBe("3 more papers on Ketamine are not sorted as benefit, no benefit or mixed (see Other research).")
     await pick("lithium", "[data-treatments]")
-    expect(q("[data-unreported]").textContent).toBe("1 more paper on Lithium did not report whether it worked (see Other research).")
+    expect(q("[data-unreported]").textContent).toBe("1 more paper on Lithium is not sorted as benefit, no benefit or mixed (see Other research).")
     document.body.innerHTML = ""
     await show()
     await openTreatment("medicine", "ketamine")
@@ -360,7 +368,7 @@ describe("the evidence block of a condition page", () => {
     await show({ ...EVIDENCE, research: [{ ...EVIDENCE.research[0], papers: 3, newPapers: 2 }, EVIDENCE.research[1], { type: "no-efficacy", papers: 1, newPapers: 0, studies: [unreported] }] })
     const bubbles = [...section("research").querySelectorAll("button[data-bubble]")] as HTMLElement[]
     expect(bubbles.map((entry) => [entry.getAttribute("data-bubble"), entry.querySelector("[data-name]")!.textContent, entry.querySelector("[data-number]")!.textContent]))
-      .toEqual([["mechanism", "Mechanisms", "3"], ["risk-factor", "Risk factors", "1"], ["no-efficacy", "Treatment studied, no efficacy result", "1"]])
+      .toEqual([["mechanism", "Mechanisms", "3"], ["risk-factor", "Risk factors", "1"], ["no-efficacy", "Treatment studied, not sorted by result", "1"]])
     expect(bubbles[0].querySelector("[data-new]")!.textContent).toBe("+2 new")
     expect(bubbles[1].querySelector("[data-new]")).toBeNull()
     expect(section("research").querySelectorAll("[data-slice]")).toHaveLength(0)

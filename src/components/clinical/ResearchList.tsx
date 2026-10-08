@@ -5,7 +5,7 @@ import { EvidenceBubble } from "./EvidenceBubble"
 import { StudyTable } from "./StudyTable"
 
 const E = CLINICAL_COPY.evidence
-/** The group of the papers that name a treatment and report no efficacy result: its table says which treatment. */
+/** The group of the papers that name a treatment and are not sorted by what they found: its table says which treatment. */
 const NO_EFFICACY = "no-efficacy"
 
 /** Other research: a light bubble per kind of research, and under the row the table of the chosen one. */

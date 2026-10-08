@@ -56,9 +56,17 @@ describe("the direction plot of a treatment", () => {
     expect(q('a[data-dot="pmid:3"]').getAttribute("aria-label")).toBe("Smith 2023: Benefit (Text 3), n = not stated")
   })
 
+  it("names the paper's own treatments on the dot of a paper that has several", async () => {
+    await render(<DirectionPlot name="Clozapine" studies={[study(1, { treatment: "clozapine, paliperidone, and olanzapine", severalTreatments: true }), study(2)]} />)
+    const first = q('a[data-dot="pmid:1"]')
+    expect(first.getAttribute("aria-label")).toBe("Smith 2021 (clozapine, paliperidone, and olanzapine): Benefit (Text 1), n = 120")
+    expect(first.getAttribute("title")).toBe(first.getAttribute("aria-label"))
+    expect(q('a[data-dot="pmid:2"]').getAttribute("aria-label")).toBe("Smith 2022: Benefit (Text 2), n = 120")
+  })
+
   it("says what a dot is under the rows, and names the plot", async () => {
     await render(<DirectionPlot name="Ketamine" studies={[study(1)]} />)
-    expect(q("[data-plot-key]").textContent).toBe("Each dot is one paper. Larger dots have more participants.")
+    expect(q("[data-plot-key]").textContent).toBe("Each dot is one paper. Larger dots have more participants. A hollow dot: participants not stated.")
     expect(q("[data-testid=direction-plot]").getAttribute("aria-label")).toBe("Papers on Ketamine, by design and by what they found")
     expect(q("[data-tier-dots]").className).toContain("overflow-x-auto")
   })

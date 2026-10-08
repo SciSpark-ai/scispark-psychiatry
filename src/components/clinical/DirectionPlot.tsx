@@ -12,7 +12,7 @@ const directionOf = (study: Study): EfficacyKind => (study.kind === "benefit" ||
 /**
  * The papers of one treatment as dots: a row per tier of design, a dot per paper, coloured by what the paper found and
  * sized by its participants (hollow and small when the paper states none). Each dot is a link to its paper and says in
- * words what its colour and size say. Papers are shown one by one: nothing is pooled.
+ * words what its colour and size say, and for a paper of several treatments which they are. Papers are shown one by one: nothing is pooled.
  */
 export function DirectionPlot({ studies, name }: { studies: Study[]; name: string }) {
   // Every dot is worked out before any element is built.
@@ -23,7 +23,7 @@ export function DirectionPlot({ studies, name }: { studies: Study[]; name: strin
       const radius = dotRadius(study.sampleSize)
       return {
         key: study.key, href: `/paper/${study.slug}`, radius, box: 2 * (radius + STROKE), colour: KIND_COLOUR[direction], hollow: study.sampleSize === null,
-        label: P.dot(study.label ?? study.headline, E.kindLabels[direction], study.text, study.sampleSize),
+        label: P.dot(study.label ?? study.headline, E.kindLabels[direction], study.text, study.sampleSize, study.severalTreatments ? study.treatment : null),
       }
     }),
   })).filter((row) => row.dots.length > 0)

@@ -9,7 +9,7 @@ const LINES = ["benefit", "no-benefit", "mixed", "safety"] as const
 
 /**
  * What is under a chosen treatment: what its papers found in each paper's own few words, by direction; how many more
- * of its papers report no efficacy result; a dot per paper; and the table of the papers.
+ * of its papers are not sorted by what they found; a dot per paper; and the table of the papers.
  */
 export function TreatmentDetail({ treatment }: { treatment: TreatmentEvidence }) {
   const lines = LINES.map((kind) => ({ kind, texts: treatment.lines[kind].map((entry) => entry.text) })).filter((line) => line.texts.length > 0)

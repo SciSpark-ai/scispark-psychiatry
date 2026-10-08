@@ -11,8 +11,11 @@ type Kind = EfficacyKind | "safety" | "other"
 const MIXED_FILL = "color-mix(in srgb, var(--text-muted) 55%, transparent)"
 export const SAFETY_COLOUR = "var(--viz-cat-3)"
 export const KIND_COLOUR: Record<EfficacyKind, string> = { benefit: "var(--clinical-benefit)", "no-benefit": "var(--clinical-no-benefit)", mixed: MIXED_FILL }
-/** The colour of a direction's name in text: the thinned fill of a neutral kind would not be read. */
-export const KIND_TEXT_COLOUR: Record<Kind, string> = { ...KIND_COLOUR, mixed: "var(--text-muted)", safety: SAFETY_COLOUR, other: "var(--text-muted)" }
+/**
+ * The colour of a direction's name in text: the thinned fill of a neutral kind would not be read, and the violet of
+ * safety has too little contrast as text, so that word is in the colour of text and the violet stays on the ring.
+ */
+export const KIND_TEXT_COLOUR: Record<Kind, string> = { ...KIND_COLOUR, mixed: "var(--text-muted)", safety: "var(--text-primary)", other: "var(--text-muted)" }
 /** The disc of a bubble that has no direction: the accent, as light as a badge's ground. */
 export const LIGHT_FILL = "color-mix(in srgb, var(--accent) 18%, transparent)"
 export const LIGHT_EDGE = "color-mix(in srgb, var(--accent) 45%, transparent)"

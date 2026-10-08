@@ -28,6 +28,13 @@ describe("verifyMatchedParts", () => {
     expect(verifyMatchedParts(grade("m", "full"), p("Probiotics reduced depressive symptoms in adults"), [MDD_ESK], pack).matched).toBe("condition")
   })
 
+  it("does not take the bare abbreviation EPA or DHA for omega-3", async () => {
+    const pack = await loadPsychiatryPack()
+    const omega = watch({ id: "o", condition: "Major depressive disorder", treatment: "Omega-3 fatty acids" })
+    expect(verifyMatchedParts(grade("o", "full"), p("Air quality and major depressive disorder", "EPA monitoring data and DHA levels were linked to admissions."), [omega], pack).matched).toBe("condition")
+    expect(verifyMatchedParts(grade("o", "full"), p("Fish oil in major depressive disorder"), [omega], pack).matched).toBe("full")
+  })
+
   it("lowers it to a treatment match when the text never names the condition", async () => {
     const pack = await loadPsychiatryPack()
     expect(verifyMatchedParts(grade("m", "full"), p("Esketamine for anxiety after colorectal surgery"), [MDD_ESK], pack).matched).toBe("treatment")

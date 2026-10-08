@@ -18,8 +18,11 @@ export interface DateWindow {
   to: Date
 }
 
-/** Short acronyms that are ordinary English words or collide across fields; never used as text words. */
-const AMBIGUOUS_TERMS = new Set(["act", "ba", "pe", "tbs", "mst", "gad", "asd", "ipt"])
+/**
+ * Short acronyms that are ordinary English words or collide across fields; never used as text words. EPA and DHA
+ * (synonyms of omega-3) are an agency and many other things outside psychiatry.
+ */
+const AMBIGUOUS_TERMS = new Set(["act", "ba", "pe", "tbs", "mst", "gad", "asd", "ipt", "epa", "dha"])
 
 const JOURNALS_PER_QUERY = 15
 

@@ -85,6 +85,7 @@ function Sections({ evidence }: { evidence: Evidence }) {
         {evidence.classes.length === 0 ? <p data-empty="true" className={EMPTY}>{E.treatmentsEmpty}</p> : (
           <>
             <BubbleKey />
+            <p data-bubble-note="true" className="mt-1 max-w-[720px] text-[12px] text-muted-text">{E.bubbleNote}</p>
             <div data-classes="true">
               <BubbleRow label={E.rows.classes}>
                 {evidence.classes.map((entry) => (

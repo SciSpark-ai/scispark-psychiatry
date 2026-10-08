@@ -1,6 +1,6 @@
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import type { Efficacy } from "@/lib/clinical/evidence/build"
-import { arcPath, bubbleRadius, CENTRE_FILL, KIND_COLOUR, LIGHT_EDGE, LIGHT_FILL, NUMBER_COLOUR, pieSlices, SAFETY_COLOUR } from "./evidence-shapes"
+import { arcPath, bubbleRadius, CENTRE_FILL, KIND_COLOUR, LIGHT_EDGE, LIGHT_FILL, KIND_TEXT_COLOUR, NUMBER_COLOUR, pieSlices, SAFETY_COLOUR } from "./evidence-shapes"
 
 const E = CLINICAL_COPY.evidence
 /** The share of the radius the plain centre of a pie takes: the number is read there, not on a colour. */
@@ -18,7 +18,7 @@ interface Props {
 /**
  * One bubble: a button whose disc grows with its papers, the number in it, and its name under it. With `efficacy` the
  * disc is a ring divided by what the papers found, clockwise from 12 o'clock; a treatment that has safety papers has a
- * ring around it and says so in words.
+ * ring around it and says so in words, after a small ring of the same colour.
  */
 export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safetyPapers = 0, pressed, onPick }: Props) {
   const radius = bubbleRadius(papers)
@@ -48,7 +48,12 @@ export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safe
       </span>
       <span data-name="true" className={pressed ? "block text-[13px] font-semibold leading-tight text-espresso" : "block text-[13px] leading-tight text-secondary-dark"}>{name}</span>
       {newPapers > 0 && <span data-new="true" className="block text-[12px] font-semibold leading-tight text-accent-ink">{E.newCount(newPapers)}</span>}
-      {safetyPapers > 0 && <span data-safety-mark="true" className="block text-[12px] font-semibold leading-tight" style={{ color: SAFETY_COLOUR }}>{E.safetyMark(safetyPapers)}</span>}
+      {safetyPapers > 0 && (
+        <span data-safety-mark="true" className="flex items-center justify-center gap-1 text-[12px] font-semibold leading-tight" style={{ color: KIND_TEXT_COLOUR.safety }}>
+          <span data-safety-swatch="true" aria-hidden="true" className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border-2" style={{ borderColor: SAFETY_COLOUR }} />
+          <span>{E.safetyMark(safetyPapers)}</span>
+        </span>
+      )}
     </button>
   )
 }
