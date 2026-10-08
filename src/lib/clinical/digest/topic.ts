@@ -32,7 +32,7 @@ export { tidyOverviewSentence }
  */
 
 /** The version of the overview skill; also part of the key its answers are kept under. */
-export const OVERVIEW_VERSION = "15"
+export const OVERVIEW_VERSION = "16"
 
 export const OVERVIEW_MIN_PAPERS = 1
 // One short answer per paper, so a long list is still one modest call.
@@ -90,7 +90,7 @@ export interface OverviewSentence {
   group?: "focus" | "related"
   /** What the finding says about benefit. Absent in overviews written before 2026-10-07. */
   kind?: OverviewKind
-  /** The treatment or exposure the finding is about, as the paper names it. The page joins findings on the same one. */
+  /** The treatment the finding is about, as the paper names it: something given or done to patients, never an exposure. The page joins findings on the same one. */
   treatment?: string
   /** The PICO line of the paper, each part as the paper states it: who was studied, against what, on which outcome. */
   population?: string
@@ -136,7 +136,7 @@ const SYSTEM_PROMPT = `You sort the new papers on one topic for a psychiatrist, 
 
 Return "sentences": exactly one entry for every paper. Each entry:
 - "sources": a list with the one number of the paper.
-- "treatment": the treatment, intervention or exposure the paper is about, as its shortest usual name copied from the paper ("ketamine", not "repeated ketamine infusions"; "rTMS"; "exercise"; "nature exposure", never half a name). When the paper compares two treatments or doses, name both ("methylphenidate and risperidone", "low-dose antipsychotics"). null when the paper is not about a treatment or exposure (genetics, prediction models, prevalence, scales).
+- "treatment": the treatment the paper is about, as its shortest usual name copied from the paper ("ketamine", not "repeated ketamine infusions"; "rTMS"; "exercise", never half a name). A treatment is something given or done to patients to treat or prevent the condition. An exposure (caffeine, antibiotics in early life, pollution), a risk factor, a test, a scale or a prediction model is not a treatment: leave the treatment null and give the research type. When the paper compares two treatments or doses, name both ("methylphenidate and risperidone", "low-dose antipsychotics"). null when the paper is not about a treatment (genetics, prediction models, prevalence, scales).
 - "text": what the paper found, at most 14 words, lower case, no full stop.
   - With a treatment: start with a verb and do NOT repeat the treatment name, so that "<treatment> <text>" reads as a sentence: "reduced suicidal thoughts in treatment-resistant depression", "did not reduce symptoms compared with placebo".
   - Without a treatment: a complete short statement: "older age was linked to slower improvement".

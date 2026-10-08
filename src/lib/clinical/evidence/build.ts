@@ -26,7 +26,7 @@ const TOP_CLASSES = 3
 /** The key of the timeline's series of everything that has no line of its own, and of the class of treatments no other class holds. */
 const OTHER = "other"
 /** The class of a pack treatment whose modality is "other", when none of its findings names one (final review M2). */
-const CLASS_BY_ID: Readonly<Record<string, TreatmentClass>> = { exercise: "lifestyle", "light-therapy": "lifestyle", "digital-interventions": "digital", "mdma-assisted-therapy": "medicine" }
+const CLASS_BY_ID: Readonly<Record<string, TreatmentClass>> = { exercise: "lifestyle", "light-therapy": "lifestyle", "digital-interventions": "digital", "mdma-assisted-therapy": "medicine", "omega-3": "lifestyle", probiotics: "lifestyle" }
 
 export type Period = "all" | "12m" | "6m" | "3m"
 /** Calendar-free: the last 365, 183 or 92 days. */

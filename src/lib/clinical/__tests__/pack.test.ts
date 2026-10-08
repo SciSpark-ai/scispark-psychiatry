@@ -42,8 +42,17 @@ describe("psychiatry pack", () => {
 describe("the treatments a text names", () => {
   const ids = async (text: string) => findTreatments((await loadPsychiatryPack()).taxonomy, text).map((node) => node.id)
   const CASES: Array<[string, string[]]> = [
-    // The pack's long-acting-injectables node has no term "LAI", so the word found is the class.
-    ["LAI antipsychotics", ["antipsychotic"]],
+    // "LAI" is a term of the long-acting injectables, which are below the class: the class is left out.
+    ["LAI antipsychotics", ["long-acting-injectables"]],
+    ["switching to an LAI", ["long-acting-injectables"]],
+    ["trazodone", ["trazodone"]],
+    ["zuclopenthixol acetate", ["zuclopenthixol"]],
+    ["omega-3 PUFAs", ["omega-3"]],
+    ["PUFA supplementation", ["omega-3"]],
+    ["probiotics", ["probiotics"]],
+    // No term of the digital interventions is printed in "web-based".
+    ["web-based psychoeducation program", ["psychoeducation"]],
+    ["centanafadine", ["centanafadine"]],
     ["low-dose antipsychotics", ["antipsychotic"]],
     ["clozapine, paliperidone, and olanzapine", ["clozapine", "paliperidone", "olanzapine"]],
     ["lithium and quetiapine", ["lithium", "quetiapine"]],

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { TaxonomySchema } from "../pack/schema"
 import type { Finding } from "../evidence/schema"
 import { buildConditionEvidence, followedConditions } from "../evidence/build"
+import { loadPsychiatryPack } from "../pack/load"
 import { paper } from "./helpers"
 
 const CONDITIONS = [
@@ -451,5 +452,20 @@ describe("the conditions the reader follows", () => {
     expect(list.map((entry) => [entry.code, entry.total, entry.recent])).toEqual([["depression", 6, 1], ["schizophrenia", 1, 0], ["trd", 0, 0]])
     expect(list[0].treatments).toEqual([{ key: "antipsychotic", label: "Antipsychotics" }, { key: "lifestyle", label: null }, { key: "medicine", label: null }])
     expect(list[2].treatments).toEqual([])
+  })
+})
+
+describe("the treatments added to the pack", () => {
+  it("puts omega-3 and probiotics under lifestyle and trazodone under Antidepressants", async () => {
+    const { taxonomy } = await loadPsychiatryPack()
+    const evidence = buildConditionEvidence([
+      uncoded(1, "omega-3 PUFAs"), uncoded(2, "trazodone"), uncoded(3, "probiotics"), uncoded(4, "LAI antipsychotics"), uncoded(5, "psychoeducation"),
+    ], taxonomy, "depression", { now: NOW })!
+    expect(evidence.classes.map((entry) => [entry.key, entry.label, entry.treatments.map((treatment) => [treatment.key, treatment.name])])).toEqual([
+      ["lifestyle", null, [["omega-3", "Omega-3 fatty acids"], ["probiotics", "Probiotics"]]],
+      ["antidepressant", "Antidepressants", [["trazodone", "Trazodone"]]],
+      ["antipsychotic", "Antipsychotics", [["long-acting-injectables", "Long-acting injectable antipsychotics"]]],
+      ["psychotherapy", "Psychotherapy", [["psychoeducation", "Psychoeducation"]]],
+    ])
   })
 })

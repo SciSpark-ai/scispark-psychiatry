@@ -80,7 +80,7 @@
     {"id": "paliperidone", "type": "treatment", "name": "Paliperidone", "synonyms": [], "brands": ["Invega"], "parents": ["antipsychotic"], "modality": "drug"},
     {"id": "lurasidone", "type": "treatment", "name": "Lurasidone", "synonyms": [], "brands": ["Latuda"], "parents": ["antipsychotic"], "modality": "drug"},
     {"id": "haloperidol", "type": "treatment", "name": "Haloperidol", "synonyms": [], "brands": ["Haldol"], "parents": ["antipsychotic"], "modality": "drug"},
-    {"id": "long-acting-injectables", "type": "treatment", "name": "Long-acting injectable antipsychotics", "synonyms": ["long-acting injectable", "depot antipsychotic", "long acting injectable"], "brands": [], "parents": ["antipsychotic"], "modality": "drug"},
+    {"id": "long-acting-injectables", "type": "treatment", "name": "Long-acting injectable antipsychotics", "synonyms": ["long-acting injectable", "depot antipsychotic", "long acting injectable", "LAI", "LAIs", "LAI antipsychotics", "long-acting injectable antipsychotic"], "brands": [], "parents": ["antipsychotic"], "modality": "drug"},
     {"id": "bupropion", "type": "treatment", "name": "Bupropion", "synonyms": [], "brands": ["Wellbutrin"], "parents": ["antidepressant"], "modality": "drug"},
     {"id": "venlafaxine", "type": "treatment", "name": "Venlafaxine", "synonyms": [], "brands": ["Effexor"], "parents": ["antidepressant"], "modality": "drug"},
     {"id": "duloxetine", "type": "treatment", "name": "Duloxetine", "synonyms": [], "brands": ["Cymbalta"], "parents": ["antidepressant"], "modality": "drug"},
@@ -100,6 +100,12 @@
     {"id": "family-therapy", "type": "treatment", "name": "Family therapy", "synonyms": ["family intervention", "family-focused therapy"], "brands": [], "parents": ["psychotherapy"], "modality": "psychotherapy"},
     {"id": "digital-interventions", "type": "treatment", "name": "Digital interventions", "synonyms": ["digital therapeutics", "mobile health", "mHealth", "internet-delivered", "smartphone app"], "brands": [], "parents": [], "modality": "other"},
     {"id": "exercise", "type": "treatment", "name": "Exercise", "synonyms": ["physical activity", "aerobic exercise"], "brands": [], "parents": [], "modality": "other"},
-    {"id": "light-therapy", "type": "treatment", "name": "Light therapy", "synonyms": ["bright light therapy"], "brands": [], "parents": [], "modality": "other"}
+    {"id": "light-therapy", "type": "treatment", "name": "Light therapy", "synonyms": ["bright light therapy"], "brands": [], "parents": [], "modality": "other"},
+    {"id": "trazodone", "type": "treatment", "name": "Trazodone", "synonyms": [], "brands": ["Desyrel"], "parents": ["antidepressant"], "modality": "drug"},
+    {"id": "zuclopenthixol", "type": "treatment", "name": "Zuclopenthixol", "synonyms": ["zuclopenthixol acetate", "zuclopenthixol decanoate"], "brands": ["Clopixol"], "parents": ["antipsychotic"], "modality": "drug"},
+    {"id": "centanafadine", "type": "treatment", "name": "Centanafadine", "synonyms": [], "brands": [], "parents": [], "modality": "drug"},
+    {"id": "omega-3", "type": "treatment", "name": "Omega-3 fatty acids", "synonyms": ["omega-3", "omega 3", "PUFA", "PUFAs", "polyunsaturated fatty acids", "fish oil", "EPA", "DHA"], "brands": [], "parents": [], "modality": "other"},
+    {"id": "probiotics", "type": "treatment", "name": "Probiotics", "synonyms": ["probiotic", "psychobiotics"], "brands": [], "parents": [], "modality": "other"},
+    {"id": "psychoeducation", "type": "treatment", "name": "Psychoeducation", "synonyms": ["psychoeducational intervention", "psycho-education"], "brands": [], "parents": ["psychotherapy"], "modality": "psychotherapy"}
   ]
 }

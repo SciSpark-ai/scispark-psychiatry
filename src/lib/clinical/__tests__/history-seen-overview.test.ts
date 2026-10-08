@@ -440,9 +440,20 @@ describe("the kind of treatment or research and the sample size", () => {
       expect(topic.papers.map((paper) => paper.design)).toEqual(["cohort", undefined])
     })
   })
+  // Owner decision 2026-10-08: an exposure is not a treatment.
+  it("says what a treatment is, and that an exposure, a risk factor, a test, a scale or a prediction model is not one", async () => {
+    const { topicOverviewSkill } = await import("../digest/topic")
+    let prompt = ""
+    await topicOverviewSkill.run({ llmStructured: async (_tier: unknown, request: { messages: Array<{ content: string }> }) => { prompt = request.messages[0].content; return { sentences: [] } } } as never, { topic: "t", papers: [] })
+    const bullet = prompt.split("\n").find((line) => line.startsWith('- "treatment"')) ?? ""
+    expect(bullet).toContain("given or done to patients to treat or prevent the condition")
+    for (const word of ["exposure", "caffeine", "antibiotics in early life", "pollution", "risk factor", "a test", "a scale", "prediction model", "is not a treatment", "leave the treatment null", "research type"]) expect(bullet, word).toContain(word)
+    expect(bullet).not.toContain("intervention or exposure the paper is about")
+    expect(bullet).not.toContain("nature exposure")
+  })
   it("asks for the three fields and files the version under a new key", async () => {
     const { OVERVIEW_VERSION, topicOverviewSkill } = await import("../digest/topic")
-    expect(Number(OVERVIEW_VERSION)).toBeGreaterThan(14)
+    expect(Number(OVERVIEW_VERSION)).toBeGreaterThan(15)
     expect(topicOverviewSkill.version).toBe(OVERVIEW_VERSION)
   })
 })
