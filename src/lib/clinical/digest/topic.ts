@@ -7,6 +7,7 @@ import { numbers, sharesWords } from "./card"
 import { TREATMENT_CLASSES, RESEARCH_TYPES, type TreatmentClass, type ResearchType } from "../evidence/schema"
 import { negationWords, tidyOverviewSentence } from "../text/overview-text"
 import { sampleSizeStated } from "../text/sample-size"
+import type { Design } from "../types"
 
 export { tidyOverviewSentence }
 
@@ -31,7 +32,7 @@ export { tidyOverviewSentence }
  */
 
 /** The version of the overview skill; also part of the key its answers are kept under. */
-export const OVERVIEW_VERSION = "14"
+export const OVERVIEW_VERSION = "15"
 
 export const OVERVIEW_MIN_PAPERS = 1
 // One short answer per paper, so a long list is still one modest call.
@@ -70,6 +71,14 @@ const OPENS_WITH_NO = /^(?:did not|does not|do not|was not|were not|not|no|faile
 /** The wording of an association ("was linked to", "may be associated with", "predicted"): not a finding that a treatment helped. */
 const ASSOCIATION = /\b(was|were|is|are|may be)?\s*(linked to|associated with|correlated with|correlates with|predicts?|predicted)\b/i
 
+/**
+ * The designs that test a treatment or pool such tests: a randomised trial, another clinical trial, a systematic review,
+ * a meta-analysis. Their result is a finding on the treatment even when it is worded as an association ("was associated
+ * with a reduction in relapse"). In any other design (a cohort, a case report, a narrative review, one nobody named) an
+ * association shows nothing to have helped.
+ */
+const TESTS_TREATMENT: ReadonlySet<Design> = new Set<Design>(["randomized-trial", "clinical-trial", "systematic-review", "meta-analysis"])
+
 /** What a finding says: a treatment helped, did not help, did both, raised a safety concern, or something else was found. */
 export const OVERVIEW_KINDS = ["benefit", "no-benefit", "mixed", "safety", "other"] as const
 export type OverviewKind = (typeof OVERVIEW_KINDS)[number]
@@ -100,6 +109,8 @@ export interface OverviewPaper {
   key: string; headline: string; takeaway: string; part: "focus" | "related"
   /** The abstract, which the model reads to sort the paper. Absent in older callers. */
   abstract?: string
+  /** The design of the paper, for the association rule. Never sent to the model. Absent in older callers. */
+  design?: Design
 }
 
 /** How much of an abstract the model is given to sort a paper by (characters). */
@@ -166,7 +177,7 @@ export const topicOverviewSkill = defineSkill<OverviewInput, z.infer<typeof Over
 
 /** The topics worth an overview: those with at least one listed paper that has a checked summary. */
 export function overviewTopics(
-  items: Array<{ key: string; entryId: string | null; digest?: CardDigest; matched?: "full" | "condition" | "treatment"; abstract?: string }>,
+  items: Array<{ key: string; entryId: string | null; digest?: CardDigest; matched?: "full" | "condition" | "treatment"; abstract?: string; design?: Design }>,
 ): Array<{ entryId: string; papers: OverviewPaper[] }> {
   const byTopic = new Map<string, OverviewPaper[]>()
   for (const item of items) {
@@ -174,7 +185,7 @@ export function overviewTopics(
     const papers = byTopic.get(item.entryId) ?? []
     // A paper that matches only part of the topic is summarised apart from those that match all of it.
     const part = item.matched === "condition" || item.matched === "treatment" ? "related" : "focus"
-    papers.push({ key: item.key, headline: item.digest.headline, takeaway: item.digest.takeaway, part, ...(item.abstract ? { abstract: item.abstract } : {}) })
+    papers.push({ key: item.key, headline: item.digest.headline, takeaway: item.digest.takeaway, part, ...(item.abstract ? { abstract: item.abstract } : {}), ...(item.design ? { design: item.design } : {}) })
     byTopic.set(item.entryId, papers)
   }
   return [...byTopic]
@@ -212,8 +223,9 @@ export function judgeOverview(
     else if (kind === "no-benefit" && NOT_INFERIOR.test(text)) { problems.push(`kind-contradicted:${kind}`); kind = "other" }
     // A finding that opens by saying the treatment did not do something is not a benefit.
     else if (kind === "benefit" && OPENS_WITH_NO.test(text)) { problems.push(`kind-contradicted:${kind}`); kind = "other" }
-    // An association ("was linked to", "predicted") is not a benefit: nothing was shown to help.
-    else if (kind === "benefit" && ASSOCIATION.test(text)) { problems.push(`kind-association:${kind}`); kind = "other" }
+    // An association ("was linked to", "predicted") is not a benefit: nothing was shown to help. A trial or a review of
+    // trials did test the treatment, so its wording stands; a paper whose design is not known is treated as untested.
+    else if (kind === "benefit" && ASSOCIATION.test(text) && !cited.every((paper) => paper.design !== undefined && TESTS_TREATMENT.has(paper.design))) { problems.push(`kind-association:${kind}`); kind = "other" }
     // The treatment must be named in the summaries of the papers the finding rests on.
     let treatment = sentence.treatment?.replace(/\s+/g, " ").trim() || undefined
     if (treatment) {

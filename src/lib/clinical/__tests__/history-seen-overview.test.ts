@@ -412,9 +412,37 @@ describe("the kind of treatment or research and the sample size", () => {
     // Only a benefit is demoted: the other kinds keep their own checks.
     expect(one({ text: "was associated with weight gain", kind: "safety" }).kind).toBe("safety")
   })
+  // Owner decision 2026-10-08: a trial or a review that reports its result as an association still tested the treatment.
+  describe("the association rule, by the design of the paper", () => {
+    const judged = (text: string, design?: string) => judgeOverview([{ text, sources: [1], kind: "benefit" } as never], paperWith("Adults received ketamine.").map((paper) => ({ ...paper, ...(design ? { design } : {}) })) as never)
+    it("keeps a randomised trial's \"was associated with a reduction in relapse\" a benefit", () => {
+      const answer = judged("was associated with a reduction in relapse", "randomized-trial")
+      expect(answer.kept[0].kind).toBe("benefit")
+      expect(answer.problems).toEqual([])
+    })
+    it("files a cohort's \"was associated with lower mood symptoms\" under other", () => {
+      const answer = judged("was associated with lower mood symptoms", "cohort")
+      expect(answer.kept[0].kind).toBe("other")
+      expect(answer.problems).toEqual(["kind-association:benefit"])
+    })
+    it("keeps a systematic review's \"linked to a small improvement\" a benefit", () => {
+      expect(judged("linked to a small improvement", "systematic-review").kept[0].kind).toBe("benefit")
+    })
+    it("keeps it for a meta-analysis and another clinical trial, and demotes every other design and a paper with none", () => {
+      for (const design of ["meta-analysis", "clinical-trial"]) expect(judged("was associated with fewer relapses", design).kept[0].kind, design).toBe("benefit")
+      for (const design of ["case-report", "review", "guideline", "editorial", "protocol", "preclinical", "other", "unknown", undefined]) expect(judged("was associated with fewer relapses", design).kept[0].kind, String(design)).toBe("other")
+    })
+    it("still demotes a trial's finding that opens by saying it did not work", () => {
+      expect(judged("did not reduce relapse", "randomized-trial").kept[0].kind).toBe("other")
+    })
+    it("takes the design of each paper from the list", () => {
+      const [topic] = overviewTopics([{ key: "a", entryId: "w1", digest: { headline: "H1", takeaway: "T1", quote: "" }, design: "cohort" }, { key: "b", entryId: "w1", digest: { headline: "H2", takeaway: "T2", quote: "" } }])
+      expect(topic.papers.map((paper) => paper.design)).toEqual(["cohort", undefined])
+    })
+  })
   it("asks for the three fields and files the version under a new key", async () => {
     const { OVERVIEW_VERSION, topicOverviewSkill } = await import("../digest/topic")
-    expect(Number(OVERVIEW_VERSION)).toBeGreaterThan(13)
+    expect(Number(OVERVIEW_VERSION)).toBeGreaterThan(14)
     expect(topicOverviewSkill.version).toBe(OVERVIEW_VERSION)
   })
 })
