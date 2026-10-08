@@ -251,7 +251,7 @@ describe("saveNote", () => {
   it("changes the title, the dates and the body, and keeps every other frontmatter key", async () => {
     const result = await saveNote(storage, taxonomy, "project-plan", { title: "Project plan, revised", body: "New body.\n", revision: revisionOf(NOTE_PROJECT), now: later })
     const raw = await storage.read("wiki/notes/project-plan.md") as string
-    expect(result).toEqual({ revision: revisionOf(raw), unresolved: [] })
+    expect(result).toEqual({ revision: revisionOf(raw), unresolved: [], savedPapers: [] })
     const { frontmatter, body } = parseDocument(raw)
     expect(frontmatter).toEqual({
       type: "note", title: "Project plan, revised", created: "2026-09-20", updated: "2026-10-08", tags: ["plan"], related: [], sources: ["https://example.org/a"], projects: ["proj-1"],
@@ -263,7 +263,7 @@ describe("saveNote", () => {
   it("answers a stale revision with the stored version and writes nothing", async () => {
     const before = storage.snapshot()
     const result = await saveNote(storage, taxonomy, "project-plan", { title: "Mine", body: "Mine.", revision: revisionOf("something else"), now: later })
-    expect(result).toEqual({ conflict: true, title: "Project plan", body: parseDocument(NOTE_PROJECT).body, revision: revisionOf(NOTE_PROJECT) })
+    expect(result).toEqual({ conflict: true, title: "Project plan", untitled: false, body: parseDocument(NOTE_PROJECT).body, revision: revisionOf(NOTE_PROJECT) })
     expect(storage.snapshot()).toEqual(before)
   })
   it("saves a newly cited paper to the Library and reports one it cannot resolve", async () => {
@@ -307,7 +307,7 @@ describe("fix round 1", () => {
     const vault = await failing("wiki/papers/paper-2.md")
     const result = await saveNote(vault, taxonomy, "note-1756684800000", { title: "Clozapine", body: "See [[paper-2]] and [[paper-5]].", revision: revisionOf(NOTE_BUTTON), now: later })
     const raw = await vault.read("wiki/notes/note-1756684800000.md") as string
-    expect(result).toEqual({ revision: revisionOf(raw), unresolved: ["paper-2"] })
+    expect(result).toEqual({ revision: revisionOf(raw), unresolved: ["paper-2"], savedPapers: ["paper-5"] })
     expect(parseDocument(raw).body).toBe("See [[paper-2]] and [[paper-5]].\n")
     expect(await vault.read("wiki/papers/paper-5.md")).not.toBeNull()
   })
@@ -331,8 +331,8 @@ describe("fix round 1", () => {
     expect([won.length, lost.length]).toEqual([1, 1])
     const raw = await storage.read("wiki/notes/project-plan.md") as string
     const stored = parseDocument(raw)
-    expect(won[0]).toEqual({ revision: revisionOf(raw), unresolved: [] })
-    expect(lost[0]).toEqual({ conflict: true, title: stored.frontmatter.title, body: stored.body, revision: revisionOf(raw) })
+    expect(won[0]).toEqual({ revision: revisionOf(raw), unresolved: [], savedPapers: [] })
+    expect(lost[0]).toEqual({ conflict: true, title: stored.frontmatter.title, untitled: false, body: stored.body, revision: revisionOf(raw) })
     expect(["Body one.\n", "Body two.\n"]).toContain(stored.body)
     expect(stored.frontmatter.title).toBe(stored.body === "Body one.\n" ? "Title one" : "Title two")
   })
@@ -358,7 +358,7 @@ describe("fix round 1", () => {
     const vault = new Breaking()
     for (const [path, raw] of storage.snapshot()) await vault.write(path, raw)
     expect(await saveNote(vault, taxonomy, "project-plan", { title: "x", body: "x", revision: revisionOf(NOTE_PROJECT), now: later }))
-      .toEqual({ conflict: true, title: CLINICAL_COPY.notes.untitled, body: "no frontmatter at all", revision: revisionOf("no frontmatter at all") })
+      .toEqual({ conflict: true, title: CLINICAL_COPY.notes.untitled, untitled: true, body: "no frontmatter at all", revision: revisionOf("no frontmatter at all") })
   })
   it("refuses a note about a treatment when the treatment or its condition is not the pack's", async () => {
     const before = storage.snapshot()

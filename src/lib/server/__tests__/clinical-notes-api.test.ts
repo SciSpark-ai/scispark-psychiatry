@@ -79,15 +79,24 @@ describe("/api/clinical/notes", () => {
     const res = await send("PUT", { id: "esketamine-in-trd", title: "Esketamine in TRD", body: "Rewritten, citing [[paper-2]] and [[made-up]].", revision: revisionOf(NOTE) })
     expect(res.status).toBe(200)
     const raw = await storage.read("wiki/notes/esketamine-in-trd.md") as string
-    expect((await res.json()).result).toEqual({ revision: revisionOf(raw), unresolved: ["made-up"] })
+    expect((await res.json()).result).toEqual({ revision: revisionOf(raw), unresolved: ["made-up"], savedPapers: ["paper-2"] })
     expect(parseDocument(raw).body).toBe("Rewritten, citing [[paper-2]] and [[made-up]].\n")
     expect(await storage.read("wiki/papers/paper-2.md")).not.toBeNull()
   })
   it("answers 409 with the stored version when the note changed since it was read", async () => {
     const res = await send("PUT", { id: "esketamine-in-trd", title: "Mine", body: "Mine.", revision: revisionOf("stale") })
     expect(res.status).toBe(409)
-    expect(await res.json()).toEqual({ error: CLINICAL_COPY.notes.conflict, conflict: { title: "Esketamine in TRD", body: parseDocument(NOTE).body, revision: revisionOf(NOTE) } })
+    expect(await res.json()).toEqual({ error: CLINICAL_COPY.notes.conflict, conflict: { title: "Esketamine in TRD", untitled: false, body: parseDocument(NOTE).body, revision: revisionOf(NOTE) } })
     expect(await storage.read("wiki/notes/esketamine-in-trd.md")).toBe(NOTE)
+  })
+  it("answers 413, in words of its own, for a text over the limit, and writes nothing", async () => {
+    const long = await send("PUT", { id: "esketamine-in-trd", title: "Esketamine in TRD", body: "x".repeat(200_001), revision: revisionOf(NOTE) })
+    expect([long.status, (await long.json()).error]).toEqual([413, CLINICAL_COPY.notes.tooLong])
+    expect(await storage.read("wiki/notes/esketamine-in-trd.md")).toBe(NOTE)
+    const made = await send("POST", { title: "Long", body: "x".repeat(200_001) })
+    expect([made.status, (await made.json()).error]).toEqual([413, CLINICAL_COPY.notes.tooLong])
+    expect(await storage.read("wiki/notes/long.md")).toBeNull()
+    expect((await send("PUT", { id: "esketamine-in-trd", title: "Esketamine in TRD", body: "x".repeat(200_000), revision: revisionOf(NOTE) })).status).toBe(200)
   })
   it("answers 404 when the note to save is not there", async () => {
     expect((await send("PUT", { id: "nope", title: "x", body: "x", revision: revisionOf("x") })).status).toBe(404)

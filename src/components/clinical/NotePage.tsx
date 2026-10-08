@@ -8,18 +8,19 @@ import { renderMarkdown } from "@/components/wiki/markdown-preview"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { evidenceHref } from "@/lib/clinical/evidence/href"
 import { readNoteRemote, saveNoteRemote, type NoteAnswer } from "@/lib/clinical/notes/client"
+import { clearDraft, readDraft, writeDraft } from "@/lib/clinical/notes/draft"
 import { noteChatHref, notesHref, paperHref } from "@/lib/clinical/notes/href"
 import { copyText, endOfText, insertLink } from "@/lib/clinical/notes/insert"
 import { previewMarkdown } from "@/lib/clinical/notes/preview"
-import { conditionLink, noteLinks, paperLink, titleOf, treatmentLink, type NoteConflict, type NoteReference } from "@/lib/clinical/notes/links"
+import { conditionLink, isUntitledStored, noteLinks, paperLink, titleOf, treatmentLink, type NoteConflict, type NoteReference } from "@/lib/clinical/notes/links"
 import { CitePaper } from "./CitePaper"
 import { LinkTopic, type Topic } from "./LinkTopic"
 import { NewPapersSince } from "./NewPapersSince"
 
 const N = CLINICAL_COPY.notes
 const P = N.page
-/** How long after the last change a note saves itself. */
-export const SAVE_DELAY_MS = 800
+/** How long after the last change a note saves itself. Leaving a field, leaving the page and the buttons save at once. */
+export const SAVE_DELAY_MS = 3000
 /** The longest title the field takes. */
 const TITLE_MAX = 200
 const LINKS_ID = "note-links"
@@ -47,17 +48,26 @@ interface Work {
   ready: boolean
   /** A conflict waits for the reader: nothing is saved until it is answered. */
   blocked: boolean
-  /** The page was left: what is still unsaved is sent so that it outlives the page. */
+  /** The page is no longer drawn. */
   gone: boolean
+  /** The page is being left (taken down, or hidden by the browser): what is unsaved is sent so that it outlives the page. */
+  leaving: boolean
   saving: Promise<void> | null
   timer: ReturnType<typeof setTimeout> | null
   /** The links of the text the chips, references and new papers were read for. */
   links: string
   references: NoteReference[]
-  /** Papers cited here that were not in the Library: the next save puts them there. */
-  awaiting: string[]
+  /** How many times the chips were asked for: only the answer to the last asking is shown. */
+  reads: number
 }
 const dirty = (work: Work) => work.ready && (work.title !== work.saved.title || work.body !== work.saved.body)
+/** The title of a stored version as the field holds it: empty for a note that has none. */
+const fieldTitle = (stored: NoteConflict) => (stored.untitled ? "" : stored.title)
+/** True when the stored version of a conflict is what was just sent: the save arrived, and only its answer was lost. */
+function isSent(stored: NoteConflict, sent: { title: string; body: string }): boolean {
+  const title = sent.title.replace(/\s+/g, " ").trim()
+  return stored.body === sent.body && (isUntitledStored(title) ? stored.untitled : !stored.untitled && stored.title === title)
+}
 
 export interface NotePageProps {
   /** The note's id, as the notes route knows it. */
@@ -74,7 +84,10 @@ export interface NotePageProps {
  * The page of one note: its title, what it is about, its text in one field that grows, and what can be done with it.
  * It saves itself a moment after the last change and when a field is left, one save at a time, each naming the
  * revision the one before gave; a note changed elsewhere is shown beside the reader's text and nothing is overwritten
- * until the reader says which to keep. Opening a note writes nothing.
+ * until the reader says which to keep, and until then no link of the page takes the reader away from their text.
+ * Opening a note writes nothing. Text that has not reached the server is also kept by the browser (a draft per note),
+ * so it outlives a reload or a save that failed: a note opened with such a draft shows it again, as unsaved text when
+ * it was typed over the stored version, else beside the stored version as a conflict.
  *
  * The text has two tabs: "Edit", the field, and "Preview", the text as it reads (the wiki's Markdown renderer), where
  * a cited paper is a link to the paper's page and a wiki link that resolves to nothing is marked. A note with text
@@ -98,11 +111,80 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
   /** The names of what was linked on this visit, until the server names them. */
   const [named, setNamed] = useState<Record<string, string>>({})
   const work = useRef<Work>({
-    title: "", body: "", saved: { title: "", body: "", revision: "" }, ready: false, blocked: false, gone: false, saving: null, timer: null, links: "", references: [], awaiting: [],
+    title: "", body: "", saved: { title: "", body: "", revision: "" }, ready: false, blocked: false, gone: false, leaving: false, saving: null, timer: null, links: "", references: [], reads: 0,
   })
+  const card = useRef<HTMLDivElement>(null)
   const area = useRef<HTMLTextAreaElement>(null)
   const touched = useRef(false)
   const place = useRef<number | null>(null)
+
+  /** The browser's copy of what has not reached the server: kept while there is such text, dropped when there is none. */
+  const keep = useCallback(() => {
+    const w = work.current
+    if (dirty(w) || w.blocked) writeDraft(id, { title: w.title, body: w.body, revision: w.saved.revision })
+    else clearDraft(id)
+  }, [id])
+
+  /** The chips, the references and the new papers, read again: they follow the links of the text. */
+  const refresh = useCallback(async () => {
+    const w = work.current
+    const asked = ++w.reads
+    try {
+      const fresh = await readNoteRemote(id)
+      if (!fresh || w.gone || asked !== w.reads) return
+      w.links = linkKey(fresh.body)
+      w.references = fresh.references
+      setView(fresh)
+    } catch {
+      // What is shown stays as it was; the next save that changes a link asks again.
+    }
+  }, [id])
+
+  /**
+   * Saves what is unsaved, one save at a time, until nothing is: a change made during a save is saved after it. The
+   * turn ends with the last save; reading the chips again comes after it and holds nothing up.
+   */
+  const save = useCallback(function send(): Promise<void> {
+    const w = work.current
+    if (w.saving) return w.saving
+    if (w.timer !== null) clearTimeout(w.timer)
+    w.timer = null
+    if (w.blocked || !dirty(w)) return Promise.resolve()
+    let failed = false
+    const turn = async () => {
+      while (dirty(w) && !w.blocked) {
+        const sent = { title: w.title, body: w.body }
+        let result: Awaited<ReturnType<typeof saveNoteRemote>>
+        try {
+          result = await saveNoteRemote({ id, ...sent, revision: w.saved.revision }, undefined, w.leaving ? { keepalive: true } : {})
+        } catch (reason) {
+          failed = true
+          setFailure(messageOf(reason))
+          return
+        }
+        if ("conflict" in result && !isSent(result, sent)) {
+          w.blocked = true
+          setConflict(result)
+          return
+        }
+        w.saved = { ...sent, revision: result.revision }
+        keep()
+        setFailure(null)
+        // A conflict that says what was sent is a save whose answer was lost: there is nothing more to report of it.
+        if ("conflict" in result) continue
+        setUnresolved(result.unresolved)
+        if (result.savedPapers.length > 0) setNotice(P.savedToLibrary)
+      }
+    }
+    w.saving = turn().finally(() => {
+      w.saving = null
+      setUnsaved(dirty(w))
+      if (!w.gone && w.links !== linkKey(w.saved.body)) void refresh()
+      // Whatever was typed as the turn ended is not left waiting for another keystroke.
+      if (!failed && !w.blocked && dirty(w)) void send()
+    })
+    return w.saving
+  }, [id, keep, refresh])
 
   useEffect(() => {
     let cancelled = false
@@ -112,77 +194,44 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
         if (cancelled) return
         if (answer && !w.ready) {
           const stored = { title: untitled ? "" : answer.summary.title, body: answer.body }
-          Object.assign(w, stored, { saved: { ...stored, revision: answer.revision }, ready: true, links: linkKey(answer.body), references: answer.references })
-          setTitle(stored.title)
-          setBody(stored.body)
-          setTab(stored.body.trim() === "" ? "edit" : "preview")
+          // Text the browser kept from an earlier visit, when it says something the stored note does not.
+          const draft = readDraft(id)
+          const mine = draft && (draft.title !== stored.title || draft.body !== stored.body) ? draft : null
+          if (draft && !mine) clearDraft(id)
+          // Typed over another version than the stored one: the reader chooses, as for any conflict.
+          const stale = mine !== null && mine.revision !== answer.revision
+          const text = mine ? { title: mine.title, body: mine.body } : stored
+          Object.assign(w, text, {
+            saved: { ...stored, revision: mine && stale ? mine.revision : answer.revision }, ready: true, blocked: stale, links: linkKey(answer.body), references: answer.references,
+          })
+          setTitle(text.title)
+          setBody(text.body)
+          setTab(mine || text.body.trim() === "" ? "edit" : "preview")
+          setUnsaved(mine !== null)
+          if (stale) setConflict({ conflict: true, title: answer.summary.title, untitled, body: answer.body, revision: answer.revision })
+          else if (mine) void save()
         }
         setView(answer)
       })
       .catch((reason) => { if (!cancelled) setLoadError(messageOf(reason)) })
     return () => { cancelled = true }
-  }, [id, untitled])
+  }, [id, untitled, save])
 
-  /** The chips, the references and the new papers, read again: they follow the links of the text. */
-  const refresh = useCallback(async () => {
-    const w = work.current
-    try {
-      const fresh = await readNoteRemote(id)
-      if (!fresh || w.gone) return
-      w.links = linkKey(fresh.body)
-      w.references = fresh.references
-      setView(fresh)
-    } catch {
-      // What is shown stays as it was; the next save that changes a link asks again.
-    }
-  }, [id])
-
-  /** Saves what is unsaved, one save at a time, until nothing is: a change made during a save is saved after it. */
-  const save = useCallback((): Promise<void> => {
-    const w = work.current
-    if (w.saving) return w.saving
-    if (w.timer !== null) clearTimeout(w.timer)
-    w.timer = null
-    if (w.blocked || !dirty(w)) return Promise.resolve()
-    const turn = async () => {
-      while (dirty(w) && !w.blocked) {
-        const sent = { title: w.title, body: w.body }
-        let result: Awaited<ReturnType<typeof saveNoteRemote>>
-        try {
-          result = await saveNoteRemote({ id, ...sent, revision: w.saved.revision }, undefined, w.gone ? { keepalive: true } : {})
-        } catch (reason) {
-          setFailure(messageOf(reason))
-          return
-        }
-        if ("conflict" in result) {
-          w.blocked = true
-          setConflict(result)
-          return
-        }
-        const { revision, unresolved: lost } = result
-        w.saved = { ...sent, revision }
-        setFailure(null)
-        setUnresolved(lost)
-        const cited = noteLinks(sent.body).papers
-        const done = w.awaiting.filter((slug) => cited.includes(slug))
-        w.awaiting = w.awaiting.filter((slug) => !done.includes(slug))
-        if (done.some((slug) => !lost.includes(slug))) setNotice(P.savedToLibrary)
-      }
-      if (!w.gone && w.links !== linkKey(w.saved.body)) await refresh()
-    }
-    w.saving = turn().finally(() => {
-      w.saving = null
-      setUnsaved(dirty(w))
-    })
-    return w.saving
-  }, [id, refresh])
-
-  // Leaving the page with unsaved text sends it once more, in a request that outlives the page.
+  // Leaving the page with unsaved text sends it once more, in a request that outlives the page: when the page is
+  // taken down, and when the browser hides it (a closed tab, another site). A page shown again saves as before.
   useEffect(() => {
     const w = work.current
     w.gone = false
+    w.leaving = false
+    const hide = () => { w.leaving = true; void save() }
+    const show = () => { w.leaving = false }
+    window.addEventListener("pagehide", hide)
+    window.addEventListener("pageshow", show)
     return () => {
+      window.removeEventListener("pagehide", hide)
+      window.removeEventListener("pageshow", show)
       w.gone = true
+      w.leaving = true
       void save()
     }
   }, [save])
@@ -224,7 +273,8 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
     if (w.timer !== null) clearTimeout(w.timer)
     w.timer = null
     setNotice(null)
-    setUnsaved(dirty(w) || w.saving !== null)
+    keep()
+    setUnsaved(dirty(w) || w.blocked || w.saving !== null)
     if (dirty(w)) w.timer = setTimeout(() => { w.timer = null; void save() }, SAVE_DELAY_MS)
   }
 
@@ -240,8 +290,7 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
     place.current = next.caret
     change({ body: next.text })
   }
-  const cite = (paper: { slug: string; label: string; saved?: boolean }) => {
-    if (paper.saved === false && !work.current.awaiting.includes(paper.slug)) work.current.awaiting.push(paper.slug)
+  const cite = (paper: { slug: string; label: string }) => {
     setNamed((names) => ({ ...names, [`paper:${paper.slug}`]: paper.label }))
     setPanel(null)
     insert(paperLink(paper.slug, paper.label))
@@ -255,17 +304,20 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
   const keepMine = () => {
     const w = work.current
     if (!conflict) return
-    w.saved = { ...w.saved, revision: conflict.revision }
+    // From here the stored version is what the reader's text is measured against: whatever differs from it is sent.
+    w.saved = { title: fieldTitle(conflict), body: conflict.body, revision: conflict.revision }
     w.blocked = false
     setConflict(null)
+    keep()
+    setUnsaved(dirty(w))
     void save()
   }
   const useStored = () => {
     const w = work.current
     if (!conflict) return
-    // A note that had no title still has none when the stored title is only its first line.
-    const stored = { title: w.saved.title === "" && conflict.title === titleOf(null, conflict.body) ? "" : conflict.title, body: conflict.body }
+    const stored = { title: fieldTitle(conflict), body: conflict.body }
     Object.assign(w, stored, { saved: { ...stored, revision: conflict.revision }, blocked: false })
+    clearDraft(id)
     setTitle(stored.title)
     setBody(stored.body)
     setConflict(null)
@@ -287,16 +339,27 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
     }
   }
 
-  /** A link away from the page waits for what is unsaved; when that cannot be saved the reader stays, with the reason. */
+  /**
+   * A link away from the page waits for what is unsaved; when that cannot be saved the reader stays, with the reason.
+   * While a conflict holds text of the reader's that the stored version does not have, no link takes them away: the
+   * card that asks which to keep is brought to them instead.
+   */
   const leave = (event: MouseEvent<HTMLDivElement>) => {
     const w = work.current
-    if ((!dirty(w) && w.saving === null) || w.blocked) return
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
     const anchor = (event.target as Element).closest("a[href]")
     const href = anchor?.getAttribute("href") ?? ""
     if (!anchor || !href.startsWith("/") || anchor.getAttribute("target")) return
+    if (w.blocked) {
+      if (conflict && w.title === fieldTitle(conflict) && w.body === conflict.body) return
+      event.preventDefault()
+      card.current?.scrollIntoView?.({ block: "center" })
+      card.current?.focus()
+      return
+    }
+    if (!dirty(w) && w.saving === null) return
     event.preventDefault()
-    void save().then(() => { if (!dirty(w)) router.push(href) })
+    void save().then(() => { if (!dirty(w) && !w.blocked) router.push(href) })
   }
 
   if (loadError !== null) return <div className="p-7"><p role="alert" className="text-[14px] text-accent-ink">{loadError}</p></div>
@@ -360,7 +423,7 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
       <NewPapersSince papers={fresh} since={summary.updated} onCite={cite} />
 
       {conflict && (
-        <div role="alert" data-note-conflict="true" className="mt-4 rounded-card border border-orange bg-orange/10 px-4 py-3">
+        <div ref={card} tabIndex={-1} role="alert" data-note-conflict="true" className="mt-4 rounded-card border border-orange bg-orange/10 px-4 py-3">
           <p className="text-[14px] text-espresso">{N.conflict}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <Button onClick={keepMine}>{P.keepMine}</Button>

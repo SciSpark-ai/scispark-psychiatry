@@ -1,5 +1,6 @@
 import { findWikilinkMatches } from "../../vault/wikilinks"
 import { paperHref } from "./href"
+import { linkedSlug } from "./links"
 
 // A note's text made ready for the wiki's Markdown renderer. Pure text: a page can use it.
 
@@ -13,8 +14,12 @@ export interface PreviewLinks {
   notFound: string
 }
 
-/** A label as the text of a Markdown link: on one line, and with no bracket that would close the link early. */
-const labelText = (label: string) => label.replace(/\[/g, "(").replace(/\]/g, ")").replace(/\s+/g, " ").trim()
+/**
+ * A label as the text of a Markdown link: on one line, with no bracket that would close the link early, and with no
+ * mark the renderer reads as emphasis or code. The renderer has no escape, so `*` and the backtick are shown by the
+ * characters that look like them (U+2217, U+02CB); `_` is not a mark to it and stays.
+ */
+const labelText = (label: string) => label.replace(/\[/g, "(").replace(/\]/g, ")").replace(/\*/g, "\u2217").replace(/`/g, "\u02cb").replace(/\s+/g, " ").trim()
 /** The address of a paper's page inside a Markdown link, where a bracket would end the address. */
 const address = (slug: string) => paperHref(encodeURIComponent(slug)).replace(/\(/g, "%28").replace(/\)/g, "%29")
 
@@ -28,9 +33,11 @@ export function previewMarkdown(body: string, { papers, missing, notFound }: Pre
   let out = ""
   let at = 0
   for (const link of findWikilinkMatches(body)) {
-    const label = labelText(link.alias ?? papers.get(link.slug) ?? link.slug) || link.slug
+    // A paper linked by its path (`wiki/papers/x`) is the paper `x`.
+    const slug = linkedSlug(link.slug)
+    const label = labelText(link.alias ?? papers.get(slug) ?? slug) || labelText(slug)
     out += body.slice(at, link.start)
-    out += missing.has(link.slug) ? `${label} *(${notFound})*` : papers.has(link.slug) ? `[${label}](${address(link.slug)})` : label
+    out += missing.has(slug) ? `${label} *(${notFound})*` : papers.has(slug) ? `[${label}](${address(slug)})` : label
     at = link.end
   }
   return out + body.slice(at)

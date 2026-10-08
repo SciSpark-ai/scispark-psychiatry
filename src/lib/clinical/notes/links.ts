@@ -33,8 +33,10 @@ export interface NoteSummary {
 export interface NewPaper { slug: string; label: string; headline: string; condition: string; firstListed: string }
 export interface NoteDetail { summary: NoteSummary; body: string; revision: string }
 export interface NoteAbout { paper?: string; condition?: string; treatment?: { condition: string; key: string } }
-export interface NoteSaved { revision: string; unresolved: string[] }
-export interface NoteConflict { conflict: true; title: string; body: string; revision: string }
+/** `savedPapers`: the cited papers this save put in the Library. `unresolved`: those no source knows, or that could not be saved. */
+export interface NoteSaved { revision: string; unresolved: string[]; savedPapers: string[] }
+/** The stored version of a note that changed since it was read. `untitled`: it has no title of its own, and `title` is only how it is shown. */
+export interface NoteConflict { conflict: true; title: string; untitled: boolean; body: string; revision: string }
 export interface CitablePaper { slug: string; label: string; title: string; venue: string | null; year: number | null; saved: boolean }
 export interface NoteReference { slug: string; text: string }
 
@@ -54,9 +56,21 @@ const withoutCode = (body: string) => body.replace(FENCE_RE, (span) => " ".repea
 /** An ordinary link to the Evidence view. Not an image, and not a link to another site. */
 const EVIDENCE_LINK_RE = /(?<!!)\[([^\]\n]*)\]\(\s*\/wiki\?([^)\s]*)\s*\)/g
 
+/** Where the Library keeps its paper pages, as a wiki link may spell it out. */
+const PAPER_PATH = "wiki/papers/"
+/** What a wiki link names: `wiki/papers/x` and `wiki/papers/x.md` are the paper `x`; anything else is left as written. */
+export function linkedSlug(target: string): string {
+  const name = target.endsWith(".md") ? target.slice(0, -3) : target
+  const slug = name.startsWith(PAPER_PATH) ? name.slice(PAPER_PATH.length) : ""
+  return slug !== "" && !slug.includes("/") ? slug : target
+}
+
 export function noteLinks(body: string): NoteLinks {
   const links: NoteLinks = { papers: [], conditions: [], treatments: [] }
-  for (const { slug } of findWikilinkMatches(body)) if (!links.papers.includes(slug)) links.papers.push(slug)
+  for (const match of findWikilinkMatches(body)) {
+    const slug = linkedSlug(match.slug)
+    if (!links.papers.includes(slug)) links.papers.push(slug)
+  }
   for (const match of withoutCode(body).matchAll(EVIDENCE_LINK_RE)) {
     // What follows a `#` is a place on the page, not a parameter.
     const query = new URLSearchParams(match[2].split("#")[0])

@@ -2,8 +2,11 @@
 import type { VaultStorage } from "../../vault/storage"
 import type { Frontmatter } from "../../vault/types"
 import { asStringArray, parseDocument, serializeDocument } from "../../vault/frontmatter"
-import { ChangesetConflictError, makeChangesetId } from "../../vault/changesets"
+import { loadBundle } from "../../vault/bundle"
+import { ChangesetConflictError, applyChangeset, makeChangesetId, parseChangeset } from "../../vault/changesets"
+import { writeIndex } from "../../vault/index-builder"
 import { commitChangeset } from "../../vault/mutations"
+import type { Changeset } from "../../vault/types"
 import { findWikilinkMatches } from "../../vault/wikilinks"
 import { loadRouting } from "../../wiki/schema-routing"
 import { slugifyTitle } from "../../wiki/authoring"
@@ -16,7 +19,7 @@ import type { Finding } from "../evidence/schema"
 import type { Taxonomy, TaxonomyNode } from "../pack/schema"
 import { armsOf, withDescendants } from "../pack/taxonomy"
 import {
-  UNTITLED_STORED, conditionLink, excerptOf, noteKind, noteLinks, paperLabel, paperLink, plainText, referenceLine, revisionOf, titleOf, treatmentLink,
+  UNTITLED_STORED, conditionLink, excerptOf, isUntitledStored, noteKind, noteLinks, paperLabel, paperLink, plainText, referenceLine, revisionOf, titleOf, treatmentLink,
   type CitablePaper, type NewPaper, type NoteAbout, type NoteConflict, type NoteDetail, type NoteKind, type NoteLinks, type NoteReference, type NoteSaved, type NoteSummary,
 } from "./links"
 
@@ -105,9 +108,10 @@ async function openVault(storage: VaultStorage, taxonomy: Taxonomy): Promise<Vau
 }
 
 async function readPaperPage(storage: VaultStorage, paperDir: string, slug: string): Promise<PaperFacts | null> {
-  const raw = await storage.read(`${paperDir}/${slug}.md`)
-  if (raw === null) return null
+  // A page that cannot be read or parsed is a paper nothing is known of: it never fails the note that cites it.
   try {
+    const raw = await storage.read(`${paperDir}/${slug}.md`)
+    if (raw === null) return null
     return factsOf(paperRecordFromFrontmatter(parseDocument(raw).frontmatter))
   } catch {
     return null
@@ -239,7 +243,8 @@ export async function listNotes(storage: VaultStorage, taxonomy: Taxonomy, filte
   const vault = await openVault(storage, taxonomy)
   const prefix = `${vault.noteDir}/`
   const paths = (await storage.list(prefix)).filter((path) => path.endsWith(".md"))
-  const loaded = (await Promise.all(paths.map((path) => load(vault, path.slice(prefix.length, -3), filters.now)))).filter((note): note is Loaded => note !== null)
+  // A note that cannot be read is left out: one bad file never empties the list.
+  const loaded = (await Promise.all(paths.map((path) => load(vault, path.slice(prefix.length, -3), filters.now).catch(() => null)))).filter((note): note is Loaded => note !== null)
   const wanted = words(filters.q)
   const under = filters.condition ? vault.codesUnder(filters.condition) : null
   return loaded
@@ -347,12 +352,82 @@ export async function createNote(storage: VaultStorage, taxonomy: Taxonomy, inpu
 
 export interface SaveNoteInput { title: string; body: string; revision: string; now: Date }
 
+const SAVE_SKILL = "clinical-note-save"
+/** Where the vault keeps the record of each changeset, and how one is named: `cs-<milliseconds>-<random>`. */
+const RECORD_DIR = ".scispark/changesets/"
+const RECORD_RE = /^cs-(\d+)-[A-Za-z0-9]+\.json$/
+/** A save made this soon after the save before is the same stretch of writing: one record holds both. */
+export const COALESCE_MS = 10 * 60_000
+
+/**
+ * The record of the last save of this note, when it was made less than ten minutes before `now` and the note is
+ * still as that save left it. Only records named in that window are read.
+ */
+async function recentSave(storage: VaultStorage, path: string, raw: string, now: Date): Promise<Changeset | null> {
+  try {
+    const names = (await storage.list(RECORD_DIR)).map((entry) => entry.slice(RECORD_DIR.length))
+    const near = names.flatMap((name) => {
+      const made = Number(RECORD_RE.exec(name)?.[1] ?? Number.NaN)
+      return made <= now.getTime() && now.getTime() - made < COALESCE_MS ? [{ name, made }] : []
+    }).sort((a, b) => b.made - a.made)
+    for (const { name } of near) {
+      const text = await storage.read(`${RECORD_DIR}${name}`)
+      if (text === null) continue
+      let record: Changeset
+      try {
+        record = parseChangeset(JSON.parse(text))
+      } catch {
+        continue
+      }
+      const made = Date.parse(record.timestamp)
+      if (record.skill !== SAVE_SKILL || record.changes.length !== 1 || `${record.id}.json` !== name) continue
+      if (!(made <= now.getTime()) || now.getTime() - made >= COALESCE_MS) continue
+      const [change] = record.changes
+      if (change.path === path && change.before !== null && change.after === raw) return record
+    }
+  } catch {
+    // The history cannot be read: the save is then a record of its own.
+  }
+  return null
+}
+
+/**
+ * Writes a note's new text as a changeset. A save that follows another of the same note within ten minutes does not
+ * add to the vault's history: its record is folded into the earlier one, which keeps its own `before` text and time
+ * and takes the new `after`, so that undoing it gives back the note as it was before that stretch of writing; no log
+ * line is added for it. Throws `ChangesetConflictError` when the file is not `before`.
+ */
+async function writeNote(storage: VaultStorage, id: string, path: string, before: string, after: string, now: Date): Promise<void> {
+  // The record is named by `now`, so that the next save finds it without reading the whole history.
+  const changeset: Changeset = {
+    id: `cs-${now.getTime()}-${makeChangesetId().split("-").at(-1)}`, skill: SAVE_SKILL, model: "none", timestamp: now.toISOString(), changes: [{ path, before, after }],
+  }
+  const earlier = await recentSave(storage, path, before, now)
+  if (!earlier) {
+    await commitChangeset(storage, changeset, { op: SAVE_SKILL, summary: id })
+    return
+  }
+  await applyChangeset(storage, changeset)
+  try {
+    // The earlier record first: were this to stop half-way, the history would hold one step too many, never one too few.
+    await storage.write(`${RECORD_DIR}${earlier.id}.json`, JSON.stringify({ ...earlier, changes: [{ path, before: earlier.changes[0].before, after }] }, null, 2))
+    await storage.delete(`${RECORD_DIR}${changeset.id}.json`)
+  } catch {
+    // The note is saved and both records are true; they are only not folded.
+  }
+  try {
+    await writeIndex(storage, await loadBundle(storage))
+  } catch {
+    // As after any changeset: the index is derived, and the next change writes it again.
+  }
+}
+
 /**
  * Saves a note's title and body. Only `title`, `updated`, `edited` and the body change: every other frontmatter key
  * stays, and the file keeps its name. When the stored text is not the one the save began from, nothing is written and
  * the stored version is given back, its title as it is shown. Every paper the body cites that has no Library page is
- * saved; one that no source knows, or that could not be saved, is left as written and named in `unresolved`. Once the
- * note is written this always answers with the new revision.
+ * saved and named in `savedPapers`; one that no source knows, or that could not be saved, is left as written and named
+ * in `unresolved`. Once the note is written this always answers with the new revision.
  */
 export async function saveNote(storage: VaultStorage, taxonomy: Taxonomy, id: string, input: SaveNoteInput): Promise<NoteSaved | NoteConflict> {
   const vault = await openVault(storage, taxonomy)
@@ -361,10 +436,10 @@ export async function saveNote(storage: VaultStorage, taxonomy: Taxonomy, id: st
   const stored = (raw: string): NoteConflict => {
     try {
       const { frontmatter, body } = parseDocument(raw)
-      return { conflict: true, title: titleOf(frontmatter.title, body), body, revision: revisionOf(raw) }
+      return { conflict: true, title: titleOf(frontmatter.title, body), untitled: isUntitledStored(frontmatter.title), body, revision: revisionOf(raw) }
     } catch {
       // A file whose frontmatter no longer parses is given as it stands.
-      return { conflict: true, title: titleOf(null, ""), body: raw, revision: revisionOf(raw) }
+      return { conflict: true, title: titleOf(null, ""), untitled: true, body: raw, revision: revisionOf(raw) }
     }
   }
   if (revisionOf(note.raw) !== input.revision) return stored(note.raw)
@@ -372,15 +447,13 @@ export async function saveNote(storage: VaultStorage, taxonomy: Taxonomy, id: st
   const body = input.body.replace(/\r\n/g, "\n")
   const title = oneLine(input.title).slice(0, TITLE_MAX)
   const frontmatter: Frontmatter = { ...note.frontmatter, title: title || UNTITLED_STORED, updated: day(input.now), edited: input.now.toISOString() }
-  const after = serializeDocument(frontmatter, body)
+  // White space around a title is not a change: with the same title and text nothing is written and the edit time stays.
+  const sameTitle = title === "" ? isUntitledStored(note.frontmatter.title) : note.frontmatter.title === title
+  const after = sameTitle && body === note.body ? note.raw : serializeDocument(frontmatter, body)
   const path = `${vault.noteDir}/${id}.md`
   if (after !== note.raw) {
     try {
-      await commitChangeset(
-        storage,
-        { id: makeChangesetId(), skill: "clinical-note-save", model: "none", timestamp: input.now.toISOString(), changes: [{ path, before: note.raw, after }] },
-        { op: "clinical-note-save", summary: id },
-      )
+      await writeNote(storage, id, path, note.raw, after, input.now)
     } catch (error) {
       // The file changed between the read above and the write: the same answer as a stale revision.
       if (!(error instanceof ChangesetConflictError)) throw error
@@ -390,13 +463,15 @@ export async function saveNote(storage: VaultStorage, taxonomy: Taxonomy, id: st
     }
   }
   const unresolved: string[] = []
+  const savedPapers: string[] = []
   for (const slug of linksOf(vault, body).links.papers) {
     if (vault.saved.has(slug)) continue
     // The note is saved by now. A paper that cannot be saved is reported with those no source knows; the save still answers.
     const outcome = await ensurePaperSaved(storage, slug, input.now).catch(() => "unknown" as const)
     if (outcome === "unknown") unresolved.push(slug)
+    if (outcome === "saved") savedPapers.push(slug)
   }
-  return { revision: revisionOf(after), unresolved }
+  return { revision: revisionOf(after), unresolved, savedPapers }
 }
 
 /**

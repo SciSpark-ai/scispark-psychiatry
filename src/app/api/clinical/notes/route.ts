@@ -26,9 +26,13 @@ const CreateSchema = z.object({
 })
 const SaveSchema = z.object({ id: z.string().refine(isNoteId), title: z.string().max(500), body: z.string().max(BODY_MAX), revision: z.string().regex(REVISION_RE) })
 
-async function input<T>(request: Request, schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } }): Promise<T | null> {
+/** What was sent, checked: the data, `long` for a text over the limit (it has its own answer), or null. */
+async function input<T>(request: Request, schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } }): Promise<T | "long" | null> {
   try {
-    const parsed = schema.safeParse(await request.json())
+    const sent: unknown = await request.json()
+    const text = typeof sent === "object" && sent !== null ? (sent as { body?: unknown }).body : undefined
+    if (typeof text === "string" && text.length > BODY_MAX) return "long"
+    const parsed = schema.safeParse(sent)
     return parsed.success ? parsed.data : null
   } catch {
     return null
@@ -72,6 +76,7 @@ export async function GET(request: Request): Promise<Response> {
 /** POST { title?, body?, about?: { paper?, condition?, treatment?: { condition, key } } }: makes a note and answers its id. */
 export async function POST(request: Request): Promise<Response> {
   const data = await input(request, CreateSchema)
+  if (data === "long") return fail(413, N.tooLong)
   if (!data) return fail(400, N.badRequest)
   try {
     const vault = await getServerVault()
@@ -83,17 +88,19 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 /**
- * PUT { id, title, body, revision }: saves a note and answers the new revision and the cited papers no source knows.
- * 409 with the stored title, body and revision when the note changed since `revision` was read; nothing is written then.
+ * PUT { id, title, body, revision }: saves a note and answers the new revision, the cited papers it put in the Library
+ * and those no source knows. 409 with the stored title (and whether it is one), body and revision when the note
+ * changed since `revision` was read; nothing is written then. 413 for a text over the limit.
  */
 export async function PUT(request: Request): Promise<Response> {
   const data = await input(request, SaveSchema)
+  if (data === "long") return fail(413, N.tooLong)
   if (!data) return fail(400, N.badRequest)
   try {
     const vault = await getServerVault()
     const { taxonomy } = await loadPsychiatryPack()
     const result = await saveNote(vault, taxonomy, data.id, { title: data.title, body: data.body, revision: data.revision, now: new Date() })
-    if ("conflict" in result) return Response.json({ error: N.conflict, conflict: { title: result.title, body: result.body, revision: result.revision } }, { status: 409 })
+    if ("conflict" in result) return Response.json({ error: N.conflict, conflict: { title: result.title, untitled: result.untitled, body: result.body, revision: result.revision } }, { status: 409 })
     return ok(result)
   } catch (error) {
     return failed(error)

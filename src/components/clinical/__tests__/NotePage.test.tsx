@@ -18,6 +18,8 @@ vi.mock("@/lib/clinical/evidence/client", () => evidence)
 
 import { NotePage, SAVE_DELAY_MS } from "../NotePage"
 import { CITE_DELAY_MS } from "../CitePaper"
+import { readDraft, writeDraft } from "@/lib/clinical/notes/draft"
+import { CLINICAL_COPY } from "@/lib/clinical/copy"
 
 const BODY = "On [[lee-2024|Lee 2024]] and [[ghost]].\n\n[Esketamine](/wiki?condition=depression&treatment=esketamine) helps.\n"
 const summary = (extra: Partial<NoteSummary> = {}): NoteSummary => ({
@@ -35,7 +37,7 @@ const answer = (extra: Partial<NoteAnswer> = {}): NoteAnswer => ({
   references: [{ slug: "lee-2024", text: "Lee A. A trial. 2024." }],
   ...extra,
 })
-const saved = (revision: string, unresolved: string[] = []) => ({ revision, unresolved })
+const saved = (revision: string, unresolved: string[] = [], savedPapers: string[] = []) => ({ revision, unresolved, savedPapers })
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason: unknown) => void
@@ -84,6 +86,7 @@ const guarded = () => {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  sessionStorage.clear()
   document.body.innerHTML = ""
   for (const mock of [nav.push, notes.readNoteRemote, notes.saveNoteRemote, notes.searchCitableRemote, records.listConditionsRemote, evidence.loadConditionEvidenceRemote, onDelete]) mock.mockReset()
   notes.readNoteRemote.mockResolvedValue(answer())
@@ -108,11 +111,11 @@ describe("the page of a note", () => {
       ["treatment", "Esketamine", "/wiki?condition=depression&treatment=esketamine"],
       ["papers", "2 papers", "#note-links"],
     ])
-    expect(anchor("Ask in Chat").getAttribute("href")).toBe("/chat?new=1&note=esk")
+    expect(anchor("Ask about this note").getAttribute("href")).toBe("/chat?new=1&note=esk")
     for (const label of ["Cite a paper", "Link a condition or treatment", "Copy with references", "Delete"]) expect(button(label)).toBeTruthy()
     expect(state()).toBe("saved")
     expect(container.textContent).toContain("Do not write anything about a patient.")
-    expect(container.textContent).toContain("Ask in Chat sends this note and its cited papers to your model provider.")
+    expect(container.textContent).toContain("Asking sends this note and its cited papers to your model provider.")
     expect(area().className).not.toContain("font-mono")
     await tick(5 * SAVE_DELAY_MS)
     expect(notes.saveNoteRemote).not.toHaveBeenCalled()
@@ -130,8 +133,8 @@ describe("the page of a note", () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toBe("no vault")
   })
 
-  it("saves once, 800 ms after the last change, with the revision it read; the next save names the revision that one gave", async () => {
-    expect(SAVE_DELAY_MS).toBe(800)
+  it("saves once, three seconds after the last change, with the revision it read; the next save names the revision that one gave", async () => {
+    expect(SAVE_DELAY_MS).toBe(3000)
     await open()
     await write(titleField(), "A new title")
     await tick(SAVE_DELAY_MS - 100)
@@ -196,7 +199,7 @@ describe("the page of a note", () => {
 })
 
 describe("a note that was changed somewhere else", () => {
-  const stored = { conflict: true as const, title: "Stored title", body: "Stored text.\n", revision: "r9" }
+  const stored = { conflict: true as const, title: "Stored title", untitled: false, body: "Stored text.\n", revision: "r9" }
   async function conflicted() {
     notes.saveNoteRemote.mockResolvedValueOnce(stored).mockResolvedValue(saved("r10"))
     await open()
@@ -320,7 +323,7 @@ describe("a save that fails, and leaving with unsaved text", () => {
     notes.saveNoteRemote.mockReturnValueOnce(pending.promise)
     await open()
     await write(area(), "On my way out.\n")
-    await click(anchor("Ask in Chat"))
+    await click(anchor("Ask about this note"))
     expect(saves()).toHaveLength(1)
     expect(nav.push).not.toHaveBeenCalled()
     await act(async () => { pending.resolve(saved("r2")) })
@@ -366,6 +369,7 @@ describe("citing a paper and linking a condition or a treatment", () => {
     expect(area().value).toBe(`On [[kim-2023|Kim 2023]] ${BODY.slice(3)}`)
     expect(area().selectionStart).toBe("On [[kim-2023|Kim 2023]] ".length)
     expect(notice()).toBeNull()
+    notes.saveNoteRemote.mockResolvedValue(saved("r2", [], ["kim-2023"]))
     await tick(SAVE_DELAY_MS)
     expect(saves()[0].body).toBe(`On [[kim-2023|Kim 2023]] ${BODY.slice(3)}`)
     expect(notice()).toBe("Saved to your Library")
@@ -695,5 +699,274 @@ describe("a note made by the old button, a captured passage or a project", () =>
     await write(area(), `${OLD}A new line.\n`)
     await tick(SAVE_DELAY_MS)
     expect(saves()[0].title).toBe("The first line of it")
+  })
+})
+
+describe("the final fix wave: a note never loses text", () => {
+  const stored = { conflict: true as const, title: "Stored title", untitled: false, body: "Stored text.\n", revision: "r9" }
+  const ADHD = "[ADHD](/wiki?condition=adhd)\n"
+  const press = async (element: Element) => {
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 })
+    await act(async () => { element.dispatchEvent(event) })
+    return event
+  }
+
+  it("A1: saves what was typed while the chips were being read again, with no further keystroke", async () => {
+    await open()
+    const reading = deferred<NoteAnswer>()
+    notes.readNoteRemote.mockReturnValueOnce(reading.promise)
+    await write(area(), ADHD)
+    await tick(SAVE_DELAY_MS)
+    expect(saves()).toHaveLength(1)
+    expect(notes.readNoteRemote).toHaveBeenCalledTimes(2)
+    notes.saveNoteRemote.mockResolvedValue(saved("r3"))
+    await write(area(), `${ADHD}More.\n`)
+    await tick(SAVE_DELAY_MS)
+    expect(saves()).toHaveLength(2)
+    expect(saves()[1]).toEqual({ id: "esk", title: "Esketamine in TRD", body: `${ADHD}More.\n`, revision: "r2" })
+    expect(state()).toBe("saved")
+    await act(async () => { reading.resolve(answer({ body: ADHD })) })
+    expect(area().value).toBe(`${ADHD}More.\n`)
+  })
+
+  it("A1: shows the newest reading of the chips when an older one answers last", async () => {
+    await open()
+    const first = deferred<NoteAnswer>()
+    notes.readNoteRemote.mockReturnValueOnce(first.promise)
+    await write(area(), ADHD)
+    await tick(SAVE_DELAY_MS)
+    notes.readNoteRemote.mockResolvedValueOnce(answer({ summary: summary({ conditions: [{ code: "ocd", name: "OCD" }], treatments: [], papers: [] }), body: "[OCD](/wiki?condition=ocd)\n", references: [] }))
+    await write(area(), "[OCD](/wiki?condition=ocd)\n")
+    await tick(SAVE_DELAY_MS)
+    await act(async () => { first.resolve(answer({ summary: summary({ conditions: [{ code: "adhd", name: "ADHD" }], treatments: [], papers: [] }), body: ADHD, references: [] })) })
+    expect([...container.querySelectorAll("[data-chip]")].map((chip) => chip.textContent)).toEqual(["OCD"])
+  })
+
+  it("A2: a link inside the page does not take the reader away while a conflict holds their text; the card is brought to them", async () => {
+    const scrolled = vi.fn()
+    Element.prototype.scrollIntoView = scrolled
+    notes.saveNoteRemote.mockResolvedValueOnce(stored)
+    await open()
+    await write(area(), `${BODY}Mine.\n`)
+    await tick(SAVE_DELAY_MS)
+    const card = container.querySelector("[data-note-conflict]") as HTMLElement
+    for (const text of ["← Notes", "Ask about this note", "Major depressive disorder"]) {
+      scrolled.mockClear()
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      const event = await press(anchor(text))
+      expect(event.defaultPrevented, text).toBe(true)
+      expect(scrolled, text).toHaveBeenCalledTimes(1)
+      expect(document.activeElement, text).toBe(card)
+    }
+    await click(tab("preview"))
+    const inPreview = preview()!.querySelector("a") as HTMLAnchorElement
+    expect((await press(inPreview)).defaultPrevented).toBe(true)
+    await click(button("Show"))
+    expect((await press(container.querySelector("[data-new-paper] a, [data-new-papers] a") ?? anchor("← Notes"))).defaultPrevented).toBe(true)
+    expect(nav.push).not.toHaveBeenCalled()
+    expect(saves()).toHaveLength(1)
+    // Once the reader has taken the stored text nothing of theirs is held, and the links work again.
+    await click(button("Use the stored one"))
+    expect((await press(anchor("← Notes"))).defaultPrevented).toBe(false)
+  })
+
+  it("A3: sends what is unsaved when the browser hides the page, in a request that outlives it", async () => {
+    await open()
+    await write(area(), "Typed, then the tab was closed.\n")
+    await act(async () => { window.dispatchEvent(new Event("pagehide")) })
+    expect(notes.saveNoteRemote.mock.calls[0]).toEqual([{ id: "esk", title: "Esketamine in TRD", body: "Typed, then the tab was closed.\n", revision: "r1" }, undefined, { keepalive: true }])
+    await flush()
+    // A page that is shown again (the back-forward cache) saves as before.
+    await act(async () => { window.dispatchEvent(new Event("pageshow")) })
+    await write(area(), "Back again.\n")
+    await tick(SAVE_DELAY_MS)
+    expect(notes.saveNoteRemote.mock.calls[1][2]).toEqual({})
+    expect(guarded()).toBe(false)
+  })
+
+  it("A3: keeps a draft in the browser while text is unsaved or could not be saved, and drops it once saved", async () => {
+    notes.saveNoteRemote.mockRejectedValueOnce(new Error("The disk is full.")).mockResolvedValue(saved("r2"))
+    await open()
+    expect(readDraft("esk")).toBeNull()
+    await write(titleField(), "A draft title")
+    await write(area(), "A draft.\n")
+    expect(readDraft("esk")).toEqual({ title: "A draft title", body: "A draft.\n", revision: "r1" })
+    await tick(SAVE_DELAY_MS)
+    expect(container.querySelector("[data-note-state]")?.textContent).toBe("The disk is full.")
+    expect(readDraft("esk")).toEqual({ title: "A draft title", body: "A draft.\n", revision: "r1" })
+    await click(button("Retry"))
+    await flush()
+    expect(state()).toBe("saved")
+    expect(readDraft("esk")).toBeNull()
+    await write(area(), BODY)
+    await write(titleField(), "A draft title")
+    expect(readDraft("esk")).toEqual({ title: "A draft title", body: BODY, revision: "r2" })
+  })
+
+  it("A3: opens with a draft typed over the stored version as unsaved text, and saves it", async () => {
+    writeDraft("esk", { title: "Esketamine in TRD", body: "Typed before the reload.\n", revision: "r1" })
+    await open()
+    expect(area().value).toBe("Typed before the reload.\n")
+    expect(tabOn()).toBe("edit")
+    expect(container.querySelector("[data-note-conflict]")).toBeNull()
+    await flush()
+    expect(saves()).toEqual([{ id: "esk", title: "Esketamine in TRD", body: "Typed before the reload.\n", revision: "r1" }])
+    expect(state()).toBe("saved")
+    expect(readDraft("esk")).toBeNull()
+  })
+
+  it("A3: opens with a draft typed over another version as a conflict, the draft as the reader's text", async () => {
+    writeDraft("esk", { title: "My title", body: "Typed over an older version.\n", revision: "r0" })
+    await open()
+    expect(container.querySelector("[data-note-conflict]")).not.toBeNull()
+    expect(area().value).toBe("Typed over an older version.\n")
+    expect(titleField().value).toBe("My title")
+    expect(container.querySelector("[data-note-stored]")?.textContent).toContain("Esketamine in TRD")
+    expect(container.querySelector("[data-note-stored]")?.textContent).toContain("Esketamine")
+    await tick(3 * SAVE_DELAY_MS)
+    expect(saves()).toHaveLength(0)
+    expect(guarded()).toBe(true)
+    expect(readDraft("esk")).toEqual({ title: "My title", body: "Typed over an older version.\n", revision: "r0" })
+    await click(button("Keep mine"))
+    await flush()
+    expect(saves()).toEqual([{ id: "esk", title: "My title", body: "Typed over an older version.\n", revision: "r1" }])
+    expect(readDraft("esk")).toBeNull()
+  })
+
+  it("A3: takes the stored text over such a draft on \"Use the stored one\", and forgets the draft", async () => {
+    writeDraft("esk", { title: "My title", body: "Typed over an older version.\n", revision: "r0" })
+    await open()
+    await click(button("Use the stored one"))
+    await flush()
+    expect(area().value).toBe(BODY)
+    expect(titleField().value).toBe("Esketamine in TRD")
+    expect(readDraft("esk")).toBeNull()
+    expect(saves()).toHaveLength(0)
+    expect(guarded()).toBe(false)
+  })
+
+  it("A3: forgets a draft that says what is stored, and opens as usual", async () => {
+    writeDraft("esk", { title: "Esketamine in TRD", body: BODY, revision: "r0" })
+    await open({ asOpened: true })
+    expect(tabOn()).toBe("preview")
+    expect(readDraft("esk")).toBeNull()
+    expect(container.querySelector("[data-note-conflict]")).toBeNull()
+    await tick(2 * SAVE_DELAY_MS)
+    expect(saves()).toHaveLength(0)
+  })
+
+  it("A4: says a paper was saved to the Library whenever a save put one there: typed by hand, or cited from the new papers", async () => {
+    notes.saveNoteRemote.mockResolvedValue(saved("r2", [], ["typed-2025"]))
+    await open()
+    await write(area(), `${BODY}And [[typed-2025]].\n`)
+    expect(notice()).toBeNull()
+    await tick(SAVE_DELAY_MS)
+    expect(notice()).toBe("Saved to your Library")
+
+    notes.saveNoteRemote.mockResolvedValue(saved("r3", [], ["new-1"]))
+    await click(button("Show"))
+    await click(button("Cite"))
+    expect(notice()).toBeNull()
+    await tick(SAVE_DELAY_MS)
+    expect(saves()[1].body).toContain("[[new-1|Park 2026]]")
+    expect(notice()).toBe("Saved to your Library")
+
+    notes.saveNoteRemote.mockResolvedValue(saved("r4"))
+    await write(area(), "Nothing cited.\n")
+    await tick(SAVE_DELAY_MS)
+    expect(notice()).toBeNull()
+  })
+
+  it("A6: \"Keep mine\" sends the reader's text even when it is what was last saved from here", async () => {
+    await open()
+    await write(area(), "A.\n")
+    await tick(SAVE_DELAY_MS)
+    notes.saveNoteRemote.mockResolvedValueOnce(stored).mockResolvedValue(saved("r10"))
+    await write(area(), "A, more.\n")
+    await tick(SAVE_DELAY_MS)
+    expect(container.querySelector("[data-note-conflict]")).not.toBeNull()
+    await write(area(), "A.\n")
+    await click(button("Keep mine"))
+    await flush()
+    expect(saves()).toHaveLength(3)
+    expect(saves()[2]).toEqual({ id: "esk", title: "Esketamine in TRD", body: "A.\n", revision: "r9" })
+    expect(state()).toBe("saved")
+  })
+
+  it("A6: \"Use the stored one\" leaves the title empty for a stored note that has none, whatever its first line", async () => {
+    notes.saveNoteRemote.mockResolvedValueOnce({ ...stored, title: "Stored text.", untitled: true })
+    await open()
+    await write(area(), "Mine.\n")
+    await tick(SAVE_DELAY_MS)
+    await click(button("Use the stored one"))
+    expect(titleField().value).toBe("")
+    expect(area().value).toBe("Stored text.\n")
+  })
+
+  it("A6: \"Use the stored one\" takes a real title that equals the first line, also for a note that had none here", async () => {
+    notes.saveNoteRemote.mockResolvedValueOnce({ ...stored, title: "Stored text.", untitled: false })
+    await open({ untitled: true })
+    await write(area(), "Mine.\n")
+    await tick(SAVE_DELAY_MS)
+    await click(button("Use the stored one"))
+    expect(titleField().value).toBe("Stored text.")
+  })
+
+  it("A6: a conflict that says what was just sent is a lost answer: the stored revision is taken and nothing is asked", async () => {
+    notes.saveNoteRemote.mockResolvedValueOnce({ conflict: true as const, title: "Esketamine in TRD", untitled: false, body: "Sent once.\n", revision: "r5" }).mockResolvedValue(saved("r6"))
+    await open()
+    await write(area(), "Sent once.\n")
+    await tick(SAVE_DELAY_MS)
+    expect(container.querySelector("[data-note-conflict]")).toBeNull()
+    expect(state()).toBe("saved")
+    expect(saves()).toHaveLength(1)
+    expect(readDraft("esk")).toBeNull()
+    await write(area(), "Sent once. And more.\n")
+    await tick(SAVE_DELAY_MS)
+    expect(saves()[1]).toEqual({ id: "esk", title: "Esketamine in TRD", body: "Sent once. And more.\n", revision: "r5" })
+  })
+
+  it("A6: the same for a note without a title, and not when only the text is the same", async () => {
+    notes.saveNoteRemote.mockResolvedValueOnce({ conflict: true as const, title: "Sent once.", untitled: true, body: "Sent once.\n", revision: "r5" })
+    await open({ untitled: true })
+    await write(area(), "Sent once.\n")
+    await tick(SAVE_DELAY_MS)
+    expect(container.querySelector("[data-note-conflict]")).toBeNull()
+    act(() => root!.unmount())
+
+    notes.saveNoteRemote.mockReset()
+    notes.saveNoteRemote.mockResolvedValueOnce({ conflict: true as const, title: "Another title", untitled: false, body: "Sent once.\n", revision: "r5" })
+    await open()
+    await write(area(), "Sent once.\n")
+    await tick(SAVE_DELAY_MS)
+    expect(container.querySelector("[data-note-conflict]")).not.toBeNull()
+  })
+
+  it("A7: shows the route's words for a note that is too long, and keeps the text", async () => {
+    notes.saveNoteRemote.mockRejectedValue(new Error(CLINICAL_COPY.notes.tooLong))
+    await open()
+    await write(area(), "Far too long.\n")
+    await tick(SAVE_DELAY_MS)
+    expect(container.querySelector('[data-note-state="failed"]')?.textContent).toBe("This note is too long to save. Shorten it, or move part of it to another note.")
+    expect(area().value).toBe("Far too long.\n")
+    expect(readDraft("esk")?.body).toBe("Far too long.\n")
+  })
+
+  it("A8: a paper linked by its path is a link in the list and in the preview", async () => {
+    notes.readNoteRemote.mockResolvedValue(answer({ body: "On [[wiki/papers/lee-2024]] and [[wiki/papers/ghost.md|Ghost]].\n", summary: summary({ conditions: [], treatments: [] }) }))
+    await open({ asOpened: true })
+    expect(container.querySelector('[data-note-link="paper:lee-2024"] a')?.getAttribute("href")).toBe("/paper/lee-2024")
+    expect(container.querySelector('[data-note-link="paper:ghost"]')?.textContent).toContain("not found")
+    const links = [...preview()!.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")])
+    expect(links).toEqual([["Lee 2024", "/paper/lee-2024"]])
+    expect(preview()!.textContent).toContain("Ghost (not found)")
+  })
+
+  it("A8: a label with the marks of emphasis or code is shown as text in the preview", async () => {
+    notes.readNoteRemote.mockResolvedValue(answer({ body: "[[lee-2024|Lee *2024* `x`]] and [[ghost|*G* `g`]]\n", summary: summary({ conditions: [], treatments: [] }) }))
+    await open({ asOpened: true })
+    expect(preview()!.querySelector("code")).toBeNull()
+    expect([...preview()!.querySelectorAll("em")].map((mark) => mark.textContent)).toEqual(["(not found)"])
+    expect(preview()!.querySelector("a")?.getAttribute("href")).toBe("/paper/lee-2024")
   })
 })

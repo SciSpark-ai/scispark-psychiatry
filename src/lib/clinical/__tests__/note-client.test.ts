@@ -37,10 +37,10 @@ describe("the notes client", () => {
   it("saves a note, and gives a conflict back as a value", async () => {
     const input = { id: "a", title: "T", body: "B", revision: "r1" }
     const saved = fake(200, { result: { revision: "r2", unresolved: [] } })
-    expect(await saveNoteRemote(input, saved.fetchFn)).toEqual({ revision: "r2", unresolved: [] })
+    expect(await saveNoteRemote(input, saved.fetchFn)).toEqual({ revision: "r2", unresolved: [], savedPapers: [] })
     expect(saved.calls[0].init?.method).toBe("PUT")
     const conflict = fake(409, { error: "changed", conflict: { title: "Stored", body: "Stored body", revision: "r9" } })
-    expect(await saveNoteRemote(input, conflict.fetchFn)).toEqual({ conflict: true, title: "Stored", body: "Stored body", revision: "r9" })
+    expect(await saveNoteRemote(input, conflict.fetchFn)).toEqual({ conflict: true, title: "Stored", untitled: false, body: "Stored body", revision: "r9" })
   })
   it("searches the papers to cite", async () => {
     const { calls, fetchFn } = fake(200, { result: { papers: [{ slug: "p" }] } })

@@ -35,18 +35,25 @@ export async function createNoteRemote(input: { title?: string; body?: string; a
   return (await unwrap<{ id: string }>(await fetchFn(URL, json("POST", input)))).id
 }
 
+/** The most bytes a request that outlives its page is sent with. */
+export const KEEPALIVE_MAX_BYTES = 60_000
+
 /** Saves a note. A note that changed since `revision` was read comes back as a value, the stored version in it, not as an error. */
 export async function saveNoteRemote(
   input: { id: string; title: string; body: string; revision: string }, fetchFn: typeof fetch = fetch, opts: { keepalive?: boolean } = {},
 ): Promise<NoteSaved | NoteConflict> {
-  // `keepalive` lets the request outlive the page that sent it: the save of a reader who is leaving.
-  const res = await fetchFn(URL, opts.keepalive ? { ...json("PUT", input), keepalive: true } : json("PUT", input))
+  // `keepalive` lets the request outlive the page that sent it: the save of a reader who is leaving. A browser
+  // refuses such a request above about 64 KB, so a longer note is sent as an ordinary request.
+  const init = json("PUT", input)
+  const small = new TextEncoder().encode(init.body as string).length < KEEPALIVE_MAX_BYTES
+  const res = await fetchFn(URL, opts.keepalive && small ? { ...init, keepalive: true } : init)
   if (res.status === 409) {
     const stored = ((await res.json()) as { conflict?: Omit<NoteConflict, "conflict"> }).conflict
-    if (stored) return { conflict: true, title: stored.title, body: stored.body, revision: stored.revision }
+    if (stored) return { conflict: true, title: stored.title, untitled: stored.untitled === true, body: stored.body, revision: stored.revision }
     throw new Error(CLINICAL_COPY.notes.conflict)
   }
-  return unwrap<NoteSaved>(res)
+  const result = await unwrap<NoteSaved>(res)
+  return { ...result, savedPapers: result.savedPapers ?? [] }
 }
 
 /** The papers that can be cited for a query: the Library's first. */
