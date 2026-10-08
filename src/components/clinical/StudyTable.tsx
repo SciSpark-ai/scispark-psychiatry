@@ -13,7 +13,10 @@ const C = E.columns
 export type StudyTableKind = "treatment" | "safety" | "research"
 
 const TH = "border-b border-border-warm px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-secondary-dark"
+const TH_RIGHT = TH.replace("text-left", "text-right")
 const TD = "border-b border-border-warm/60 px-3 py-2.5 align-top text-[13px] text-espresso"
+
+const SIZE_FORMAT = new Intl.NumberFormat("en-US")
 
 function Cell({ name, children }: { name: string; children: ReactNode }) {
   return <td data-cell={name} className={TD}>{children}</td>
@@ -54,7 +57,8 @@ function Row({ study, kind, named, width }: { study: Study; kind: StudyTableKind
     <>
       <tr data-study={study.key}>
         <StudyCell study={study} named={named} />
-        <Cell name="design">{E.designCell(study.designNamed ? CLINICAL_COPY.designLabels[study.design] : null, study.sampleSize)}</Cell>
+        <Cell name="design">{study.designNamed ? CLINICAL_COPY.designLabels[study.design] : E.noValue}</Cell>
+        <td data-cell="size" className={`${TD} text-right tabular-nums`}>{study.sampleSize === null ? E.noValue : SIZE_FORMAT.format(study.sampleSize)}</td>
         {kind === "research" ? <Cell name="finding">{study.takeaway}</Cell> : (
           <>
             <Cell name="comparator">{study.comparator ?? ""}</Cell>
@@ -91,14 +95,16 @@ function Row({ study, kind, named, width }: { study: Study; kind: StudyTableKind
  * not only under those that name several. The table scrolls sideways inside its own box when the screen is narrow.
  */
 export function StudyTable({ studies, kind, caption, treatmentShown = false }: { studies: Study[]; kind: StudyTableKind; caption: string; treatmentShown?: boolean }) {
-  const heads = [C.study, C.design, ...(kind === "research" ? [C.finding] : [C.comparator, C.result])]
+  const heads = [C.study, C.design, C.size, ...(kind === "research" ? [C.finding] : [C.comparator, C.result])]
   return (
     <div data-table-scroll="true" className="overflow-x-auto">
       <table className="w-full min-w-[560px] border-collapse">
         <caption className="sr-only">{caption}</caption>
         <thead>
           <tr>
-            {heads.map((head) => <th key={head} scope="col" className={TH}>{head}</th>)}
+            {heads.map((head) => head === C.size
+              ? <th key={head} scope="col" title={C.sizeTitle} className={TH_RIGHT}>{head}</th>
+              : <th key={head} scope="col" className={TH}>{head}</th>)}
             <th scope="col" className={TH}><span className="sr-only">{C.details}</span></th>
           </tr>
         </thead>

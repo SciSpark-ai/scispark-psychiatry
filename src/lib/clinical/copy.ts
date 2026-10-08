@@ -407,9 +407,9 @@ export const CLINICAL_COPY = {
         `${label}${treatments ? ` (${treatments})` : ""}: ${direction}${text ? ` (${text})` : ""}, n = ${size ?? "not stated"}`,
       key: "Each dot is one paper. Larger dots have more participants. A hollow dot: participants not stated.",
     },
-    columns: { study: "Study", design: "Design", population: "Population", comparator: "Compared with", outcome: "Outcome", result: "Result", finding: "Finding", details: "Details" },
-    /** The design of a study and its participants, as the paper prints them: either, both, or a dash. */
-    designCell: (design: string | null, size: number | null) => [design, size === null ? null : `n = ${size}`].filter(Boolean).join(", ") || "–",
+    columns: { study: "Study", design: "Design", size: "n", sizeTitle: "Participants, as the paper prints it", population: "Population", comparator: "Compared with", outcome: "Outcome", result: "Result", finding: "Finding", details: "Details" },
+    /** A cell whose value the paper does not state. */
+    noValue: "–",
     studyMarks: { new: "new", saved: "saved" },
     timeline: "When they were published",
     otherSeries: "Other",
