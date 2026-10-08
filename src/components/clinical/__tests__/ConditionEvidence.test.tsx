@@ -16,7 +16,7 @@ const counts = (over: Partial<Counts> = {}): Counts => ({ benefit: 0, "no-benefi
 const study = (n: number, over: Partial<Study> = {}): Study => ({
   key: `pmid:${n}`, slug: `paper-${n}`, headline: `Headline ${n}`, takeaway: `Takeaway ${n}.`, label: `Smith 2026`, venue: "A Journal", date: "2026-09-20",
   design: "randomized-trial", designNamed: true, population: "adults with depression", sampleSize: 120, comparator: "placebo", outcome: "depressive symptoms",
-  kind: "benefit", text: `Text ${n}`, treatment: "Ketamine", isNew: false, saved: false, ...over,
+  kind: "benefit", text: `Text ${n}`, treatment: "Ketamine", severalTreatments: false, isNew: false, saved: false, ...over,
 })
 const treatment = (key: string, name: string, studies: Study[], over: Partial<TreatmentEvidence> = {}): TreatmentEvidence => ({
   key, name, papers: studies.length, counts: counts({ benefit: studies.length }), newPapers: 0, did: [], watch: [], studies, ...over,
@@ -34,7 +34,7 @@ const sertraline = treatment("sertraline", "Sertraline", [study(7, { treatment: 
 const med = klass("medicine", null, [ketamine, lithium], { papers: 4, newPapers: 2, counts: counts({ benefit: 3, "no-benefit": 1 }) })
 const ect = klass("neuromodulation", "Neuromodulation", [treatment("ect", "ECT", [study(4, { treatment: "ECT" })])], { papers: 1, counts: counts({ benefit: 1 }) })
 const EVIDENCE: Evidence = {
-  condition: { code: "depression", name: "Major depressive disorder" }, period: "all", total: 5, collected: 5, since: "2026-03-02",
+  condition: { code: "depression", name: "Major depressive disorder" }, period: "all", total: 5, collected: 5, treatmentPapers: 5, since: "2026-03-02",
   classes: [med, ect], safety: [study(7, { kind: "safety", treatment: "Sertraline" })],
   research: [
     { type: "mechanism", papers: 1, newPapers: 0, studies: [study(5, { treatment: null, kind: null, takeaway: "Inflammation tracks severity." })] },
@@ -221,6 +221,21 @@ describe("the evidence block of a condition page", () => {
     expect((result.querySelector("[data-kind-label]") as HTMLElement).textContent).toBe("No benefit")
     expect((result.querySelector("[data-kind-label]") as HTMLElement).style.color).toBe("var(--clinical-no-benefit)")
     expect(q("[data-table-scroll]").className).toContain("overflow-x-auto")
+  })
+
+  // Owner decision 2026-10-08: a paper under each treatment it names shows what it named itself.
+  it("shows what the paper itself named under the study, only when it names several treatments", async () => {
+    const both = study(11, { treatment: "ketamine and esketamine", severalTreatments: true })
+    await show({ ...EVIDENCE, classes: [klass("medicine", null, [treatment("ketamine", "Ketamine", [both, study(12, { treatment: "IV ketamine" })])])] })
+    await openClass("medicine")
+    const named = q('[data-study="pmid:11"] [data-cell=study] [data-named]')
+    expect(named.textContent).toBe("ketamine and esketamine")
+    expect(named.className).toContain("text-muted-text")
+    expect(q('[data-study="pmid:12"] [data-named]')).toBeNull()
+  })
+  it("counts the treatments tab by distinct papers, not by the sum of the classes", async () => {
+    await show({ ...EVIDENCE, treatmentPapers: 3 })
+    expect(qa('[role="tab"]')[0].querySelector("[data-tab-count]")!.textContent).toBe("3")
   })
 
   it("marks a new or saved study, falls back to the headline and the takeaway, and names a design only when named", async () => {

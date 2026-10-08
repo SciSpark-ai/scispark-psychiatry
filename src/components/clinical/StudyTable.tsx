@@ -17,10 +17,12 @@ function Cell({ name, children }: { name: string; children: ReactNode }) {
   return <td data-cell={name} className={TD}>{children}</td>
 }
 
-function StudyCell({ study }: { study: Study }) {
+/** `named`: what the paper itself named, shown when the row sits under one of several treatments it names. */
+function StudyCell({ study, named }: { study: Study; named: string | null }) {
   return (
     <Cell name="study">
       <Link href={`/paper/${study.slug}`} className="font-semibold hover:text-accent-ink">{study.label ?? study.headline}</Link>
+      {named && <span data-named="true" className="block text-[12px] text-muted-text">{named}</span>}
       {study.venue && <span className="block text-[12px] text-muted-text">{study.venue}</span>}
       {study.isNew && <span className="mr-1.5 text-[11px] font-bold uppercase tracking-wide text-accent-ink">{E.studyMarks.new}</span>}
       {study.saved && <span className="rounded-pill border border-border-warm px-2 py-0.5 text-[11px] text-secondary-dark">{E.studyMarks.saved}</span>}
@@ -52,7 +54,7 @@ export function StudyTable({ studies, kind }: { studies: Study[]; kind: StudyTab
           {studies.map((study) => (
             <tr key={study.key} data-study={study.key}>
               {kind === "safety" && <Cell name="treatment">{study.treatment ?? E.noTreatment}</Cell>}
-              <StudyCell study={study} />
+              <StudyCell study={study} named={kind === "treatment" && study.severalTreatments ? study.treatment : null} />
               <Cell name="design">{study.designNamed ? CLINICAL_COPY.designLabels[study.design] : ""}</Cell>
               <Cell name="population">{study.population ?? ""}</Cell>
               <Cell name="size">{study.sampleSize === null ? E.dash : String(study.sampleSize)}</Cell>

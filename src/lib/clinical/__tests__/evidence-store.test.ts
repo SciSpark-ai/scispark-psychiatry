@@ -34,6 +34,16 @@ const feed = (items: StoredFeedItem[], over: Partial<StoredFeed> = {}): StoredFe
 })
 
 describe("the findings store", () => {
+  // Owner decision 2026-10-08: the stored code is the first treatment the text names, found by its words.
+  it("stores the code of the first treatment the answer's text names", async () => {
+    const stored = async (treatment: string) => {
+      const storage = new MemoryVaultStorage()
+      await recordFindings(storage, feed([item(1)], { topicOverviews: { w1: [{ text: "reduced symptoms", sources: ["pmid:1"], kind: "benefit", treatment }] } }), TAXONOMY)
+      return (await readFindings(storage))[0]
+    }
+    expect(await stored("low-dose ketamine and lithium")).toMatchObject({ treatment: "low-dose ketamine and lithium", treatmentCode: "ketamine" })
+    expect(await stored("yoga")).toMatchObject({ treatment: "yoga", treatmentCode: null })
+  })
   it("keeps one finding per listed paper, with its direction, its PICO line and the condition of its topic", async () => {
     const storage = new MemoryVaultStorage()
     expect(await recordFindings(storage, feed([item(1), item(2, { digest: undefined })]), TAXONOMY)).toBe(2)

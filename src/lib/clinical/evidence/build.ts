@@ -1,6 +1,6 @@
 // src/lib/clinical/evidence/build.ts
 import type { Taxonomy, TaxonomyNode } from "../pack/schema"
-import { withDescendants } from "../pack/taxonomy"
+import { findTreatments, withDescendants } from "../pack/taxonomy"
 import { sampleSizeStated } from "../text/sample-size"
 import type { Design } from "../types"
 import { FINDING_KINDS, RESEARCH_TYPES, type Finding, type FindingKind, type ResearchType, type TreatmentClass } from "./schema"
@@ -10,6 +10,12 @@ import { FINDING_KINDS, RESEARCH_TYPES, type Finding, type FindingKind, type Res
  * treatments in each and the studies on each; the safety findings; and the research that names no
  * treatment. Papers are counted, never pooled, and no effect size is shown. Pure: no storage, no
  * model, no clock (`now` comes in).
+ *
+ * A treatment is found by its words (owner decision 2026-10-08): a finding is under every pack treatment its text
+ * names, so findings stored before that are read the same way with no migration. The counting rule: a treatment
+ * counts each paper under it once; a class counts its DISTINCT papers, so a paper that names three antipsychotics adds
+ * 1 to each of the three and 1 to Antipsychotics, and a class is no longer the sum of its treatments; a paper under
+ * two classes adds 1 to each; `total` and `treatmentPapers` count distinct papers.
  */
 
 export const RECENT_DAYS = 14
@@ -37,7 +43,11 @@ export interface Study {
   kind: FindingKind | null
   /** The paper's short finding: what the treatment did. */
   text: string | null
-  treatment: string | null; isNew: boolean; saved: boolean
+  /** The treatment as the paper itself named it, whichever treatment the row is under. */
+  treatment: string | null
+  /** The paper's text names more than one pack treatment, so the row is under each of them. */
+  severalTreatments: boolean
+  isNew: boolean; saved: boolean
 }
 export interface TreatmentEvidence {
   key: string; name: string; papers: number; counts: Counts; newPapers: number
@@ -52,6 +62,8 @@ export interface ConditionEvidence {
   period: Period
   /** Papers of the condition in the period, and in all. */
   total: number; collected: number
+  /** Distinct papers of the period under at least one treatment: the count of the treatments tab. */
+  treatmentPapers: number
   /** The day the earliest paper of the condition was first listed (YYYY-MM-DD), or null. */
   since: string | null
   classes: ClassEvidence[]; safety: Study[]; research: ResearchGroup[]
@@ -124,21 +136,24 @@ const shownSampleSize = (finding: Finding): number | null => {
   return sampleSizeStated(size, [finding.paper.title, finding.paper.abstract ?? "", finding.headline, finding.takeaway].join(" . ")) ? size : null
 }
 
-const studyOf = (finding: Finding, now: Date, saved?: ReadonlySet<string>): Study => ({
+const studyOf = (finding: Finding, now: Date, saved: ReadonlySet<string> | undefined, several: boolean): Study => ({
   key: finding.key, slug: finding.slug, headline: finding.headline, takeaway: finding.takeaway, label: studyLabel(finding),
   venue: finding.paper.venue ?? null, date: shownDate(finding), design: finding.design, designNamed: designNamed(finding),
   population: finding.population, sampleSize: shownSampleSize(finding), comparator: finding.comparator, outcome: finding.outcome,
-  kind: finding.kind, text: finding.text, treatment: finding.treatment?.trim() || null, isNew: isNew(finding, now), saved: saved?.has(finding.slug) ?? false,
+  kind: finding.kind, text: finding.text, treatment: finding.treatment?.trim() || null, severalTreatments: several, isNew: isNew(finding, now), saved: saved?.has(finding.slug) ?? false,
 })
 
 interface ClassRef { key: string; label: string | null }
 
+interface TreatmentRef { key: string; class: ClassRef | null }
+
 /**
- * Where a finding that names a treatment belongs: the key of its treatment and the class of it. Null when it names none.
- * The class is null when the pack does not decide it (an uncoded name, a node of modality other): the caller then takes it
- * from the findings of that treatment, so one treatment is never in two classes.
+ * Where a finding that names a treatment belongs: for each treatment, its key and the class of it. Empty when it names none.
+ * The treatments are the pack's that the finding's text names as whole words; when it names none, the stored code; when
+ * there is neither, the name itself. The class is null when the pack does not decide it (an uncoded name, a node of
+ * modality other): the caller then takes it from the findings of that treatment, so one treatment is never in two classes.
  */
-function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => { key: string; class: ClassRef | null } | null; byClass: (value: TreatmentClass | null) => ClassRef } {
+function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => TreatmentRef[]; byClass: (value: TreatmentClass | null) => ClassRef } {
   const nodeOf = new Map(taxonomy.nodes.map((node) => [node.id, node]))
   const treatmentNode = (id: string | null | undefined): TaxonomyNode | undefined => {
     const node = id ? nodeOf.get(id) : undefined
@@ -167,12 +182,7 @@ function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => { key
       default: return { key: OTHER, label: null }
     }
   }
-  const classify = (finding: Finding) => {
-    // A paper filed under a type of research, with no class and no code of a treatment, is research: the treatment an earlier answer named is not what it is about.
-    if (finding.researchType !== null && finding.treatmentClass === null && !finding.treatmentCode) return null
-    const name = finding.treatment?.trim() || null
-    const node = treatmentNode(finding.treatmentCode)
-    if (!node) return name || finding.treatmentCode ? { key: `name:${(name ?? finding.treatmentCode ?? "").toLowerCase().replace(/\s+/g, " ")}`, class: null } : null
+  const ofNode = (node: TaxonomyNode): TreatmentRef => {
     const top = topOf(node)
     if (top) return { key: node.id, class: { key: top.id, label: top.name } }
     if (parents.has(node.id)) return { key: node.id, class: { key: node.id, label: node.name } }
@@ -183,6 +193,23 @@ function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => { key
       : null
     return { key: node.id, class: cls }
   }
+  // The same texts come again for every period and every condition of one build.
+  const named = new Map<string, TaxonomyNode[]>()
+  const namedIn = (text: string) => {
+    let nodes = named.get(text)
+    if (!nodes) named.set(text, (nodes = findTreatments(taxonomy, text)))
+    return nodes
+  }
+  const classify = (finding: Finding): TreatmentRef[] => {
+    // A paper filed under a type of research, with no class and no code of a treatment, is research: the treatment an earlier answer named is not what it is about.
+    if (finding.researchType !== null && finding.treatmentClass === null && !finding.treatmentCode) return []
+    const name = finding.treatment?.trim() || null
+    const found = name ? namedIn(name) : []
+    if (found.length > 0) return found.map(ofNode)
+    const node = treatmentNode(finding.treatmentCode)
+    if (node) return [ofNode(node)]
+    return name || finding.treatmentCode ? [{ key: `name:${(name ?? finding.treatmentCode ?? "").toLowerCase().replace(/\s+/g, " ")}`, class: null }] : []
+  }
   return { classify, byClass }
 }
 
@@ -191,7 +218,8 @@ const inCondition = (findings: Finding[], taxonomy: Taxonomy, code: string) => {
   return findings.filter((finding) => finding.conditionCodes.some((entry) => codes.has(entry)))
 }
 
-interface Organised { classes: ClassEvidence[]; classOf: Map<string, string>; research: ResearchGroup[] }
+/** `classOf`: the keys of the classes each finding is under, by the finding's key. */
+interface Organised { classes: ClassEvidence[]; classOf: Map<string, Set<string>>; research: ResearchGroup[] }
 
 /**
  * The classes, treatments and studies of `findings`, and the research with no treatment. The class and the spelling of a
@@ -205,52 +233,63 @@ function organise(findings: Finding[], all: Finding[], taxonomy: Taxonomy, now: 
   // A treatment the pack does not know is named as its earliest-listed finding wrote it.
   const firstOf = new Map<string, Finding>()
   for (const finding of all) {
-    const ref = classify(finding)
-    if (!ref) continue
-    const held = named.get(ref.key)
-    if (ref.class === null && finding.treatmentClass && (!held || finding.firstListedAt < held.firstListedAt)) named.set(ref.key, finding)
-    const first = firstOf.get(ref.key)
-    if (!first || finding.firstListedAt < first.firstListedAt) firstOf.set(ref.key, finding)
+    const refs = classify(finding)
+    for (const ref of refs) {
+      const held = named.get(ref.key)
+      // The one class a paper names is the class of its one treatment: with several treatments it says nothing of each.
+      if (refs.length === 1 && ref.class === null && finding.treatmentClass && (!held || finding.firstListedAt < held.firstListedAt)) named.set(ref.key, finding)
+      const first = firstOf.get(ref.key)
+      if (!first || finding.firstListedAt < first.firstListedAt) firstOf.set(ref.key, finding)
+    }
   }
   const nodeOf = new Map(taxonomy.nodes.map((node) => [node.id, node]))
   const classes = new Map<string, ClassEvidence>()
   const slots = new Map<string, { evidence: TreatmentEvidence; findings: Finding[] }>()
-  const classOf = new Map<string, string>()
+  const classOf = new Map<string, Set<string>>()
+  const several = new Set<string>()
   const researchFindings = new Map<ResearchType, Finding[]>()
   for (const finding of findings) {
-    const ref = classify(finding)
-    if (!ref) {
+    const refs = classify(finding)
+    if (refs.length === 0) {
       const type = finding.researchType ?? "other"
       researchFindings.set(type, [...(researchFindings.get(type) ?? []), finding])
       continue
     }
-    const cls = ref.class ?? byClass(named.get(ref.key)?.treatmentClass ?? CLASS_BY_ID[ref.key] ?? null)
-    classOf.set(finding.key, cls.key)
-    const entry = classes.get(cls.key) ?? { key: cls.key, label: null, papers: 0, counts: emptyCounts(), newPapers: 0, treatments: [] }
-    entry.label ??= cls.label
+    if (refs.length > 1) several.add(finding.key)
     const fresh = isNew(finding, now)
     const kind = finding.kind ?? "unsorted"
-    entry.papers += 1
-    entry.counts[kind] += 1
-    if (fresh) entry.newPapers += 1
-    classes.set(entry.key, entry)
-    const id = `${cls.key}\u0000${ref.key}`
-    let slot = slots.get(id)
-    if (!slot) {
-      const first = firstOf.get(ref.key) ?? finding
-      slot = { evidence: { key: ref.key, name: nodeOf.get(ref.key)?.name ?? (first.treatment?.trim() || first.treatmentCode || ref.key), papers: 0, counts: emptyCounts(), newPapers: 0, did: [], watch: [], studies: [] }, findings: [] }
-      slots.set(id, slot)
-      entry.treatments.push(slot.evidence)
+    const mine = new Set<string>()
+    classOf.set(finding.key, mine)
+    for (const ref of refs) {
+      const cls = ref.class ?? byClass(named.get(ref.key)?.treatmentClass ?? CLASS_BY_ID[ref.key] ?? null)
+      const entry = classes.get(cls.key) ?? { key: cls.key, label: null, papers: 0, counts: emptyCounts(), newPapers: 0, treatments: [] }
+      entry.label ??= cls.label
+      // A class counts a paper once, however many of its treatments the paper names.
+      if (!mine.has(cls.key)) {
+        mine.add(cls.key)
+        entry.papers += 1
+        entry.counts[kind] += 1
+        if (fresh) entry.newPapers += 1
+      }
+      classes.set(entry.key, entry)
+      const id = `${cls.key}\u0000${ref.key}`
+      let slot = slots.get(id)
+      if (!slot) {
+        const first = firstOf.get(ref.key) ?? finding
+        slot = { evidence: { key: ref.key, name: nodeOf.get(ref.key)?.name ?? (first.treatment?.trim() || first.treatmentCode || ref.key), papers: 0, counts: emptyCounts(), newPapers: 0, did: [], watch: [], studies: [] }, findings: [] }
+        slots.set(id, slot)
+        entry.treatments.push(slot.evidence)
+      }
+      slot.evidence.papers += 1
+      slot.evidence.counts[kind] += 1
+      if (fresh) slot.evidence.newPapers += 1
+      slot.findings.push(finding)
     }
-    slot.evidence.papers += 1
-    slot.evidence.counts[kind] += 1
-    if (fresh) slot.evidence.newPapers += 1
-    slot.findings.push(finding)
   }
   for (const slot of slots.values()) {
     const ordered = [...slot.findings].sort(newestFirst)
     const withText = ordered.filter((finding) => finding.text?.trim())
-    slot.evidence.studies = ordered.map((finding) => studyOf(finding, now, saved))
+    slot.evidence.studies = ordered.map((finding) => studyOf(finding, now, saved, several.has(finding.key)))
     slot.evidence.did = withText.filter((finding) => finding.kind === "benefit").slice(0, SHORT_LIST).map((finding) => ({ text: finding.text as string, key: finding.key }))
     slot.evidence.watch = withText
       .filter((finding) => finding.kind === "safety" || finding.kind === "no-benefit" || finding.kind === "mixed")
@@ -260,7 +299,7 @@ function organise(findings: Finding[], all: Finding[], taxonomy: Taxonomy, now: 
   for (const entry of ordered) entry.treatments.sort((a, b) => b.papers - a.papers || a.name.localeCompare(b.name))
   const research = RESEARCH_TYPES.filter((type) => researchFindings.has(type)).map((type) => {
     const mine = [...(researchFindings.get(type) as Finding[])].sort(newestFirst)
-    return { type, papers: mine.length, newPapers: mine.filter((finding) => isNew(finding, now)).length, studies: mine.map((finding) => studyOf(finding, now, saved)) }
+    return { type, papers: mine.length, newPapers: mine.filter((finding) => isNew(finding, now)).length, studies: mine.map((finding) => studyOf(finding, now, saved, false)) }
   }).sort((a, b) => b.papers - a.papers)
   return { classes: ordered, classOf, research }
 }
@@ -281,19 +320,20 @@ export function buildConditionEvidence(findings: Finding[], taxonomy: Taxonomy, 
   const cutoff = period === "all" ? null : daysBefore(opts.now, PERIOD_DAYS[period])
   const mine = cutoff === null ? all : all.filter((finding) => inPeriod(finding, cutoff))
   const { classes, classOf, research } = organise(mine, all, taxonomy, opts.now, opts.savedSlugs)
-  const safety = mine.filter((finding) => finding.kind === "safety").sort(newestFirst).map((finding) => studyOf(finding, opts.now, opts.savedSlugs))
+  const safety = mine.filter((finding) => finding.kind === "safety").sort(newestFirst).map((finding) => studyOf(finding, opts.now, opts.savedSlugs, false))
 
   const months = monthsBefore(opts.now, TIMELINE_MONTHS)
   const drawn = classes.filter((entry) => entry.key !== OTHER).slice(0, TIMELINE_SERIES)
   const drawnKeys = new Set(drawn.map((entry) => entry.key))
   const counts = (belongs: (finding: Finding) => boolean) => months.map((month) => mine.filter((finding) => belongs(finding) && monthOf(finding, opts.now) === month).length)
-  const isRest = (finding: Finding) => !drawnKeys.has(classOf.get(finding.key) ?? "")
+  // A paper under two classes is drawn once in each; it is in the rest only when none of its classes has a series.
+  const isRest = (finding: Finding) => ![...(classOf.get(finding.key) ?? [])].some((key) => drawnKeys.has(key))
   const series = [
-    ...drawn.map((entry) => ({ key: entry.key, label: entry.label, counts: counts((finding) => classOf.get(finding.key) === entry.key) })),
+    ...drawn.map((entry) => ({ key: entry.key, label: entry.label, counts: counts((finding) => classOf.get(finding.key)?.has(entry.key) ?? false) })),
     ...(mine.some(isRest) ? [{ key: OTHER, label: null, counts: counts(isRest) }] : []),
   ]
   const since = all.length > 0 ? all.map((finding) => finding.firstListedAt.slice(0, 10)).reduce((a, b) => (a < b ? a : b)) : null
-  return { condition: { code: node.id, name: node.name }, period, total: mine.length, collected: all.length, since, classes, safety, research, timeline: { months, series } }
+  return { condition: { code: node.id, name: node.name }, period, total: mine.length, collected: all.length, treatmentPapers: classOf.size, since, classes, safety, research, timeline: { months, series } }
 }
 
 /** The conditions to show on wiki home: those of the reader's topics and those with findings. */

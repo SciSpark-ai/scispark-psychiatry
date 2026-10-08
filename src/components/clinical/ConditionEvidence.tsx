@@ -30,7 +30,8 @@ function PeriodSelect({ period, onChange }: { period: Period; onChange: (period:
 function Tabs({ evidence, tab, onPick }: { evidence: Evidence; tab: Tab; onPick: (tab: Tab) => void }) {
   const id = useId()
   const totals: Record<Tab, number> = {
-    treatments: evidence.classes.reduce((sum, entry) => sum + entry.papers, 0),
+    // Distinct papers: one under two classes is counted once.
+    treatments: evidence.treatmentPapers,
     safety: evidence.safety.length,
     research: evidence.research.reduce((sum, group) => sum + group.papers, 0),
   }

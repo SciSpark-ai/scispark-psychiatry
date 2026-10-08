@@ -15,6 +15,11 @@ const TAXONOMY = TaxonomySchema.parse({ version: "t", nodes: [
   { id: "ketamine", type: "treatment", name: "Ketamine", modality: "drug" },
   { id: "antipsychotic", type: "treatment", name: "Antipsychotics", modality: "drug" },
   { id: "clozapine", type: "treatment", name: "Clozapine", modality: "drug", parents: ["antipsychotic"] },
+  { id: "paliperidone", type: "treatment", name: "Paliperidone", modality: "drug", parents: ["antipsychotic"] },
+  { id: "olanzapine", type: "treatment", name: "Olanzapine", modality: "drug", parents: ["antipsychotic"] },
+  { id: "risperidone", type: "treatment", name: "Risperidone", modality: "drug", parents: ["antipsychotic"] },
+  { id: "methylphenidate", type: "treatment", name: "Methylphenidate", modality: "drug" },
+  { id: "cognitive-remediation", type: "treatment", name: "Cognitive remediation", modality: "psychotherapy", parents: ["psychotherapy"] },
   { id: "psychotherapy", type: "treatment", name: "Psychotherapy", modality: "psychotherapy" },
   { id: "cbt", type: "treatment", name: "Cognitive behavioral therapy", modality: "psychotherapy", parents: ["psychotherapy"] },
   { id: "neuromodulation", type: "treatment", name: "Neuromodulation", modality: "neuromodulation" },
@@ -121,12 +126,12 @@ describe("one class per treatment", () => {
     }
   })
   it("is other when none of its findings has a class", () => {
-    expect(classKeys(build([uncoded(1, "Exercise"), uncoded(2, "Exercise")]))).toEqual(["other"])
+    expect(classKeys(build([uncoded(1, "Yoga"), uncoded(2, "Yoga")]))).toEqual(["other"])
   })
   it("treats names that differ in spaces and case as one treatment", () => {
-    const evidence = build([uncoded(1, "Light  therapy", { treatmentClass: "lifestyle" }), uncoded(2, " light therapy", { treatmentClass: "lifestyle" })])
+    const evidence = build([uncoded(1, "Forest  bathing", { treatmentClass: "lifestyle" }), uncoded(2, " forest bathing", { treatmentClass: "lifestyle" })])
     expect(evidence.classes[0].treatments).toHaveLength(1)
-    expect(evidence.classes[0].treatments[0]).toMatchObject({ key: "name:light therapy", papers: 2 })
+    expect(evidence.classes[0].treatments[0]).toMatchObject({ key: "name:forest bathing", papers: 2 })
   })
   it("shows a code the pack does not know as the code, never as a key", () => {
     const evidence = build([finding(1, { treatment: null, treatmentCode: "abc", text: null })])
@@ -148,11 +153,11 @@ describe("the edges of a period and of new", () => {
 describe("the treatments of a class", () => {
   it("are one treatment under two spellings by case, named as the earliest-listed finding wrote it", () => {
     const evidence = build([
-      uncoded(1, "exercise", { treatmentClass: "lifestyle", firstListedAt: "2026-10-03T10:00:00.000Z" }),
-      uncoded(2, "Exercise", { treatmentClass: "lifestyle", firstListedAt: "2026-10-01T10:00:00.000Z" }),
+      uncoded(1, "yoga", { treatmentClass: "lifestyle", firstListedAt: "2026-10-03T10:00:00.000Z" }),
+      uncoded(2, "Yoga", { treatmentClass: "lifestyle", firstListedAt: "2026-10-01T10:00:00.000Z" }),
     ])
     expect(evidence.classes[0].treatments).toHaveLength(1)
-    expect(evidence.classes[0].treatments[0]).toMatchObject({ key: "name:exercise", name: "Exercise", papers: 2 })
+    expect(evidence.classes[0].treatments[0]).toMatchObject({ key: "name:yoga", name: "Yoga", papers: 2 })
   })
   it("give did from benefit findings and watch from safety, no-benefit and mixed ones, each with its paper", () => {
     const evidence = build([
@@ -173,7 +178,7 @@ describe("the treatments of a class", () => {
     expect(did.map((entry) => entry.key)).toEqual(["pmid:7", "pmid:6", "pmid:5", "pmid:4"])
     expect(evidence.classes[0].treatments[0].papers).toBe(7)
   })
-  it("sum, in the counts of a class, to the class", () => {
+  it("count each of their papers once, as the class counts each of its papers once: the same sums while no paper names two treatments", () => {
     const evidence = build([finding(1), finding(2, { kind: "safety" }), finding(3, { treatment: "Clozapine", treatmentCode: "clozapine", kind: null }), finding(4, { treatment: "Clozapine", treatmentCode: "clozapine", kind: "mixed" }), uncoded(5, "Pill", { treatmentClass: "medicine", kind: "no-benefit" })])
     const medicine = evidence.classes.find((entry) => entry.key === "medicine")!
     expect(medicine.counts).toEqual({ benefit: 1, "no-benefit": 1, mixed: 0, safety: 1, other: 0, unsorted: 0 })
@@ -194,6 +199,80 @@ describe("the treatments of a class", () => {
   it("list their studies newest first", () => {
     const evidence = build([finding(1, { date: "2026-08-01" }), finding(2, { date: "2026-09-15" }), finding(3, { date: "2026-09-01" })])
     expect(evidence.classes[0].treatments[0].studies.map((study) => study.key)).toEqual(["pmid:2", "pmid:3", "pmid:1"])
+  })
+})
+
+// Owner decision 2026-10-08: a treatment is found by its words, and a paper counts under each treatment it names.
+describe("a paper that names several treatments", () => {
+  const three = (n: number, over: Partial<Finding> & { date?: string } = {}) => finding(n, { treatment: "clozapine, paliperidone, and olanzapine", treatmentCode: null, treatmentClass: "medicine", ...over })
+  it("is under each of three antipsychotics with 1 paper each, and adds 1 to their class", () => {
+    const evidence = build([three(1, { kind: "mixed", text: "eased symptoms but not relapse", date: daysAgo(3) })])
+    expect(evidence.classes).toHaveLength(1)
+    const [cls] = evidence.classes
+    expect(cls).toMatchObject({ key: "antipsychotic", label: "Antipsychotics", papers: 1, newPapers: 1 })
+    expect(cls.counts).toEqual({ benefit: 0, "no-benefit": 0, mixed: 1, safety: 0, other: 0, unsorted: 0 })
+    expect(cls.treatments.map((treatment) => [treatment.key, treatment.name, treatment.papers, treatment.newPapers, treatment.counts.mixed])).toEqual([
+      ["clozapine", "Clozapine", 1, 1, 1], ["olanzapine", "Olanzapine", 1, 1, 1], ["paliperidone", "Paliperidone", 1, 1, 1],
+    ])
+    for (const treatment of cls.treatments) {
+      expect(treatment.studies.map((study) => [study.key, study.treatment, study.severalTreatments])).toEqual([["pmid:1", "clozapine, paliperidone, and olanzapine", true]])
+      expect(treatment.watch).toEqual([{ text: "eased symptoms but not relapse", key: "pmid:1", kind: "mixed" }])
+    }
+    expect([evidence.total, evidence.treatmentPapers]).toEqual([1, 1])
+  })
+  it("counts the distinct papers of a class, not the sum of its treatments", () => {
+    const evidence = build([three(1), finding(2, { treatment: "Clozapine", treatmentCode: "clozapine", kind: "safety" }), finding(3, { treatment: "olanzapine", treatmentCode: null, date: daysAgo(2) })])
+    const [cls] = evidence.classes
+    expect([cls.papers, cls.newPapers]).toEqual([3, 1])
+    expect(cls.counts).toMatchObject({ benefit: 2, safety: 1 })
+    expect(cls.treatments.map((treatment) => [treatment.key, treatment.papers])).toEqual([["clozapine", 2], ["olanzapine", 2], ["paliperidone", 1]])
+    expect(cls.treatments.reduce((sum, treatment) => sum + treatment.papers, 0)).toBe(5)
+  })
+  it("adds 1 to each of two classes and 1 to the total", () => {
+    const evidence = build([finding(1, { treatment: "methylphenidate and risperidone", treatmentCode: null, treatmentClass: "medicine" }), none(2)])
+    expect(evidence.classes.map((entry) => [entry.key, entry.papers, entry.treatments.map((treatment) => [treatment.key, treatment.papers])])).toEqual([
+      ["antipsychotic", 1, [["risperidone", 1]]], ["medicine", 1, [["methylphenidate", 1]]],
+    ])
+    expect(evidence.total).toBe(2)
+    expect(evidence.treatmentPapers).toBe(1)
+  })
+  it("gives the total of the treatments tab as distinct papers", () => {
+    const evidence = build([three(1), finding(2, { treatment: "methylphenidate and risperidone", treatmentCode: null }), finding(3), none(4), uncoded(5, "Yoga")])
+    expect(evidence.classes.reduce((sum, entry) => sum + entry.papers, 0)).toBe(5)
+    expect(evidence.treatmentPapers).toBe(4)
+    expect(evidence.total).toBe(5)
+  })
+  it("does not give a pack treatment the one class the paper named for all of them", () => {
+    const evidence = build([finding(1, { treatment: "cognitive remediation and exercise", treatmentCode: null, treatmentClass: "psychosocial" })])
+    expect(evidence.classes.map((entry) => [entry.key, entry.treatments.map((treatment) => treatment.key)])).toEqual([["lifestyle", ["exercise"]], ["psychotherapy", ["cognitive-remediation"]]])
+  })
+  it("draws the paper once in each class it is under, and in the rest only when none of its classes is drawn", () => {
+    const evidence = build([finding(1, { treatment: "methylphenidate and risperidone", treatmentCode: null })])
+    expect(evidence.timeline.series.map((entry) => [entry.key, entry.counts.reduce((sum, count) => sum + count, 0)])).toEqual([["antipsychotic", 1], ["medicine", 1]])
+  })
+  it("keeps the paper once in the safety list", () => {
+    expect(build([three(1, { kind: "safety" })]).safety.map((study) => study.key)).toEqual(["pmid:1"])
+  })
+})
+
+describe("the treatment of a finding", () => {
+  it("is found in its words when it was stored without a code, and marks nothing when it names one", () => {
+    const evidence = build([finding(1, { treatment: "low-dose antipsychotics", treatmentCode: null }), finding(2, { treatment: "Clozapine", treatmentCode: null })])
+    expect(evidence.classes.map((entry) => [entry.key, entry.treatments.map((treatment) => [treatment.key, treatment.name])])).toEqual([["antipsychotic", [["antipsychotic", "Antipsychotics"], ["clozapine", "Clozapine"]]]])
+    const [study] = evidence.classes[0].treatments[0].studies
+    expect([study.treatment, study.severalTreatments]).toEqual(["low-dose antipsychotics", false])
+  })
+  it("goes by its words before the stored code", () => {
+    expect(build([finding(1, { treatment: "Clozapine", treatmentCode: "ketamine" })]).classes[0].treatments.map((treatment) => treatment.key)).toEqual(["clozapine"])
+  })
+  it("is the stored code when its words name no pack treatment", () => {
+    const evidence = build([finding(1, { treatment: "the talking cure", treatmentCode: "cbt" })])
+    expect(evidence.classes[0].treatments.map((treatment) => [treatment.key, treatment.name])).toEqual([["cbt", "Cognitive behavioral therapy"]])
+    expect(evidence.classes[0].treatments[0].studies[0].treatment).toBe("the talking cure")
+  })
+  it("is keyed by its name when there is neither", () => {
+    const evidence = build([uncoded(1, "Yoga  nidra"), uncoded(2, "yoga nidra")])
+    expect(evidence.classes[0].treatments.map((treatment) => [treatment.key, treatment.name, treatment.papers])).toEqual([["name:yoga nidra", "Yoga  nidra".trim(), 2]])
   })
 })
 
@@ -251,10 +330,10 @@ describe("what the period does not change", () => {
   })
   it("keeps the spelling of an uncoded treatment when its earliest-listed finding is outside the period", () => {
     const findings = [
-      uncoded(1, "exercise training", { date: daysAgo(10), firstListedAt: "2026-10-03T10:00:00.000Z" }),
-      uncoded(2, "Exercise Training", { date: daysAgo(300), firstListedAt: "2026-01-03T10:00:00.000Z" }),
+      uncoded(1, "tai chi training", { date: daysAgo(10), firstListedAt: "2026-10-03T10:00:00.000Z" }),
+      uncoded(2, "Tai Chi Training", { date: daysAgo(300), firstListedAt: "2026-01-03T10:00:00.000Z" }),
     ]
-    for (const period of ["all", "3m"] as const) expect(build(findings, { now: NOW, period }).classes[0].treatments[0].name).toBe("Exercise Training")
+    for (const period of ["all", "3m"] as const) expect(build(findings, { now: NOW, period }).classes[0].treatments[0].name).toBe("Tai Chi Training")
   })
 })
 
