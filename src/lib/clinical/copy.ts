@@ -313,6 +313,18 @@ export const CLINICAL_COPY = {
     effect: (measure: string, estimate: string, low: string, high: string, note: string, compared: string, direction: string) => `${measure} ${estimate} (95% CI ${low} to ${high}${note}) · ${compared} · ${direction}`,
     effectNote: "Computed by this app from the numbers above, not taken from the paper and not written by AI. One trial is not a meta-analysis.",
   },
+  /** Notes: the Library's note pages, and what the notes route answers when it cannot do what was asked. */
+  notes: {
+    /** The title shown for a note that has no title and no text. */
+    untitled: "Untitled note",
+    badRequest: "The request was not understood.",
+    notFound: "That note is not in your Library.",
+    conflict: "This note was changed somewhere else since you opened it.",
+    unknownPaper: "That paper could not be found, so it cannot be cited.",
+    unknownCondition: "That condition is not in the pack.",
+    unknownTreatment: "That treatment is not in the pack.",
+    requestFailed: (status: number) => `Your notes could not be reached (${status}).`,
+  },
   evidence: {
     /** The Evidence view: a tab for each condition, and under it the summary and the notes. */
     page: {
