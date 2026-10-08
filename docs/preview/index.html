@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SciSpark Psychiatry: interactive preview</title>
+  <meta name="description" content="A read-only preview of SciSpark Psychiatry, a private, local-first literature feed and evidence workspace for psychiatry clinicians. Sample data; not medical advice.">
+  <!-- No icon file: this keeps the browser from asking for one. Nothing on this page is loaded from a network. -->
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="preview.css">
+</head>
+<body>
+  <a class="skip" href="#preview">Skip to the interactive preview</a>
+
+  <header class="hero">
+    <div class="wrap">
+      <p class="edition">Psychiatry edition</p>
+      <h1>SciSpark Psychiatry</h1>
+      <p class="lede">A private, local-first literature feed and evidence workspace for psychiatry clinicians.</p>
+      <ul class="points">
+        <li><strong>A feed for what you follow</strong><span>New PubMed papers on your conditions and treatments, each with its study design and an AI headline and one-sentence summary that code checks against the abstract.</span></li>
+        <li><strong>The evidence, drawn</strong><span>For each condition, a map of treatments by recency and stated participants. Every bubble opens the table of the papers behind it. Papers are counted; nothing is pooled.</span></li>
+        <li><strong>On your own computer</strong><span>Everything is kept in one folder on your machine, as plain files. You bring your own model key; the feed reads PubMed.</span></li>
+      </ul>
+      <div class="cta">
+        <!-- OWNER: put the repository's address in this href (the data-repo-link attribute marks every such link on the page). -->
+        <a class="btn primary" href="#" data-repo-link>View on GitHub</a>
+        <a class="btn" href="#run">Run it locally</a>
+        <a class="btn" href="#preview">Try the preview</a>
+      </div>
+      <p class="fork">An independent, unofficial fork of <a href="https://github.com/SciSpark-ai/scispark_wiki" rel="noreferrer">SciSpark-ai/scispark_wiki</a> (Apache-2.0). Not affiliated with or endorsed by the upstream project.</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="preview" aria-labelledby="preview-title">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2 id="preview-title">Interactive preview</h2>
+            <p class="section-lede">A read-only copy of three pages of the app, filled with sample papers from one real feed. Nothing is saved or sent, and no model is called.</p>
+          </div>
+          <button type="button" class="btn primary" id="tour-start">Take the short tour</button>
+        </div>
+
+        <div class="frame">
+          <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>127.0.0.1:3000 · read-only preview</span></div>
+          <div class="app">
+            <aside class="sidebar" aria-label="Pages of the app">
+              <div class="brand"><b>SciSpark</b><small>Psychiatry</small></div>
+              <nav class="nav" id="nav" aria-label="Pages">
+                <button type="button" data-view="feed" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/></svg><span>What's new</span></button>
+                <button type="button" data-view="wiki"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v14M12 6c-2-1.5-5-2-8-2v14c3 0 6 .5 8 2 2-1.5 5-2 8-2V4c-3 0-6 .5-8 2z"/></svg><span>Wiki</span></button>
+                <button type="button" data-view="ask"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-8l-5 4v-4H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM12 8v5M9.5 10.500h5"/></svg><span>Ask</span></button>
+                <button type="button" data-view="notes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l4 4v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM9 10h6M9 14h6M9 17h3"/></svg><span>Notes</span></button>
+                <button type="button" data-view="outputs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 4H7a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9zM13 4v5h5M9 15h5M12 12.500l2.500 2.500-2.500 2.500"/></svg><span>Outputs</span></button>
+                <hr>
+                <button type="button" data-view="library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M9 4v16M13 6l5 13M13 6l2-1 5 13-2 1"/></svg><span>Library</span></button>
+                <button type="button" data-view="topics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7l1.500 1.500L8 6M4 13l1.500 1.500L8 12M4 19l1.500 1.500L8 18M11 7h9M11 13h9M11 19h9"/></svg><span>My topics</span></button>
+              </nav>
+              <p class="sidebar-note">Ask, Outputs, Library and My topics say what they do; they are not part of this preview.</p>
+            </aside>
+            <div class="stage">
+              <div class="view" id="view" tabindex="-1">
+                <noscript>
+                  <p>The interactive preview needs JavaScript. Without it, these are three of its pages as pictures.</p>
+                  <div class="shots">
+                    <img src="screens/whats-new.png" alt="What's new: a feed of paper cards with topic, study design, journal, AI headline and summary." loading="lazy">
+                    <img src="screens/wiki.png" alt="Wiki: a map of treatment bubbles for a condition, and the table of studies of one treatment." loading="lazy">
+                    <img src="screens/notes.png" alt="Notes: a note in Preview, with its cited papers and linked treatments." loading="lazy">
+                  </div>
+                </noscript>
+              </div>
+              <p class="app-foot">Sample data. For literature awareness only — not medical advice. AI summaries can be wrong.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <h2 id="how-title">How it works</h2>
+        <p class="section-lede">The feed is a fixed pipeline. A model is used in four places only (extra queries, grading, the card summary, the topic overview), and code checks what it returns.</p>
+        <ol class="steps">
+          <li><strong>Plan and retrieve</strong>PubMed queries are built from your topics through a psychiatry term pack. The fixed plan always runs; the model may only add queries. Records are merged and kept locally.</li>
+          <li><strong>Filter</strong>Psychiatric records are kept, by MeSH headings and the pack's words, and every drop is logged with its reason. PubMed's publication type decides the study design when there is one.</li>
+          <li><strong>Grade and select</strong>The model grades how well a paper matches each topic. A quote it gives must appear in the title or abstract. Recency, design and journal band rank the list; places are shared between topics.</li>
+          <li><strong>Summarise</strong>A headline and one summary sentence per paper. A paper whose summary fails its checks is shown with its own title and the authors' conclusion.</li>
+          <li><strong>Evidence pages</strong>The Wiki's three sections (Treatments, Safety, Other research) are built from the papers the feed has listed, with treatments matched to the term pack.</li>
+        </ol>
+        <div class="two-col">
+          <div>
+            <h3>The checks that keep the model honest</h3>
+            <ul class="bullets">
+              <li><strong>Numbers must be printed in the abstract.</strong> A headline or summary with a number the paper's text does not contain is refused, asked for once more, then dropped.</li>
+              <li><strong>A summary rests on a sentence code looks up.</strong> The model names the number of an abstract sentence; it does not quote.</li>
+              <li><strong>A sample size must be tied to people.</strong> “180 patients” counts; “12 weeks in patients” and “42 of 180” do not.</li>
+              <li><strong>Association wording is not a benefit</strong> outside trials and reviews: “was linked to” or “predicted” shows nothing to have helped.</li>
+              <li><strong>Treatment names are matched to a term pack</strong> (names, synonyms, brands), not taken from the model's wording.</li>
+            </ul>
+          </div>
+          <div id="status">
+            <h3>Status and limits</h3>
+            <ul class="bullets">
+              <li><strong>An early build used by its author.</strong> For literature awareness only: not medical advice, and not a tool for deciding the care of a patient.</li>
+              <li><strong>Direction is one label per paper</strong> (benefit, no benefit, mixed), an AI reading of the abstract. It can be wrong. There are no effect sizes and no forest plots.</li>
+              <li><strong>Only what your feed listed is counted.</strong> A treatment with no bubble may have a large literature the feed never saw.</li>
+              <li><strong>Most papers are read from the abstract alone.</strong> In one check of 25 recent papers, about one in five had open full text.</li>
+              <li><strong>Do not enter patient information.</strong> No guard against protected health information is built; what you ask is sent to your model provider.</li>
+              <li><strong>Your model key is stored in plain text</strong> in the local vault, and local profiles are not access control. English only; the term pack covers psychiatry only.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="run" aria-labelledby="run-title">
+      <div class="wrap">
+        <h2 id="run-title">Run it locally</h2>
+        <p class="section-lede">You need Node.js 20.9 or later, npm, and a model provider key of your own.</p>
+<pre><code>git clone &lt;the repository's address&gt;
+cd scispark-wiki-psychiatry
+npm ci
+npm run dev</code></pre>
+        <p class="section-lede" style="margin-top:14px">Open <code>http://127.0.0.1:3000</code>. Then: Settings → Connect your AI, answer the onboarding chat, add the conditions and treatments you follow under My topics, and press Refresh on What's new. Every refresh makes model calls with your key. The README has the rest.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="page-foot">
+    <div class="wrap">
+      <p class="safety-line">Sample data. For literature awareness only — not medical advice. AI summaries can be wrong.</p>
+      <p>Licensed under the Apache License, Version 2.0. Provided “as is”, without warranties or conditions of any kind. This is a fork: most of the application is the work of <a href="https://github.com/SciSpark-ai/scispark_wiki" rel="noreferrer">SciSpark</a> by Tong Shan and contributors (Apache-2.0), with parts adapted from Ai2 ScholarQA (Allen Institute for AI, Apache-2.0) and pattern cards from Microsoft ResearchStudio (MIT). The records are from PubMed (U.S. National Library of Medicine). This project is not affiliated with or endorsed by any of them.</p>
+      <p>The sample shows bibliographic facts and this product's own AI-written headlines, summaries and extracted fields for real papers; it contains no abstracts. The note is invented. <a href="#" data-repo-link>Source and README</a></p>
+    </div>
+  </footer>
+
+  <script src="sample-data.js"></script>
+  <script src="app-lib.js"></script>
+  <script src="preview.js"></script>
+</body>
+</html>
