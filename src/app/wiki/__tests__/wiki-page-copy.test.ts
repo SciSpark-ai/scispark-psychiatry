@@ -8,4 +8,10 @@ describe("wiki index copy (C2)", () => {
     expect(src).not.toContain("Recent ingests")
     expect(src).not.toContain("listIngests")
   })
+
+  it("does not write a note from the browser: a note is made by the notes route", () => {
+    const src = readFileSync(join(process.cwd(), "src/app/wiki/page.tsx"), "utf8")
+    expect(src).not.toContain("storage.write")
+    expect(src).not.toContain("composePage")
+  })
 })

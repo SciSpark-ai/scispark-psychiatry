@@ -1,39 +1,30 @@
 "use client"
 
 import { Suspense, useCallback, useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { getOpenVault } from "@/lib/vault/get-vault"
 import { loadBundle, type Bundle } from "@/lib/vault/bundle"
 import { reviewCount } from "@/lib/wiki/review-queue"
-import { composePage } from "@/lib/wiki/authoring"
-import { wikiHref } from "@/lib/wiki/href"
-import type { VaultStorage } from "@/lib/vault/storage"
-import { Tree } from "@/components/wiki/Tree"
 import { PageHeader } from "@/components/ui/PageHeader"
-import { Button } from "@/components/ui/Button"
-import { EmptyState } from "@/components/ui/EmptyState"
 import { COMPANION_CLEARANCE } from "@/components/layout/companion-clearance"
 import { LoadingState } from "@/components/ui/LoadingState"
 import { EvidencePage } from "@/components/clinical/EvidencePage"
+import { LibraryTabs } from "@/components/clinical/LibraryTabs"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 
 const N = CLINICAL_COPY.nav
 
 function WikiIndexPageContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const view = searchParams.get("view") === "all" ? "all" : "evidence"
 
-  const [storage, setStorage] = useState<VaultStorage | null>(null)
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [inboxCount, setInboxCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     const vault = await getOpenVault()
-    setStorage(vault)
     const [b, n] = await Promise.all([loadBundle(vault), reviewCount(vault)])
     setBundle(b)
     setInboxCount(n)
@@ -53,35 +44,6 @@ function WikiIndexPageContent() {
     }
   }, [refresh])
 
-  const handleNewNote = async () => {
-    if (!storage) return
-    setBusy(true)
-    try {
-      const day = new Date().toISOString().slice(0, 10)
-      const path = `wiki/notes/note-${Date.now()}.md`
-      const content = composePage({
-        path,
-        frontmatter: {
-          type: "note",
-          title: "Untitled note",
-          created: day,
-          updated: day,
-          tags: [],
-          related: [],
-          sources: [],
-        },
-        body: "# Untitled note\n",
-      })
-      await storage.write(path, content)
-      router.push(wikiHref(path))
-    } catch (e) {
-      setBusy(false)
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
-
-  const isEmpty = bundle !== null && bundle.pages.size === 0
-
   return (
     <div className={`p-7 ${COMPANION_CLEARANCE}`}>
       <PageHeader
@@ -89,23 +51,13 @@ function WikiIndexPageContent() {
         actions={
           // The Evidence view has no header buttons: its controls are in its own row of tabs.
           view === "all" ? (
-            <>
-              <Link href="/read-later" className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm">
-                {N.readLater}
-              </Link>
-              <Link href="/feed-history" className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm">
-                {N.history}
-              </Link>
-              <Link
-                href="/wiki/inbox"
-                className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm"
-              >
-                Review inbox ({inboxCount})
-              </Link>
-              <Button onClick={handleNewNote} disabled={busy || !storage}>
-                New note
-              </Button>
-            </>
+            // Read later and History are in the sidebar; a note is made from the Notes tab.
+            <Link
+              href="/wiki/inbox"
+              className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm"
+            >
+              Review inbox ({inboxCount})
+            </Link>
           ) : undefined
         }
       />
@@ -117,21 +69,7 @@ function WikiIndexPageContent() {
       {!bundle ? (
         <LoadingState label="Loading vault…" />
       ) : view === "all" ? (
-        isEmpty ? (
-          <EmptyState
-            title="Your wiki is empty"
-            hint="Search for papers to start building your knowledge base."
-            action={
-              <Link href="/papers" className="text-[13px] text-accent-ink hover:text-accent-ink-hover">
-                Search for papers →
-              </Link>
-            }
-          />
-        ) : (
-          <div className="mt-6">
-            <Tree bundle={bundle} />
-          </div>
-        )
+        <LibraryTabs bundle={bundle} />
       ) : (
         <EvidencePage />
       )}

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { displayTitle } from "@/lib/papers/title"
 import type { Bundle } from "@/lib/vault/bundle"
-import { PAGE_TYPES } from "@/lib/vault/types"
+import { PAGE_TYPES, type PageType } from "@/lib/vault/types"
 import { wikiHref } from "@/lib/wiki/href"
 import { HIDDEN_PAGE_TYPES } from "@/lib/clinical/page-types"
 
@@ -17,6 +17,8 @@ const TYPE_HEADINGS: Record<string, string> = {
 
 interface TreeProps {
   bundle: Bundle
+  /** Only these types, as one plain list each: no heading (the caller names what is listed) and no height cap. */
+  types?: readonly PageType[]
 }
 
 /** Bundle ids are `wiki/papers/<slug>`; the last segment is the slug the
@@ -34,7 +36,7 @@ function hrefFor(type: string, id: string): string {
   return type === "paper" ? `/paper/${paperSlug(id)}` : wikiHref(id)
 }
 
-export function Tree({ bundle }: TreeProps) {
+export function Tree({ bundle, types }: TreeProps) {
   const byType = new Map<string, Array<{ id: string; title: string }>>()
   for (const page of bundle.pages.values()) {
     const rows = byType.get(page.frontmatter.type) ?? []
@@ -43,18 +45,20 @@ export function Tree({ bundle }: TreeProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {PAGE_TYPES.filter((type) => !HIDDEN_PAGE_TYPES.includes(type)).map((type) => {
+    <div className={types ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"}>
+      {(types ?? PAGE_TYPES.filter((type) => !HIDDEN_PAGE_TYPES.includes(type))).map((type) => {
         const rows = (byType.get(type) ?? []).sort((a, b) => a.title.localeCompare(b.title))
         return (
           <section key={type} className="border border-border-warm rounded-card p-3 bg-light-surface">
-            <h2 className="text-[13px] font-medium text-espresso tracking-body mb-2">
-              {TYPE_HEADINGS[type] ?? type} <span className="text-muted-text">({rows.length})</span>
-            </h2>
+            {!types && (
+              <h2 className="text-[13px] font-medium text-espresso tracking-body mb-2">
+                {TYPE_HEADINGS[type] ?? type} <span className="text-muted-text">({rows.length})</span>
+              </h2>
+            )}
             {rows.length === 0 ? (
               <p className="text-[12px] text-muted-text">None yet</p>
             ) : (
-              <ul className="space-y-1 max-h-48 overflow-y-auto">
+              <ul className={types ? "space-y-1" : "space-y-1 max-h-48 overflow-y-auto"}>
                 {rows.map((row) => (
                   <li key={row.id}>
                     <Link

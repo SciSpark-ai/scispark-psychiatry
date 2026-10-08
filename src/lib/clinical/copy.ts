@@ -326,6 +326,37 @@ export const CLINICAL_COPY = {
     unknownCondition: "That condition is not in the pack.",
     unknownTreatment: "That treatment is not in the pack.",
     requestFailed: (status: number) => `Your notes could not be reached (${status}).`,
+    /** The Library view (`/wiki?view=all`): its row of tabs, and the Papers tab when the Library has no paper. */
+    library: {
+      tabsLabel: "Parts of your Library",
+      tabs: { papers: "Papers", notes: "Notes", projects: "Projects", chats: "Saved chats" },
+      noPapers: "Your Library has no papers yet",
+      noPapersHint: "Search for papers to start building it.",
+      searchPapers: "Search for papers →",
+    },
+    /** The Notes tab of the Library. */
+    list: {
+      searchLabel: "Search your notes",
+      searchPlaceholder: "Search notes",
+      conditionLabel: "Condition",
+      allConditions: "All conditions",
+      kindLabel: "What a note is about",
+      kinds: { all: "All", paper: "On a paper", topic: "On a topic", none: "Not linked" },
+      newNote: "New note",
+      loading: "Loading your notes…",
+      papers: (count: number) => `${count} ${count === 1 ? "paper" : "papers"}`,
+      newSince: (count: number) => `${count} new ${count === 1 ? "paper" : "papers"} since your last edit`,
+      project: "Project",
+      /** The day a note was last edited, from its `YYYY-MM-DD`; a day that does not read as one is shown as it is. */
+      edited: (day: string) => {
+        const [year, month, date] = day.split("-").map(Number)
+        return MONTHS[month - 1] && date ? `Edited ${MONTHS[month - 1]} ${date}, ${year}` : `Edited ${day}`
+      },
+      none: "You have no notes yet",
+      noneHint: "A note can cite papers and link the conditions and treatments it is about.",
+      noMatch: "No note matches these filters",
+      clear: "Clear filters",
+    },
   },
   evidence: {
     /** The Evidence view: a tab for each condition, and under it the summary and the notes. */

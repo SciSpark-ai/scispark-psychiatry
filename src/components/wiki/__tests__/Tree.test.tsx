@@ -69,3 +69,24 @@ describe("Tree in the clinical edition", () => {
     for (const hidden of ["Attention Mechanism", "Sleep Overview", "A. Author"]) expect(html).not.toContain(hidden)
   })
 })
+
+describe("Tree with a type filter (the Library's tabs)", () => {
+  it("lists only the pages of the given types, without a heading", () => {
+    const bundle = bundleFromPages([
+      { id: "wiki/papers/a-paper", frontmatter: fm("paper", "A Paper") },
+      { id: "wiki/conditions/depression", frontmatter: fm("condition", "Major depressive disorder") },
+      { id: "wiki/notes/a-note", frontmatter: fm("note", "A Note") },
+      { id: "wiki/queries/a-question", frontmatter: fm("query", "A Question") },
+    ])
+    const html = renderToStaticMarkup(<Tree bundle={bundle} types={["query"]} />)
+    expect(html).toContain("A Question")
+    expect(html).toMatch(/href="\/wiki\/queries\/a-question"/)
+    for (const hidden of ["A Paper", "Major depressive disorder", "A Note", "Saved answers", "Papers", "Conditions"]) expect(html).not.toContain(hidden)
+    expect(html).not.toContain("max-h-48")
+  })
+
+  it("says so when the type has no page", () => {
+    const html = renderToStaticMarkup(<Tree bundle={bundleFromPages([])} types={["project"]} />)
+    expect(html).toContain("None yet")
+  })
+})
