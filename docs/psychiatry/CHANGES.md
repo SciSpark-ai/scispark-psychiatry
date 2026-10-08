@@ -1,5 +1,7 @@
 # SciSpark Psychiatry — changes to upstream files
 
+This file is the fork's statement of changes to the upstream project, as the Apache License 2.0, section 4(b), asks; the root `NOTICE` file points here.
+
 Upstream: https://github.com/SciSpark-ai/scispark_wiki, forked at commit 435afcd (2026-10-04), Apache-2.0.
 Every edit to a file that exists upstream is one row here (spec §4.2). New files in `src/lib/clinical/`,
 `src/components/clinical/`, `src/app/watch/`, `src/app/api/clinical/`, `packs/` and `docs/psychiatry/` are ours and need no row.

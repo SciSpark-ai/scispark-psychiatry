@@ -1,0 +1,54 @@
+SciSpark Psychiatry
+An independent, unofficial fork of SciSpark. Not affiliated with or endorsed
+by the SciSpark project.
+
+This product includes software developed by the SciSpark project
+(https://github.com/SciSpark-ai/scispark_wiki), Copyright its contributors
+("Copyright 2026 SciSpark contributors"), licensed under the Apache License,
+Version 2.0. A copy of the License is in the file LICENSE.
+
+Statement of changes (Apache License 2.0, section 4(b))
+-------------------------------------------------------
+
+This fork was taken from the SciSpark repository at commit 435afcd and has
+modified it. Every file of the upstream project that this fork changed is
+listed, with the change, in docs/psychiatry/CHANGES.md, which is this fork's
+statement of changes. The files this fork added are under src/lib/clinical/,
+src/components/clinical/, src/app/api/clinical/, src/app/watch/,
+src/app/notes/, src/app/outputs/, packs/ and docs/psychiatry/.
+
+Third-party components carried over from the upstream project
+-------------------------------------------------------------
+
+The notices below are retained from the upstream project. The files named are
+the authoritative texts; the lines quoted here are copied from them.
+
+1. Ai2 ScholarQA (Apache License 2.0)
+   Notice:  third_party/scholarqa/NOTICE
+   License: third_party/scholarqa/LICENSE
+
+   "SciSpark's src/lib/review/scholarqa.ts is a TypeScript adaptation of
+   MultiStepQAPipeline from Ai2 ScholarQA, Copyright Allen Institute for AI.
+   Licensed under the Apache License, Version 2.0. See LICENSE in this directory.
+
+   Upstream: https://github.com/allenai/ai2-scholarqa-lib
+   Revision: a96232870bdb0bd763f0131320e8377c6deb575e
+   File: api/scholarqa/rag/multi_step_qa_pipeline.py"
+
+   The modifications to that component were made by SciSpark (September 2026)
+   and are described in third_party/scholarqa/NOTICE. This fork has not
+   changed it further.
+
+2. microsoft/ResearchStudio ideation-pattern cards (MIT License)
+   Notice:  src/lib/spark/pattern-cards/NOTICE.md
+   License: src/lib/spark/pattern-cards/LICENSE
+
+   "This directory bundles the ideation-pattern reference cards from
+   microsoft/ResearchStudio (https://github.com/microsoft/ResearchStudio)
+   (the `ResearchStudio-Idea` component's `skills/idea_spark/references/`
+   corpus), used unmodified by the SciSpark Spark skill."
+
+   "microsoft/ResearchStudio is licensed under the MIT License:
+   Copyright (c) 2026 Happy"
+
+   The full MIT permission notice is reproduced in both files named above.
