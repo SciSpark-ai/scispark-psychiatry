@@ -79,7 +79,8 @@ const under = (pathname: string, base: string) => pathname === base || pathname.
 /**
  * The one item a route belongs to. Wiki and Library share the /wiki route and differ by `?view=all`; a note's page
  * (/wiki/notes/...) belongs to Notes, a condition's to Wiki, every other wiki page (papers, saved chats, the inbox)
- * to the Library, as do Read later and History, which are tabs of it; a project belongs to Outputs.
+ * to the Library, as do a paper's own page (/paper/...) and Read later and History, which are tabs of it; a project
+ * belongs to Outputs.
  */
 function activeKey(pathname: string, libraryView: boolean): string | null {
   if (pathname === "/") return "home";
@@ -87,7 +88,7 @@ function activeKey(pathname: string, libraryView: boolean): string | null {
   if (under(pathname, "/wiki/conditions")) return "evidence";
   if (under(pathname, "/notes") || under(pathname, "/wiki/notes")) return "notes";
   if (under(pathname, "/outputs") || under(pathname, "/projects")) return "outputs";
-  if (under(pathname, "/wiki") || under(pathname, "/read-later") || under(pathname, "/feed-history")) return "library";
+  if (under(pathname, "/wiki") || under(pathname, "/paper") || under(pathname, "/read-later") || under(pathname, "/feed-history")) return "library";
   if (under(pathname, "/chat") || under(pathname, "/papers")) return "chat";
   if (under(pathname, "/watch")) return "watch";
   return null;

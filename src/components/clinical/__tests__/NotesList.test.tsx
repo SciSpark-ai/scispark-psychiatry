@@ -274,3 +274,82 @@ describe("the list of the Notes page", () => {
     expect(container.textContent).not.toContain("You have no notes yet")
   })
 })
+
+describe("the final fix wave: typing and loading", () => {
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((yes) => { resolve = yes })
+    return { promise, resolve }
+  }
+
+  it("keeps what was typed after the search went to the address, when the address catches up", async () => {
+    vi.useFakeTimers()
+    await render()
+    await type(search(), "ab")
+    await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
+    expect(nav.replace).toHaveBeenLastCalledWith("/notes?q=ab")
+    // The reader types on before the address has changed; then it changes to what was sent.
+    await type(search(), "abc")
+    await at("q=ab")
+    expect(search().value).toBe("abc")
+    await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
+    expect(nav.replace).toHaveBeenLastCalledWith("/notes?q=abc")
+    await at("q=abc")
+    expect(search().value).toBe("abc")
+  })
+
+  it("still takes a search that came from elsewhere when nothing typed is waiting", async () => {
+    vi.useFakeTimers()
+    await render("q=first")
+    expect(search().value).toBe("first")
+    await at("q=second")
+    expect(search().value).toBe("second")
+    await type(search(), "second, typed")
+    await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
+    await at("")
+    expect(search().value).toBe("")
+  })
+
+  it("keeps showing the notes it had, dimmed, with their counts and conditions, while another search is read", async () => {
+    await render()
+    const before = { ids: ids(), pills: pills().map((pill) => pill.textContent), options: [...select().options].map((option) => option.textContent) }
+    expect(container.querySelector("[data-notes]")?.getAttribute("aria-busy")).toBe("false")
+    const next = deferred<NoteSummary[]>()
+    notes.listNotesRemote.mockReturnValueOnce(next.promise)
+    await at("q=esk")
+    expect(ids()).toEqual(before.ids)
+    expect(pills().map((pill) => pill.textContent)).toEqual(before.pills)
+    expect([...select().options].map((option) => option.textContent)).toEqual(before.options)
+    expect(container.querySelector("[data-notes]")?.getAttribute("aria-busy")).toBe("true")
+    expect(container.querySelector("[data-notes]")?.className).toContain("opacity-60")
+    expect(container.textContent).not.toContain("Loading your notes…")
+    await act(async () => { next.resolve([ALL[1]]) })
+    expect(ids()).toEqual(["on-a-topic"])
+    expect(container.querySelector("[data-notes]")?.getAttribute("aria-busy")).toBe("false")
+    expect(container.querySelector("[data-notes]")?.className).not.toContain("opacity-60")
+    expect(pills()[0].textContent).toBe("All 1")
+  })
+
+  it("does the same when a condition is chosen: the notes it had stay until those of the condition are read", async () => {
+    await render()
+    const narrow = deferred<NoteSummary[]>()
+    notes.listNotesRemote.mockImplementation(async (filters) => (filters.condition ? narrow.promise : answer(filters)))
+    await at("condition=adhd")
+    expect(ids()).toEqual(["on-a-paper", "on-a-topic", "one-paper", "loose"])
+    expect(container.querySelector("[data-notes]")?.getAttribute("aria-busy")).toBe("true")
+    expect(pills()[0].textContent).toBe("All 4")
+    await act(async () => { narrow.resolve(answer({ condition: "adhd" })) })
+    expect(ids()).toEqual(["on-a-topic", "one-paper"])
+    expect(container.querySelector("[data-notes]")?.getAttribute("aria-busy")).toBe("false")
+  })
+
+  it("says it is loading only when it has nothing to show yet", async () => {
+    const first = deferred<NoteSummary[]>()
+    notes.listNotesRemote.mockReturnValueOnce(first.promise)
+    await render()
+    expect(container.textContent).toContain("Loading your notes…")
+    await act(async () => { first.resolve(ALL) })
+    expect(ids()).toHaveLength(4)
+  })
+})
+

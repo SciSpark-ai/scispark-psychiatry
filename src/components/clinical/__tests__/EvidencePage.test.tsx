@@ -362,6 +362,28 @@ describe("the Evidence view", () => {
       expect(nav.replace).toHaveBeenLastCalledWith("/wiki?condition=depression&scope=saved&period=6m")
     })
 
+    it("keeps the treatment when the tab of the condition that is already shown is pressed", async () => {
+      await render("condition=depression&treatment=lithium&period=6m")
+      await click(tabsOf(tablists()[0])[0])
+      expect(nav.replace).toHaveBeenLastCalledWith("/wiki?condition=depression&treatment=lithium&period=6m")
+      expect(container.querySelector("[data-treatment-detail=lithium]")).not.toBeNull()
+    })
+
+    it("takes a treatment that is gone under another scope out of the address, leaving its class", async () => {
+      const SAVED = { ...SIZED, scope: "saved", classes: [{ ...SIZED.classes[0], treatments: [{ ...SIZED.classes[0].treatments[0], key: "ketamine", name: "Ketamine" }] }] }
+      evidence.loadConditionEvidenceRemote.mockImplementation(async (code: string, opts?: { scope?: string }) => (code !== "depression" ? answer(code) : opts?.scope === "saved" ? SAVED : SIZED))
+      await render("condition=depression&treatment=lithium")
+      nav.replace.mockReset()
+      await at("condition=depression&treatment=lithium&scope=saved")
+      await act(async () => {})
+      expect(container.querySelector("[data-treatment-detail]")).toBeNull()
+      expect(nav.replace).toHaveBeenCalledTimes(1)
+      expect(nav.replace).toHaveBeenLastCalledWith("/wiki?condition=depression&treatment=medicine&scope=saved")
+      await at("condition=depression&treatment=medicine&scope=saved")
+      expect(container.querySelector("[data-treatments]")?.getAttribute("data-treatments")).toBe("medicine")
+      expect(nav.replace).toHaveBeenCalledTimes(1)
+    })
+
     it("drops the treatment when the condition tab changes, and keeps it when the scope does", async () => {
       await render("condition=depression&treatment=lithium&period=6m")
       await choose(select("Papers"), "saved")

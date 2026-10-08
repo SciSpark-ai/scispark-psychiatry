@@ -74,8 +74,8 @@ export function EvidencePage() {
   if (!selected) {
     return <p className="mt-6 text-[15px] text-muted-text">{V.none} <Link href="/watch" className="text-accent-ink underline">{V.addTopics}</Link></p>
   }
-  // Another condition has no treatment of this one; a new scope or period keeps it.
-  const go = (next: { condition?: string; scope?: Scope; period?: Period }) => router.replace(evidenceHref({ condition: selected.code, scope, period, treatment: next.condition ? undefined : treatment ?? undefined, ...next }))
+  // Another condition has no treatment of this one; a new scope or period keeps it, and so does the tab of the condition that is shown.
+  const go = (next: { condition?: string; scope?: Scope; period?: Period }) => router.replace(evidenceHref({ condition: selected.code, scope, period, treatment: next.condition && next.condition !== selected.code ? undefined : treatment ?? undefined, ...next }))
   const choose = (key: string | null) => router.replace(evidenceHref({ condition: selected.code, scope, period, treatment: key ?? undefined }))
   const savedCount = saved?.code === selected.code ? saved.count : null
   const shown = conditions.map((entry) => entry.code)

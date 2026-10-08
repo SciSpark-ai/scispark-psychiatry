@@ -897,4 +897,80 @@ describe("the address of a treatment", () => {
     await click(q("[data-crumb] button"))
     expect(onChoose).toHaveBeenLastCalledWith(null)
   })
+
+  // Final fix C3.
+  const ectClass = klass("ect", "ECT", [treatment("ect", "ECT", [study(4, { treatment: "ECT" })]), treatment("rtms", "rTMS", [study(8, { treatment: "rTMS" })])])
+  const SAME_KEY: Evidence = { ...SIZED, classes: [SIZED.classes[0], ectClass] }
+
+  it("opens a class whose key is also the key of one of its treatments as the class, when the address it wrote comes back", async () => {
+    client.loadConditionEvidenceRemote.mockResolvedValue(SAME_KEY)
+    const onChoose = vi.fn()
+    await render(<ConditionEvidence condition="depression" treatment={null} onChoose={onChoose} />)
+    await pick("ect", "[data-classes]")
+    expect(onChoose).toHaveBeenLastCalledWith("ect")
+    await again(<ConditionEvidence condition="depression" treatment="ect" onChoose={onChoose} />)
+    expect(q("[data-treatments]").getAttribute("data-treatments")).toBe("ect")
+    expect(q("[data-treatment-detail]")).toBeNull()
+    expect(bubble("ect", "[data-treatments]").getAttribute("aria-pressed")).toBe("false")
+    // The treatment of that key is still the reader's to open, and the address then does not change.
+    await pick("ect", "[data-treatments]")
+    expect(q("[data-treatment-detail=ect]")).not.toBeNull()
+    await again(<ConditionEvidence condition="depression" treatment="ect" onChoose={onChoose} />)
+    expect(q("[data-treatment-detail=ect]")).not.toBeNull()
+  })
+
+  it("still applies an address that came from elsewhere after one of its own: the same key opens the treatment", async () => {
+    client.loadConditionEvidenceRemote.mockResolvedValue(SAME_KEY)
+    const onChoose = vi.fn()
+    await render(<ConditionEvidence condition="depression" treatment={null} onChoose={onChoose} />)
+    await pick("medicine", "[data-classes]")
+    await again(<ConditionEvidence condition="depression" treatment="medicine" onChoose={onChoose} />)
+    await click(q("[data-crumb] button"))
+    await again(<ConditionEvidence condition="depression" treatment={null} onChoose={onChoose} />)
+    expect(q("[data-classes]")).not.toBeNull()
+    await again(<ConditionEvidence condition="depression" treatment="ect" onChoose={onChoose} />)
+    expect(q("[data-treatment-detail=ect]")).not.toBeNull()
+  })
+
+  it("does not reopen what the reader closed while the address is still catching up", async () => {
+    const onChoose = await withAddress("lithium")
+    await click(q("[data-crumb] button"))
+    expect(onChoose).toHaveBeenLastCalledWith(null)
+    // Drawn again with the old address, before the new one has arrived.
+    await again(<ConditionEvidence condition="depression" treatment="lithium" onChoose={onChoose} />)
+    expect(q("[data-classes]")).not.toBeNull()
+    await again(<ConditionEvidence condition="depression" treatment={null} onChoose={onChoose} />)
+    expect(q("[data-classes]")).not.toBeNull()
+  })
+
+  it("tells its caller when what was chosen is gone after another scope or period: the class that is left, or nothing", async () => {
+    const onChoose = await withAddress("ketamine")
+    expect(onChoose).not.toHaveBeenCalled()
+    client.loadConditionEvidenceRemote.mockResolvedValue({ ...SIZED, period: "6m", classes: [{ ...SIZED.classes[0], treatments: [sizedLithium] }, SIZED.classes[1]] })
+    await again(<ConditionEvidence condition="depression" period="6m" treatment="ketamine" onChoose={onChoose} />)
+    await act(async () => {})
+    expect(q("[data-treatment-detail]")).toBeNull()
+    expect(onChoose).toHaveBeenCalledTimes(1)
+    expect(onChoose).toHaveBeenLastCalledWith("medicine")
+    // The caller's function is a new one at each of its draws: the same news is not told twice.
+    const next = vi.fn()
+    await again(<ConditionEvidence condition="depression" period="6m" treatment="medicine" onChoose={next} />)
+    expect(next).not.toHaveBeenCalled()
+    expect(q("[data-treatments]").getAttribute("data-treatments")).toBe("medicine")
+    client.loadConditionEvidenceRemote.mockResolvedValue({ ...SIZED, period: "3m", classes: [SIZED.classes[1]] })
+    await again(<ConditionEvidence condition="depression" period="3m" treatment="medicine" onChoose={next} />)
+    await act(async () => {})
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(next).toHaveBeenLastCalledWith(null)
+    expect(q("[data-classes]")).not.toBeNull()
+  })
+
+  it("tells its caller nothing when only a safety group or a kind of research is gone", async () => {
+    const onChoose = await withAddress(null)
+    await pick("sertraline", "[data-section=safety]")
+    client.loadConditionEvidenceRemote.mockResolvedValue({ ...SIZED, period: "6m", safety: [] })
+    await again(<ConditionEvidence condition="depression" period="6m" treatment={null} onChoose={onChoose} />)
+    await act(async () => {})
+    expect(onChoose).not.toHaveBeenCalled()
+  })
 })

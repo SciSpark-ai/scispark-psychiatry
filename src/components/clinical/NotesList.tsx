@@ -30,8 +30,13 @@ function asked(q: string, condition: string, treatment: string): string {
 }
 
 interface Answer { key: string; notes: NoteSummary[] | null; error: string | null }
-/** The notes the route gives for one set of filters (`key`, from `asked`); null while they are read, and for no key. */
-function useNotes(key: string | null): Answer | null {
+/** An answer, and whether it is still the one before: the filters changed and theirs is being read. */
+type Shown = Answer & { stale: boolean }
+/**
+ * The notes the route gives for one set of filters (`key`, from `asked`). While another set is read the answer it
+ * had stays, marked stale, so the list does not empty at each key. Null before the first answer, and for no key.
+ */
+function useNotes(key: string | null): Shown | null {
   const [answer, setAnswer] = useState<Answer | null>(null)
   useEffect(() => {
     if (key === null) return
@@ -41,7 +46,7 @@ function useNotes(key: string | null): Answer | null {
       .catch((reason) => { if (!cancelled) setAnswer({ key, notes: null, error: messageOf(reason) }) })
     return () => { cancelled = true }
   }, [key])
-  return answer?.key === key ? answer : null
+  return key === null || answer === null ? null : { ...answer, stale: answer.key !== key }
 }
 
 /**
@@ -60,13 +65,14 @@ export function NotesList() {
   const treatment = params.get("treatment") ?? ""
   const kind = noteKindOf(params.get("kind"))
 
-  // What is typed: the address follows it a moment after the last key, and it follows an address that changed elsewhere.
-  const [typed, setTyped] = useState({ text: q, from: q })
+  // What is typed: the address follows it a moment after the last key, and it follows an address that changed
+  // elsewhere, but never while a key is still waiting to be sent: the address then only catches up with an earlier key.
+  const [typed, setTyped] = useState({ text: q, from: q, waiting: false })
   const [making, setMaking] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  if (typed.from !== q) setTyped({ text: typed.text.trim() === q ? typed.text : q, from: q })
+  if (typed.from !== q) setTyped({ text: typed.waiting || typed.text.trim() === q ? typed.text : q, from: q, waiting: typed.waiting })
 
   // Without a condition the two are one list, asked for once.
   const wide = useNotes(asked(q, "", treatment))
@@ -78,16 +84,17 @@ export function NotesList() {
   /** Another address of this list. What is typed goes with it, so a filter chosen while the search waits does not lose it. */
   const go = (next: NotesAddress, text = typed.text) => {
     wait()
+    setTyped((held) => (held.waiting ? { ...held, waiting: false } : held))
     router.replace(notesHref({ q: text, condition: condition || undefined, treatment: treatment || undefined, kind, ...next }))
   }
   const search = (text: string) => {
-    setTyped({ text, from: q })
+    setTyped({ text, from: q, waiting: true })
     wait()
     timer.current = setTimeout(() => go({}, text), SEARCH_DELAY_MS)
   }
   const clear = () => {
     wait()
-    setTyped({ text: "", from: q })
+    setTyped({ text: "", from: q, waiting: false })
     router.replace(notesHref())
   }
   const create = async () => {
@@ -101,7 +108,8 @@ export function NotesList() {
     }
   }
 
-  const current = condition ? narrow : wide
+  // Until the notes of a condition just chosen are read, the notes it had stay, as the ones before.
+  const current: Shown | null = condition ? narrow ?? (wide ? { ...wide, stale: true } : null) : wide
   const all = wide?.notes ?? []
   const ofCondition = current?.notes ?? []
   const ofKind = kind ? all.filter((note) => note.kind === kind) : all
@@ -150,7 +158,7 @@ export function NotesList() {
         </p>
       )}
       {failure && <p role="alert" className="mt-3 text-[14px] text-accent-ink">{failure}</p>}
-      <div className="mt-4">
+      <div data-notes="true" aria-busy={current?.stale === true} className={current?.stale ? "mt-4 opacity-60 transition-opacity" : "mt-4 transition-opacity"}>
         {current === null ? <p className="text-[14px] text-muted-text">{L.loading}</p>
           : current.error !== null ? <p role="alert" className="text-[14px] text-accent-ink">{current.error}</p>
           : shown.length > 0 ? <ul className="space-y-2">{shown.map((note) => <NoteRow key={note.id} note={note} />)}</ul>

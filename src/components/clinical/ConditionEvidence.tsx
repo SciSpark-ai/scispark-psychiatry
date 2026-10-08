@@ -72,23 +72,50 @@ function Sections({ evidence, address, onChoose }: { evidence: Evidence; address
   // The treatment of the address that was last looked at, and the one whose table is to be scrolled into view.
   const [seen, setSeen] = useState<string | null>(null)
   const [scrollTo, setScrollTo] = useState<string | null>(null)
+  // What this block itself last told its caller to put in the address, until the address says it: that is its own
+  // news coming back, not something to open. (A class may have the key of one of its treatments.)
+  const [sent, setSent] = useState<{ key: string | null } | null>(null)
+  // What was chosen and is gone, for the caller to hear of: the class that is left, or nothing.
+  const [gone, setGone] = useState<{ key: string | null } | null>(null)
+  const told = useRef<{ key: string | null } | null>(null)
+  /** Remembers what the caller is about to be told, when that is not what the address already says. */
+  const awaitAddress = (key: string | null) => { if (onChoose && key !== address) setSent({ key }) }
   // Another scope or period can take away what was chosen: it is then dropped for good, not kept for when it comes back.
   const chosen = stillThere(picked, evidence)
-  if (chosen !== picked) setPicked(chosen)
+  if (chosen !== picked) {
+    setPicked(chosen)
+    if (chosen.classKey !== picked.classKey || chosen.treatment !== picked.treatment) {
+      const left = chosen.treatment ?? chosen.classKey
+      setGone({ key: left })
+      awaitAddress(left)
+    }
+  }
   // An address is applied once, when it first names a treatment or a class the evidence has: what the reader then closes stays closed.
   if (address !== seen) {
     setSeen(address)
-    const owner = address === null ? undefined : evidence.classes.find((entry) => entry.treatments.some((item) => item.key === address))
-    const named = address === null ? undefined : owner ?? evidence.classes.find((entry) => entry.key === address)
-    if (named) {
-      setPicked({ ...chosen, classKey: named.key, treatment: owner ? address : null })
-      if (owner) setScrollTo(address)
+    if (sent !== null && sent.key === address) setSent(null)
+    else {
+      const owner = address === null ? undefined : evidence.classes.find((entry) => entry.treatments.some((item) => item.key === address))
+      const named = address === null ? undefined : owner ?? evidence.classes.find((entry) => entry.key === address)
+      if (named) {
+        setPicked({ ...chosen, classKey: named.key, treatment: owner ? address : null })
+        if (owner) setScrollTo(address)
+      }
     }
   }
+  // The caller hears once of what is gone, whatever function it hands down at each of its draws.
+  useEffect(() => {
+    if (gone === null || told.current === gone) return
+    told.current = gone
+    onChoose?.(gone.key)
+  }, [gone, onChoose])
   const choose = (next: Partial<Chosen>) => {
     const after = { ...chosen, ...next }
     setPicked(after)
-    if (next.classKey !== undefined || next.treatment !== undefined) onChoose?.(after.treatment ?? after.classKey)
+    if (next.classKey === undefined && next.treatment === undefined) return
+    const key = after.treatment ?? after.classKey
+    awaitAddress(key)
+    onChoose?.(key)
   }
   const cls = evidence.classes.find((entry) => entry.key === chosen.classKey) ?? null
   const treatment = cls?.treatments.find((entry) => entry.key === chosen.treatment) ?? null
