@@ -8,8 +8,10 @@ const V = CLINICAL_COPY.evidence.page
 type Pack = { conditions: Array<{ code: string; name: string }> | null; error: string | null }
 
 /**
- * The button after the last tab of the Evidence view: it opens a list of the conditions of the pack that have no tab
- * yet, and tells its owner which one was chosen. It follows nothing and makes no page. Escape and a press outside
+ * The button after the last tab of the Evidence view, as tall as a tab and on its line (the same padding, type and
+ * line under it, and its plus in a box of the height of a tab's line), 32 px each way at least, its plus larger than
+ * the tabs' type: it opens a list of the conditions of the pack that have no tab yet, and tells its owner which one
+ * was chosen. It follows nothing and makes no page. Escape and a press outside
  * close the list; Escape puts the keyboard back on the button.
  */
 export function AddCondition({ shown, onChoose }: { shown: string[]; onChoose: (code: string) => void }) {
@@ -45,7 +47,9 @@ export function AddCondition({ shown, onChoose }: { shown: string[]; onChoose: (
   return (
     <span ref={holder} className="relative inline-flex" onKeyDown={(event) => { if (open && event.key === "Escape") close() }}>
       <button ref={button} type="button" data-add-condition="true" aria-label={V.addLabel} title={V.addLabel} aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}
-        className="px-3 py-2 text-[16px] leading-none text-secondary-dark hover:text-espresso">{V.add}</button>
+        className="inline-flex min-h-8 min-w-8 items-center justify-center border-b-2 border-transparent px-3 py-2 text-[15px] leading-5 text-muted-text transition-colors hover:text-espresso focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">
+        <span data-add-glyph="true" aria-hidden="true" className="inline-flex h-5 items-center text-[1.3em] leading-none">{V.add}</span>
+      </button>
       {open && (
         <div ref={list} id={id} data-add-menu="true" role="group" aria-label={V.addList}
           className="absolute left-0 top-full z-20 mt-1 max-h-72 w-64 overflow-y-auto rounded-card border border-border-warm bg-light-surface p-1 text-[14px] shadow-md">

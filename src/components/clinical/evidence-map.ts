@@ -1,5 +1,5 @@
-// Where the bubbles of the map of treatments go. Pure: no component, no wording, no clock, and the same places for
-// the same items.
+// Where the bubbles of the map of treatments go. Pure: no component, no wording, no clock (it does not know what day
+// it is), and the same places for the same items.
 
 export interface MapItem {
   key: string; name: string; papers: number
@@ -22,8 +22,10 @@ export interface Placed {
 }
 export interface Box { left: number; right: number; top: number; bottom: number }
 export interface MapScales {
-  /** The box the bubbles stay in. */
+  /** The frame of the plot, as it is drawn. */
   plot: Box
+  /** The part of it the bubbles and their names stay in: the plot less a clear space inside its frame. */
+  inset: Box
   /** The column of the items none of whose papers has a date; null when every item has one. */
   column: { left: number; right: number } | null
   /** The band of the items that state no participants, and the height its bubbles are at; null when every item states them. */
@@ -32,8 +34,8 @@ export interface MapScales {
   /** The days the x scale runs over, counted from 1970, and where its ends are drawn. */
   days: { from: number; to: number }
   x0: number; x1: number
-  /** A tick a month (`month` 1 to 12) or a year (`month` null); `labelled` where there is room for its name. */
-  ticksX: { x: number; year: number; month: number | null; labelled: boolean }[]
+  /** A tick a week (`day` is the Monday it is on), a month (`month` 1 to 12, `day` null) or a year (`month` null); `labelled` where there is room for its name. */
+  ticksX: { x: number; year: number; month: number | null; day: number | null; labelled: boolean }[]
   /** The participants the y scale runs over, a tick per power of ten, and where 10, the middle and the top are drawn. */
   participants: { min: number; max: number }
   ticksY: { value: number; y: number }[]
@@ -41,23 +43,34 @@ export interface MapScales {
 }
 
 /** The picture the places are worked out in. It is drawn at any width, in this proportion. */
-export const MAP_SIZE: MapSize = { width: 680, height: 400 }
+export const MAP_SIZE: MapSize = { width: 720, height: 460 }
 const [MIN_RADIUS, MAX_RADIUS] = [18, 40]
 /** The least clear space between two bubbles. */
 const GAP = 6
 const STEP = 2
-const [GUTTER, RIGHT, TOP, FOOT, COLUMN] = [76, 8, 12, 26, 88]
-/** The least room kept right of the newest date, so that the name of a bubble there stays by the picture. */
-const RIGHT_ROOM = 44
+/** Around the plot: at the left the title of the y axis, turned, and the names of its ticks; under it the names of the ticks of the x axis. */
+const [GUTTER, RIGHT, TOP, FOOT, COLUMN] = [84, 8, 8, 28, 96]
+/** The clear space kept inside the frame of the plot: no bubble and no name is nearer to an edge of it. */
+export const INSET = 16
 /** How far a bubble is moved up or down first, as a share of the height of the scale's part of the plot; then sideways, as a share of the plot's width. */
 const [Y_REACH, X_REACH] = [0.12, 0.06]
 /** The room kept under the lowest bubble for its name, and the size of a name's box. */
-const LABEL_ROOM = 34
-const [LABEL_WIDTH, LABEL_OFFSET, CHAR, MARK_CHAR, NAME_LINE, MARKS_LINE] = [104, 3, 6.7, 5.6, 16, 14]
+const LABEL_ROOM = 40
+/** A name is written in 14 px and its marks in 12 px. */
+const [LABEL_WIDTH, LABEL_OFFSET, CHAR, MARK_CHAR, NAME_LINE, MARKS_LINE] = [120, 3, 7.3, 6.1, 18, 16]
 /** What the band has over the height of its largest bubble: a little above it, and a name of two lines with its marks under it. */
-const BAND_ROOM = 54
+const BAND_HEAD = 4
+const BAND_ROOM = BAND_HEAD + LABEL_OFFSET + 2 * NAME_LINE + MARKS_LINE
 const MIN_DOMAIN = 1000
-const [MIN_DAYS, MONTHLY_DAYS, MONTH_LABEL, YEAR_LABEL] = [90, 548, 66, 40]
+/** The share of the days between the first and the last bubble that is kept free at each end of the time scale, and the least days it covers. */
+const [PADDING, MIN_DAYS] = [0.08, 21]
+/** Up to this many days the scale has a tick a week, and up to this many a tick a month. */
+const [WEEKLY_DAYS, MONTHLY_DAYS] = [70, 548]
+/** The width of the name of a tick, and the least clear space between two. */
+const TICK_NAME = { week: 44, month: 60, year: 32 }
+const TICK_GAP = 8
+/** 1970-01-01 was a Thursday: the days that are Mondays leave this over when divided by seven. */
+const MONDAY = 4
 const DAY = 86400000
 const tenth = (value: number) => Number(value.toFixed(1))
 const dayAt = (year: number, month: number, day: number) => Date.UTC(year, month - 1, day) / DAY
@@ -96,47 +109,66 @@ export function newestDate(dates: string[]): string | null {
 const daysOf = (item: MapItem): number[] => item.dates.map(dayOf).filter((day): day is number => day !== null)
 
 /**
- * The scales of a map of `items` on the day `today`: across, time, from the earliest paper of them all to today and
- * over ninety days at least; up, the participants, from 10 to the next power of ten at or above the largest, on a log
+ * The scales of a map of `items`: across, time, over the bubbles that are shown and no more: from the earliest to the
+ * latest of the newest papers of the items, with a little more at each end and twenty-one days at least, the bubbles
+ * in the middle of them; up, the participants, from 10 to the next power of ten at or above the largest, on a log
  * scale. An item with no date has a column at the left, and one that states no participants a band along the bottom.
+ * Both scales end short of the frame of the plot, by the clear space kept inside it.
  */
-export function mapScales(items: MapItem[], size: MapSize, today: string): MapScales {
+export function mapScales(items: MapItem[], size: MapSize): MapScales {
   const plot = { left: GUTTER, right: size.width - RIGHT, top: TOP, bottom: size.height - FOOT }
+  const inset = { left: plot.left + INSET, right: plot.right - INSET, top: plot.top + INSET, bottom: plot.bottom - INSET }
   const radius = Math.max(MIN_RADIUS, ...items.map((item) => mapRadius(item.papers)))
   const dated = items.map(daysOf)
   const column = dated.some((days) => days.length === 0) ? { left: plot.left, right: plot.left + COLUMN } : null
   const unstated = items.filter((item) => item.participants === null).map((item) => mapRadius(item.papers))
-  const band = unstated.length > 0 ? { top: plot.bottom - 2 * Math.max(...unstated) - BAND_ROOM, bottom: plot.bottom } : null
-  const bandY = band ? band.top + 4 + Math.max(...unstated) : null
+  const band = unstated.length > 0 ? { top: inset.bottom - 2 * Math.max(...unstated) - BAND_ROOM, bottom: plot.bottom } : null
+  const bandY = band ? band.top + BAND_HEAD + Math.max(...unstated) : null
 
-  const all = dated.flat()
-  const now = dayOf(today) ?? Math.max(0, ...all)
-  const to = Math.max(now, ...all)
-  const from = Math.min(to - MIN_DAYS, ...all)
-  const x0 = (column ? column.right : plot.left) + radius + 4
-  const x1 = plot.right - Math.max(radius, RIGHT_ROOM)
-  const xOf = (day: number) => x0 + ((day - from) / (to - from)) * (x1 - x0)
-  const monthly = to - from <= MONTHLY_DAYS
-  const [first, last] = [new Date(from * DAY), new Date(to * DAY)]
-  const starts: { year: number; month: number | null; day: number }[] = []
-  for (let year = first.getUTCFullYear(); year <= last.getUTCFullYear(); year += 1) {
-    for (const month of monthly ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : [1]) {
-      const day = dayAt(year, month, 1)
-      if (day >= from && day <= to) starts.push({ year, month: monthly ? month : null, day })
+  // Where the bubbles are: each at the newest of its papers.
+  const shown = dated.filter((days) => days.length > 0).map((days) => Math.max(...days))
+  const [earliest, latest] = shown.length > 0 ? [Math.min(...shown), Math.max(...shown)] : [0, 0]
+  const covered = Math.max(MIN_DAYS, (1 + 2 * PADDING) * (latest - earliest))
+  const from = (earliest + latest) / 2 - covered / 2
+  const to = from + covered
+  const x0 = (column ? column.right : plot.left) + INSET
+  const x1 = inset.right
+  const xOf = (day: number) => x0 + ((day - from) / covered) * (x1 - x0)
+  const every: keyof typeof TICK_NAME = covered <= WEEKLY_DAYS ? "week" : covered <= MONTHLY_DAYS ? "month" : "year"
+  const starts: { year: number; month: number | null; day: number | null; at: number }[] = []
+  if (shown.length > 0 && every === "week") {
+    for (let at = Math.ceil(from); at <= to; at += 1) {
+      if (at % 7 !== MONDAY) continue
+      const date = new Date(at * DAY)
+      starts.push({ year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate(), at })
+    }
+  } else if (shown.length > 0) {
+    for (let year = new Date(from * DAY).getUTCFullYear(); year <= new Date(to * DAY).getUTCFullYear(); year += 1) {
+      for (const month of every === "month" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : [1]) {
+        const at = dayAt(year, month, 1)
+        if (at >= from && at <= to) starts.push({ year, month: every === "month" ? month : null, day: null, at })
+      }
     }
   }
-  const apart = starts.length > 1 ? xOf(starts[1].day) - xOf(starts[0].day) : Infinity
-  const every = Math.max(1, Math.ceil((monthly ? MONTH_LABEL : YEAR_LABEL) / apart))
-  const ticksX = starts.map((start, at) => ({ x: xOf(start.day), year: start.year, month: start.month, labelled: at % every === 0 }))
+  // A name every so many ticks, from the first that is clear of the column: no two touch, and none runs out of the picture.
+  const half = TICK_NAME[every] / 2
+  const fits = (x: number) => x - half >= (column ? column.right : 0) && x + half <= size.width
+  const apart = starts.length > 1 ? xOf(starts[1].at) - xOf(starts[0].at) : Infinity
+  const stride = Math.max(1, Math.ceil((TICK_NAME[every] + TICK_GAP) / apart))
+  const first = starts.findIndex((start) => fits(xOf(start.at)))
+  const ticksX = starts.map((start, at) => {
+    const x = xOf(start.at)
+    return { x, year: start.year, month: start.month, day: start.day, labelled: first >= 0 && at >= first && (at - first) % stride === 0 && fits(x) }
+  })
 
   const largest = Math.max(0, ...items.map((item) => item.participants ?? 0))
   let max = MIN_DOMAIN
   while (max < largest) max *= 10
-  const yTop = plot.top + radius + 4
-  const yBottom = (band ? band.top : plot.bottom) - radius - LABEL_ROOM
+  const yTop = inset.top + radius
+  const yBottom = (band ? band.top : inset.bottom) - radius - LABEL_ROOM
   const decades = Math.round(Math.log10(max)) - 1
   const ticksY = Array.from({ length: decades + 1 }, (_, at) => ({ value: 10 ** (at + 1), y: yBottom - (at / decades) * (yBottom - yTop) }))
-  return { plot, column, band, bandY, days: { from, to }, x0, x1, ticksX, participants: { min: 10, max }, ticksY, yTop, yMiddle: (yTop + yBottom) / 2, yBottom }
+  return { plot, inset, column, band, bandY, days: { from, to }, x0, x1, ticksX, participants: { min: 10, max }, ticksY, yTop, yMiddle: (yTop + yBottom) / 2, yBottom }
 }
 
 interface Spot { x: number; y: number }
@@ -177,14 +209,15 @@ export function nameBoxes(item: MapItem, spot: Spot, r: number, limits: { left: 
  * there is. One moved by more than its radius is `displaced`. An item that states no participants is in the band,
  * which is one row high, and moves sideways only; one with no date stays in the column. Larger bubbles are placed
  * first, so the small ones move. A name goes under its bubble, or above it when a bubble or a name already placed is
- * in the way there, and is shifted sideways to stay in the plot; a place where the name fits neither way, or where the
- * bubble would cover a name, is not free while another is. The places are returned in the order of `items`.
+ * in the way there, and is shifted sideways to stay clear of the frame; a place where the name fits neither way, or where the
+ * bubble would cover a name, is not free while another is. No bubble and no name is on the clear space inside the
+ * frame of the plot. The places are returned in the order of `items`.
  */
-export function layoutMap(items: MapItem[], size: MapSize, today: string): Placed[] {
-  const { plot, column, band, bandY, days, x0, x1, participants, yTop, yBottom } = mapScales(items, size, today)
+export function layoutMap(items: MapItem[], size: MapSize): Placed[] {
+  const { inset, column, band, bandY, days, x0, x1, participants, yTop, yBottom } = mapScales(items, size)
   const xOf = (day: number) => x0 + ((day - days.from) / (days.to - days.from)) * (x1 - x0)
   const span = Math.log10(participants.max) - 1
-  const scaleBottom = band ? band.top : plot.bottom
+  const scaleBottom = band ? band.top - 2 : inset.bottom
   const order = [...items].sort((a, b) => b.papers - a.papers || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
   const placed: Placed[] = []
   const names: Box[] = []
@@ -193,15 +226,16 @@ export function layoutMap(items: MapItem[], size: MapSize, today: string): Place
     const dated = daysOf(item)
     const inColumn = dated.length === 0 && column !== null
     const inBand = item.participants === null && band !== null && bandY !== null
-    const xs: Range = inColumn ? { low: column.left + r + 2, high: column.right - r - 2 } : { low: (column ? column.right : plot.left) + r + 2, high: plot.right - r }
-    const ys: Range = inBand ? { low: bandY, high: bandY } : { low: plot.top + r, high: scaleBottom - r - 2 }
+    const xs: Range = inColumn ? { low: inset.left + r, high: column.right - r } : { low: x0 + r, high: x1 - r }
+    const ys: Range = inBand ? { low: bandY, high: bandY } : { low: inset.top + r, high: scaleBottom - r }
     const newest = Math.max(...dated)
     const home: Spot = {
       x: clamp(inColumn ? (column.left + column.right) / 2 : xOf(newest), xs),
       y: inBand ? bandY : clamp(yBottom - ((Math.log10(Math.max(participants.min, item.participants ?? participants.min)) - 1) / span) * (yBottom - yTop), ys),
     }
     const clearance = (spot: Spot) => Math.min(Infinity, ...placed.map((other) => Math.hypot(spot.x - other.x, spot.y - other.y) - other.r - r - GAP))
-    const nameFree = (box: Box) => box.top >= 0 && box.bottom <= plot.bottom && !names.some((name) => boxesMeet(box, name)) && !placed.some((other) => discMeetsBox(other, other.r, box))
+    const inFrame = (box: Box) => box.top >= inset.top && box.bottom <= inset.bottom
+    const nameFree = (box: Box) => inFrame(box) && !names.some((name) => boxesMeet(box, name)) && !placed.some((other) => discMeetsBox(other, other.r, box))
     // Where the bubble is clear of the others, failing a place where its name is too; and the clearest, failing that.
     let clear: Spot | null = null
     let clearest = { spot: home, by: clearance(home) }
@@ -213,24 +247,23 @@ export function layoutMap(items: MapItem[], size: MapSize, today: string): Place
       if (by < 0) return null
       clear ??= spot
       if (names.some((name) => discMeetsBox(spot, r, name))) return null
-      const { under, above } = nameBoxes(item, spot, r, plot)
+      const { under, above } = nameBoxes(item, spot, r, inset)
       return nameFree(under) ? false : nameFree(above) ? true : null
     }
     let found: { spot: Spot; above: boolean } | null = null
-    const first = [
-      ...[...offsets(-1, inBand ? 0 : Y_REACH * (scaleBottom - plot.top))].map((dy) => ({ x: home.x, y: home.y + dy })),
-      ...[...offsets(1, X_REACH * (plot.right - plot.left))].map((dx) => ({ x: home.x + dx, y: home.y })),
-    ]
-    for (const spot of first) {
-      const above = sideAt(spot)
-      if (above !== null) { found = { spot, above }; break }
+    const firstOf = (spots: Spot[]) => {
+      for (const spot of spots) {
+        if (found !== null) return
+        const above = sideAt(spot)
+        if (above !== null) found = { spot, above }
+      }
     }
-    if (found === null) {
-      // The nearest free place there is.
+    /** The nearest free place no further than `reachX` sideways and `reachY` up or down. */
+    const nearestIn = (reachX: number, reachY: number) => {
       let nearest = Infinity
-      for (const dx of offsets(1, size.width)) {
+      for (const dx of offsets(1, reachX)) {
         if (Math.abs(dx) >= nearest) break
-        for (const dy of offsets(-1, size.height)) {
+        for (const dy of offsets(-1, reachY)) {
           if (Math.abs(dy) >= nearest) break
           const far = Math.hypot(dx, dy)
           if (far >= nearest) continue
@@ -240,9 +273,19 @@ export function layoutMap(items: MapItem[], size: MapSize, today: string): Place
         }
       }
     }
-    const at = found?.spot ?? clear ?? clearest.spot
-    const labelAbove = found?.above ?? false
-    const boxes = nameBoxes(item, at, r, plot)
+    const upOrDown = (reach: number) => [...offsets(-1, reach)].map((dy) => ({ x: home.x, y: home.y + dy }))
+    const sideways = (reach: number) => [...offsets(1, reach)].map((dx) => ({ x: home.x + dx, y: home.y }))
+    // No further than its own radius, which needs no line: up or down, then sideways, then both at once.
+    firstOf([...upOrDown(r), ...sideways(r)])
+    if (found === null) nearestIn(r, r)
+    // Further: up or down, then sideways, within the reaches; and failing those, the nearest free place there is.
+    if (found === null) firstOf([...upOrDown(inBand ? 0 : Y_REACH * (scaleBottom - inset.top)), ...sideways(X_REACH * (inset.right - inset.left))])
+    if (found === null) nearestIn(size.width, size.height)
+    const settled = found as { spot: Spot; above: boolean } | null
+    const at = settled?.spot ?? clear ?? clearest.spot
+    const boxes = nameBoxes(item, at, r, inset)
+    // With no free place its name is still kept off the clear space, when one of the two sides is.
+    const labelAbove = settled?.above ?? (!inFrame(boxes.under) && inFrame(boxes.above))
     placed.push({
       key: item.key, x: at.x, y: at.y, r, labelAbove, labelShift: boxes.shift, home,
       displaced: Math.abs(at.x - home.x) > r || Math.abs(at.y - home.y) > r,

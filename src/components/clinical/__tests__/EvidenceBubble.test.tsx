@@ -143,7 +143,12 @@ describe("a bubble of the evidence summary", () => {
     expect(boxes.every((box) => box.className.includes("items-center") && box.className.includes("justify-center"))).toBe(true)
     expect(boxes.map((box) => box.querySelector("svg")!.getAttribute("width"))).toEqual(["54", "144"])
     expect(qa("button").every((button) => button.className.includes("w-full"))).toBe(true)
-    expect(qa("[data-name]").every((name) => name.className.includes("min-h-8") && name.className.includes("leading-4"))).toBe(true)
+    // Two lines of 18 px for a name of 14 px in medium weight; the number in a disc is 15 px, semibold.
+    expect(qa("[data-name]").every((name) => ["min-h-9", "leading-[18px]", "text-[14px]", "font-medium"].every((each) => name.className.split(" ").includes(each)))).toBe(true)
+    expect(qa("[data-number]").map((number) => [number.getAttribute("font-size"), number.getAttribute("font-weight")])).toEqual([["15", "600"], ["15", "600"]])
+    expect(q("button[data-bubble=a] [data-participants]").className).toContain("text-[12px]")
+    // The disc grows a little under the pointer.
+    expect(qa("button [data-disc-box] > span").every((ground) => ["transition-transform", "group-hover:scale-105"].every((each) => ground.className.split(" ").includes(each)))).toBe(true)
     expect(q("button[data-bubble=a] [data-participants]").textContent).toBe("48 participants")
     expect(q("button[data-bubble=a]").getAttribute("aria-label")).toBe("A: 1 paper; 48 participants in 1 of 1 paper")
     expect(q("button[data-bubble=b] [data-participants]")).toBeNull()

@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
-import { EvidenceMap, type MapEntry } from "../EvidenceMap"
+import { EvidenceMap, MapLegend, type MapEntry } from "../EvidenceMap"
 import { layoutMap, MAP_SIZE, mapScales } from "../evidence-map"
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -27,7 +27,7 @@ const ENTRIES: MapEntry[] = [
   entry("digital", { name: "Digital tools", papers: 1, participants: null, sized: 0, dates: ["2026"] }),
 ]
 const show = (entries: MapEntry[] = ENTRIES, chosen: string | null = null, onPick: (key: string) => void = () => {}) =>
-  render(<EvidenceMap label="Classes of treatment" entries={entries} chosen={chosen} onPick={onPick} today={TODAY} />)
+  render(<EvidenceMap label="Classes of treatment" entries={entries} chosen={chosen} onPick={onPick} />)
 const percent = (value: number, of: number) => `${Number(((value / of) * 100).toFixed(2))}%`
 const items = (entries: MapEntry[]) => entries.map((each) => ({ key: each.key, name: each.name, papers: each.papers, participants: each.participants, dates: each.dates }))
 const num = (element: Element, name: string) => Number(element.getAttribute(name))
@@ -39,15 +39,25 @@ describe("the map of treatments", () => {
     expect(pictures).toHaveLength(1)
     expect(pictures[0].getAttribute("aria-hidden")).toBe("true")
     expect(pictures[0].getAttribute("viewBox")).toBe(`0 0 ${MAP_SIZE.width} ${MAP_SIZE.height}`)
-    const scales = mapScales(items(ENTRIES), MAP_SIZE, TODAY)
-    // From 10 March to 8 October 2026: seven months begin in it.
-    expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["Apr 2026", "May 2026", "Jun 2026", "Jul 2026", "Aug 2026", "Sep 2026", "Oct 2026"])
+    const scales = mapScales(items(ENTRIES), MAP_SIZE)
+    // The bubbles are at May, 1 July and 28 September 2026: with a little more at each end, five months begin in that.
+    expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["Jun 2026", "Jul 2026", "Aug 2026", "Sep 2026", "Oct 2026"])
     expect(qa(`${WIDE} [data-tick-x]`).map((tick) => num(tick, "x"))).toEqual(scales.ticksX.map((tick) => tick.x))
     // 1,240 is the largest: the scale runs to 10,000, written from the bottom up.
     expect(qa(`${WIDE} [data-tick-y]`).map((tick) => tick.textContent)).toEqual(["10", "100", "1,000", "10,000"])
     expect(qa(`${WIDE} [data-tick-y]`).map((tick) => num(tick, "y"))).toEqual(scales.ticksY.map((tick) => tick.y))
     expect(num(qa(`${WIDE} [data-tick-y]`)[0], "y")).toBeGreaterThan(num(qa(`${WIDE} [data-tick-y]`)[3], "y"))
-    expect(qa(`${WIDE} [data-guide]`)).toHaveLength(4)
+    // Very light lines across and up, one per tick, inside a light frame; no line of an axis.
+    const [across, up] = [qa(`${WIDE} line[data-guide=y]`), qa(`${WIDE} line[data-guide=x]`)]
+    expect(across.map((line) => num(line, "y1"))).toEqual(scales.ticksY.map((tick) => tick.y))
+    expect(up.map((line) => num(line, "x1"))).toEqual(scales.ticksX.map((tick) => tick.x))
+    expect([...across, ...up].every((line) => line.getAttribute("stroke")!.startsWith("color-mix(") && line.getAttribute("stroke-width") === "1")).toBe(true)
+    expect(up.every((line) => num(line, "y1") === scales.plot.top && num(line, "y2") === scales.plot.bottom)).toBe(true)
+    expect(across.every((line) => num(line, "x1") === scales.plot.left && num(line, "x2") === scales.plot.right)).toBe(true)
+    expect(qa(`${WIDE} svg[data-map-axes] line`)).toHaveLength(across.length + up.length)
+    const frame = q(`${WIDE} rect[data-plot-frame]`)
+    expect([num(frame, "x"), num(frame, "y"), num(frame, "width"), num(frame, "height")]).toEqual([scales.plot.left, scales.plot.top, scales.plot.right - scales.plot.left, scales.plot.bottom - scales.plot.top])
+    expect([frame.getAttribute("fill"), frame.getAttribute("stroke")]).toEqual(["none", across[0].getAttribute("stroke")])
     expect(q(`${WIDE} [data-axis-title="x"]`).textContent).toBe("Most recent publication date")
     // The title of the y axis is written along it, turned a quarter, in the middle of its height; none is over the plot.
     const along = qa(`${WIDE} [data-axis-title="y"]`)
@@ -65,22 +75,35 @@ describe("the map of treatments", () => {
     expect(pictures[0].innerHTML).not.toMatch(/#[0-9a-f]{3,8}\b/i)
   })
 
-  it("names only the months there is room for, and the years when the papers reach back over eighteen months", async () => {
-    await show([entry("a", { dates: ["2025-05-08"] })])
-    expect(qa(`${WIDE} [data-tick-mark]`)).toHaveLength(17)
+  it("names a tick a week by its day, only the months there is room for, and the years when the bubbles are over eighteen months apart", async () => {
+    // Four weeks: a tick on each Monday, named by its month and day.
+    await show([entry("a", { dates: ["2026-09-01"] }), entry("b", { dates: ["2026-09-29"], participants: 10 })])
+    expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["Aug 31", "Sep 7", "Sep 14", "Sep 21", "Sep 28"])
+    expect(qa(`${WIDE} line[data-guide=x]`)).toHaveLength(5)
+    document.body.innerHTML = ""
+    // Fifteen months: a line a month, a name every third.
+    await show([entry("a", { dates: ["2025-07-01"] }), entry("b", { participants: 10 })])
+    expect(qa(`${WIDE} line[data-guide=x]`)).toHaveLength(18)
     expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["Jun 2025", "Sep 2025", "Dec 2025", "Mar 2026", "Jun 2026", "Sep 2026"])
     document.body.innerHTML = ""
-    await show([entry("a", { dates: ["2023-01-20"] })])
-    expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["2024", "2025", "2026"])
+    await show([entry("a", { dates: ["2023-01-20"] }), entry("b", { participants: 10 })])
+    expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["2023", "2024", "2025", "2026", "2027"])
+    // One bubble alone: twenty-one days around it, by the week. Today is not on the scale.
+    document.body.innerHTML = ""
+    await show([entry("a", { dates: ["2025-05-08"] })])
+    expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["Apr 28", "May 5", "May 12"])
   })
 
   it("shades a band named not stated along the bottom only when an item states no participants", async () => {
     await show()
-    const scales = mapScales(items(ENTRIES), MAP_SIZE, TODAY)
+    const scales = mapScales(items(ENTRIES), MAP_SIZE)
     const band = q(`${WIDE} [data-band]`)
     expect([num(band, "x"), num(band, "y"), num(band, "width"), num(band, "height")]).toEqual([scales.plot.left, scales.band!.top, scales.plot.right - scales.plot.left, scales.band!.bottom - scales.band!.top])
-    expect(q(`${WIDE} [data-band-label]`).textContent).toBe("not stated")
-    expect(num(q(`${WIDE} [data-band-label]`), "y")).toBeGreaterThan(scales.band!.top)
+    // A subtle tint, and a small muted name beside it, where the names of the ticks are: no bubble is over it.
+    expect(band.getAttribute("fill")).toMatch(/^color-mix\(in srgb, var\(--text-muted\) \d%, transparent\)$/)
+    const name = q(`${WIDE} [data-band-label]`)
+    expect(name.textContent).toBe("not stated")
+    expect([num(name, "x"), num(name, "y"), name.getAttribute("text-anchor"), name.getAttribute("font-size"), name.getAttribute("fill")]).toEqual([scales.plot.left - 8, scales.bandY, "end", "12", "var(--text-muted)"])
     expect(q(`${WIDE} button[data-bubble=digital]`).style.top).toBe(percent(scales.bandY!, MAP_SIZE.height))
     document.body.innerHTML = ""
     await show(ENTRIES.slice(0, 2))
@@ -95,7 +118,7 @@ describe("the map of treatments", () => {
     document.body.innerHTML = ""
     const undated = [...ENTRIES, entry("lifestyle", { name: "Lifestyle", dates: [] })]
     await show(undated)
-    const scales = mapScales(items(undated), MAP_SIZE, TODAY)
+    const scales = mapScales(items(undated), MAP_SIZE)
     const column = q(`${WIDE} [data-column]`)
     expect([num(column, "x"), num(column, "width")]).toEqual([scales.column!.left, scales.column!.right - scales.column!.left])
     expect(q(`${WIDE} [data-column-label]`).textContent).toBe("no date")
@@ -109,8 +132,9 @@ describe("the map of treatments", () => {
     expect(box.getAttribute("role")).toBe("group")
     expect(box.getAttribute("aria-label")).toBe("Classes of treatment")
     expect(box.className).toContain("relative")
-    expect(box.className).toContain("aspect-[680/400]")
-    const placed = new Map(layoutMap(items(ENTRIES), MAP_SIZE, TODAY).map((each) => [each.key, each]))
+    expect(box.className).toContain("aspect-[720/460]")
+    expect(box.className).toContain("max-w-[720px]")
+    const placed = new Map(layoutMap(items(ENTRIES), MAP_SIZE).map((each) => [each.key, each]))
     const buttons = qa(`${WIDE} button[data-bubble]`)
     expect(buttons).toHaveLength(3)
     for (const button of buttons) {
@@ -145,31 +169,45 @@ describe("the map of treatments", () => {
     expect(qa(`${WIDE} svg[data-map-axes] line[data-leader]`)).toHaveLength(0)
   })
 
-  it("has the three colours of the doughnuts in a small list beside the map, one under the other", async () => {
+  it("has no list of the colours over the plot or over the grid: its owner draws the three pills", async () => {
     await show()
-    const legend = q(`${WIDE} [data-map-legend]`)
-    expect(legend.className).toContain("flex-col")
-    expect(q(`${WIDE} [data-map-box]`).contains(legend)).toBe(false)
-    expect(q(`${WIDE} [data-map-box]`).parentElement).toBe(legend.parentElement)
-    expect(legend.parentElement!.className).toContain("flex")
-    expect(q(`${WIDE} [data-map-box]`).compareDocumentPosition(legend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    const entries = [...legend.querySelectorAll("[data-key-kind]")] as HTMLElement[]
+    expect(q("[data-map-legend]")).toBeNull()
+    document.body.innerHTML = ""
+    await render(<MapLegend />)
+    const legend = q("ul[data-map-legend]")
+    const entries = [...legend.querySelectorAll("li[data-key-kind]")] as HTMLElement[]
     expect(entries.map((each) => [each.getAttribute("data-key-kind"), each.textContent])).toEqual([["benefit", "Benefit"], ["no-benefit", "No benefit"], ["mixed", "Mixed"]])
+    expect(entries.every((each) => each.className.split(" ").includes("rounded-pill"))).toBe(true)
     expect(entries.map((each) => (each.querySelector("[data-swatch]") as HTMLElement).style.backgroundColor)).toEqual(["var(--clinical-benefit)", "var(--clinical-no-benefit)", expect.stringContaining("var(--text-muted)")])
     expect(entries.every((each) => each.querySelector("[data-swatch]")!.getAttribute("aria-hidden") === "true")).toBe(true)
-    // The grid of a narrow screen has them too, in a row over the tiles.
-    expect([...q(`${NARROW} [data-map-legend]`).querySelectorAll("[data-key-kind]")].map((each) => each.textContent)).toEqual(["Benefit", "No benefit", "Mixed"])
-    expect(q(`${NARROW} [data-map-legend]`).className).not.toContain("flex-col")
   })
 
-  it("writes a name in 13 px with nothing behind it, and the number of a bubble in 14 px", async () => {
-    await show(ENTRIES, "medicine")
+  it("writes a name in 14 px, medium, with nothing behind it, its marks in 12 px, and the number of a bubble in 15 px, semibold", async () => {
+    await show([...ENTRIES, entry("x", { newPapers: 1, dates: ["2026-08-10"], participants: 10 })], "medicine")
     for (const label of qa(`${WIDE} button[data-bubble] [data-label]`)) {
       expect(label.className).not.toMatch(/(^| )bg-/)
       expect(label.className).not.toMatch(/(^| )rounded/)
-      expect(label.querySelector("[data-name]")!.className).toContain("text-[13px]")
+      expect(label.querySelector("[data-name]")!.className.split(" ")).toEqual(expect.arrayContaining(["text-[14px]", "leading-[18px]", "max-w-[120px]"]))
     }
-    expect(qa(`${WIDE} button[data-bubble] [data-number]`).map((number) => number.getAttribute("font-size"))).toEqual(["14", "14", "14"])
+    expect(q(`${WIDE} button[data-bubble=psychotherapy] [data-name]`).className.split(" ")).toContain("font-medium")
+    expect(q(`${WIDE} button[data-bubble=medicine] [data-name]`).className.split(" ")).toContain("font-semibold")
+    expect(qa(`${WIDE} [data-marks]`).every((marks) => marks.className.split(" ").includes("text-[12px]"))).toBe(true)
+    expect(qa(`${WIDE} [data-marks]`).length).toBeGreaterThan(0)
+    expect(qa(`${WIDE} button[data-bubble] [data-number]`).map((number) => [number.getAttribute("font-size"), number.getAttribute("font-weight")])).toEqual(Array(4).fill(["15", "600"]))
+  })
+
+  it("grows the disc of a bubble a little under the pointer, with a transition, and not its name", async () => {
+    await show(ENTRIES, "medicine")
+    for (const button of qa(`${WIDE} button[data-bubble]`)) {
+      expect(button.className.split(" ")).toContain("group")
+      const disc = button.querySelector("[data-bubble-disc]") as HTMLElement
+      const classes = disc.className.split(" ")
+      expect(classes).toEqual(expect.arrayContaining(["group-hover:scale-105", "transition-transform", "motion-reduce:transition-none"]))
+      expect(classes.some((name) => name.startsWith("duration-"))).toBe(true)
+      expect(disc.firstElementChild!.tagName.toLowerCase()).toBe("svg")
+      expect(disc.contains(button.querySelector("[data-label]"))).toBe(false)
+      expect(button.children).toHaveLength(2)
+    }
   })
 
   it("names each bubble, keeps its marks on one line, and says its newest paper and its participants in words", async () => {
@@ -195,7 +233,7 @@ describe("the map of treatments", () => {
     const long = "A rather long name"
     const stacked = [entry("a", { name: long, papers: 4 }), entry("b", { name: long })]
     await show(stacked)
-    const places = layoutMap(items(stacked), MAP_SIZE, TODAY)
+    const places = layoutMap(items(stacked), MAP_SIZE)
     const [a, b] = ["a", "b"].map((key) => q(`${WIDE} button[data-bubble=${key}]`))
     expect(a.querySelector("[data-label]")!.getAttribute("data-label")).toBe("under")
     expect(a.querySelector("[data-label]")!.className).toContain("top-full")
@@ -215,7 +253,7 @@ describe("the map of treatments", () => {
   it("draws no line for a bubble moved by less than its radius, and one for each moved further, up or down or sideways", async () => {
     const close = [entry("a", { papers: 2 }), entry("b", { participants: 160 })]
     await show(close)
-    const near = layoutMap(items(close), MAP_SIZE, TODAY)
+    const near = layoutMap(items(close), MAP_SIZE)
     expect(near[1].y).not.toBe(near[1].home.y)
     expect(near[1].displaced).toBe(false)
     expect(qa(`${WIDE} [data-leader]`)).toHaveLength(0)
@@ -223,7 +261,7 @@ describe("the map of treatments", () => {
     document.body.innerHTML = ""
     const crowd = Array.from({ length: 4 }, (_, at) => entry(`k${at}`, { participants: null, sized: 0, dates: ["2026-08-20"] }))
     await show(crowd)
-    const moved = layoutMap(items(crowd), MAP_SIZE, TODAY).filter((place) => place.displaced)
+    const moved = layoutMap(items(crowd), MAP_SIZE).filter((place) => place.displaced)
     expect(moved).toHaveLength(3)
     expect(qa(`${WIDE} svg[data-map-axes] line[data-leader]`).map((line) => line.getAttribute("data-leader"))).toEqual(moved.map((place) => place.key))
     expect(qa(`${WIDE} svg[data-map-axes] circle[data-home]`)).toHaveLength(3)
@@ -232,7 +270,7 @@ describe("the map of treatments", () => {
   it("shifts a name that would run out of the picture, by the px the layout says", async () => {
     const edge = [entry("a", { newPapers: 12, safetyPapers: 12, comparatorPapers: 12 }), entry("c", { dates: ["2026-08-20"], participants: 10 })]
     await show(edge)
-    const places = layoutMap(edge.map((each, at) => ({ ...items(edge)[at], marks: at === 0 ? "+12 new · 12 safety · compared in 12" : undefined })), MAP_SIZE, TODAY)
+    const places = layoutMap(edge.map((each, at) => ({ ...items(edge)[at], marks: at === 0 ? "+12 new · 12 safety · compared in 12" : undefined })), MAP_SIZE)
     expect(places[0].labelShift).toBeLessThan(0)
     expect(q(`${WIDE} button[data-bubble=a] [data-label]`).style.marginLeft).toBe(`${places[0].labelShift}px`)
     expect(q(`${WIDE} button[data-bubble=c] [data-label]`).style.marginLeft).toBe("")
@@ -322,7 +360,7 @@ describe("the map of treatments", () => {
     document.body.innerHTML = ""
     const unsized = [entry("a", { participants: null, sized: 0, dates: ["2026-08-01"] }), entry("b", { participants: null, sized: 0, dates: ["2026-10-01"] })]
     await show(unsized)
-    const scales = mapScales(items(unsized), MAP_SIZE, TODAY)
+    const scales = mapScales(items(unsized), MAP_SIZE)
     expect(qa(`${WIDE} button[data-bubble]`).map((button) => button.style.top)).toEqual(Array(2).fill(percent(scales.bandY!, MAP_SIZE.height)))
     expect(parseFloat(q(`${WIDE} button[data-bubble=a]`).style.left)).toBeLessThan(parseFloat(q(`${WIDE} button[data-bubble=b]`).style.left))
     expect(qa(`${WIDE} [data-tick-y]`).map((tick) => tick.textContent)).toEqual(["10", "100", "1,000"])

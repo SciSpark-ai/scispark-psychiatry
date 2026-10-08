@@ -6,7 +6,7 @@ import { loadConditionEvidenceRemote } from "@/lib/clinical/evidence/client"
 import type { ClassEvidence, ConditionEvidence as Evidence, Period, Scope, Study } from "@/lib/clinical/evidence/build"
 import { BubbleGrid, discBoxHeight } from "./BubbleGrid"
 import { EvidenceBubble } from "./EvidenceBubble"
-import { EvidenceMap, type MapEntry } from "./EvidenceMap"
+import { EvidenceMap, MapLegend, type MapEntry } from "./EvidenceMap"
 import { classNameOf } from "./evidence-labels"
 import { ResearchList } from "./ResearchList"
 import { StudyTable } from "./StudyTable"
@@ -19,7 +19,11 @@ type Loaded = { condition: string; period: Period; scope: Scope; evidence: Evide
 /** What the reader has chosen in each section: a class and one of its treatments, a safety group, a research group. */
 interface Chosen { classKey: string | null; treatment: string | null; safety: string | null; research: string | null }
 const NOTHING: Chosen = { classKey: null, treatment: null, safety: null, research: null }
-const EMPTY = "py-2 text-[14px] text-muted-text"
+/** What the button beside the Treatments heading shows. */
+const ABOUT_NOTES = [E.about.text, E.about.moved]
+const EMPTY = "text-[15px] text-muted-text"
+/** A section is a card: the surface and the radius of the app's cards, a warm border at low opacity, 20 px of padding and 24 where the map is drawn. */
+const CARD = "rounded-card border border-border-warm/60 bg-light-surface p-5 sm:p-6"
 
 const periodPhrase = (period: Exclude<Period, "all">) => E.periodPhrases[period]
 
@@ -41,35 +45,60 @@ const datesOf = (studies: Study[]): string[] => studies.flatMap((study) => (stud
 const classDates = (cls: ClassEvidence): string[] => datesOf([...new Map(cls.treatments.flatMap((entry) => entry.studies).map((study) => [study.key, study])).values()])
 
 /**
- * The small button beside a heading: what it is about is its title, and is shown under the heading on a press or
- * while it has the keyboard. Escape puts it away.
+ * The small button beside a heading: what it is about is its title, and its notes are shown under the heading on a
+ * press or while it, or the button that closes them, has the keyboard. That button and Escape put them away, with the
+ * keyboard back on the small button; so does the keyboard leaving both.
  */
-function About({ label, text }: { label: string; text: string }) {
+function About({ label, notes }: { label: string; notes: string[] }) {
   const id = useId()
   const [open, setOpen] = useState(false)
+  const holder = useRef<HTMLSpanElement>(null)
+  const button = useRef<HTMLButtonElement>(null)
+  // The keyboard is put back on the button without that opening the notes again.
+  const quiet = useRef(false)
+  const close = () => {
+    setOpen(false)
+    quiet.current = true
+    button.current?.focus()
+    quiet.current = false
+  }
   return (
-    <>
-      <button type="button" data-about="true" aria-label={label} title={text} aria-expanded={open} aria-describedby={open ? id : undefined}
-        onClick={() => setOpen(true)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false) }}
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-warm text-[12px] font-semibold leading-none text-muted-text hover:text-espresso focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">{E.about.mark}</button>
-      {open && <p id={id} role="note" data-about-text="true" className="absolute left-0 top-full z-20 mt-1 w-80 max-w-[80vw] rounded-card border border-border-warm bg-light-surface p-3 text-[13px] leading-snug text-secondary-dark shadow-md">{text}</p>}
-    </>
+    <span ref={holder} data-about-holder="true" className="inline-flex"
+      onBlur={(event) => { if (!holder.current?.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={(event) => { if (open && event.key === "Escape") close() }}>
+      <button ref={button} type="button" data-about="true" aria-label={label} title={notes[0]} aria-expanded={open} aria-describedby={open ? id : undefined}
+        onClick={() => setOpen(true)} onFocus={() => { if (!quiet.current) setOpen(true) }}
+        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border-warm text-[13px] font-semibold leading-none text-muted-text transition-colors hover:text-espresso focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">{E.about.mark}</button>
+      {open && (
+        <div id={id} role="note" data-about-text="true" className="absolute left-0 top-full z-20 mt-2 w-96 max-w-[80vw] rounded-card border border-border-warm bg-light-surface p-4 pr-10 text-[14px] leading-snug text-secondary-dark shadow-md">
+          <button type="button" data-about-close="true" aria-label={E.about.close} title={E.about.close} onClick={close}
+            className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-[16px] leading-none text-muted-text hover:text-espresso focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">
+            <span aria-hidden="true">{E.about.closeMark}</span>
+          </button>
+          <div className="space-y-2">{notes.map((note) => <p key={note}>{note}</p>)}</div>
+        </div>
+      )}
+    </span>
   )
 }
 
-/** One of the three stacked sections: its name and how many distinct papers it has, a button about it when it has one, then its bubbles. */
-function Section({ name, count, about, children }: { name: SectionName; count: number; about?: ReactNode; children: ReactNode }) {
+/**
+ * One of the three stacked sections, in a card of its own: a row with its name, how many distinct papers it has in a
+ * small pill, a button about it when it has one and, at the right, what its owner puts there; and 16 px under that
+ * row, its bubbles.
+ */
+function Section({ name, count, about, aside, children }: { name: SectionName; count: number; about?: ReactNode; aside?: ReactNode; children: ReactNode }) {
   const id = useId()
   return (
-    <section data-section={name} aria-labelledby={id} className="mt-7">
-      <div className="relative flex items-center gap-2">
-        <h3 id={id} className="font-heading text-[19px] font-semibold tracking-heading text-espresso">
+    <section data-section={name} data-section-card={name} aria-labelledby={id} className={CARD}>
+      <div data-section-head="true" className="relative flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h3 id={id} className="flex items-center gap-2 font-heading text-[20px] font-semibold leading-7 tracking-heading text-espresso">
           <span>{E.sections[name]}</span>
-          <span data-section-count="true" className="ml-2 text-[13px] font-normal text-muted-text">{count}</span>
+          <span data-section-count="true" className="rounded-pill bg-card-surface px-2 py-0.5 text-[12px] font-normal leading-4 tracking-normal text-muted-text">{count}</span>
         </h3>
         {about}
+        {aside}
       </div>
-      {children}
+      <div data-section-body="true" className="mt-4">{children}</div>
     </section>
   )
 }
@@ -77,12 +106,11 @@ function Section({ name, count, about, children }: { name: SectionName; count: n
 /**
  * Treatments, Safety and Other research, one under the other. Nothing is chosen at first, so no study is listed until
  * the reader presses a bubble. Treatments is one map: of the classes, and once a class is pressed of its treatments, with
- * a crumb back to the classes. What is chosen in one section does not change another.
+ * a crumb back to the classes; the three colours of its bubbles are named in pills at the right of its heading. What
+ * is chosen in one section does not change another. The cards are 20 px apart.
  */
 function Sections({ evidence }: { evidence: Evidence }) {
   const [picked, setPicked] = useState<Chosen>(NOTHING)
-  // The day the map's time scale ends at: read once, when the sections are first drawn.
-  const [today] = useState(() => new Date().toISOString().slice(0, 10))
   // Another scope or period can take away what was chosen: it is then dropped for good, not kept for when it comes back.
   const chosen = stillThere(picked, evidence)
   if (chosen !== picked) setPicked(chosen)
@@ -108,28 +136,29 @@ function Sections({ evidence }: { evidence: Evidence }) {
     ;(buttons.find((button) => button.offsetParent !== null) ?? buttons[0])?.focus()
   }, [chosen.classKey])
   const leaveClass = () => { backFrom.current = chosen.classKey; choose({ classKey: null, treatment: null }) }
+  const mapped = evidence.classes.length > 0
   return (
-    <>
-      <Section name="treatments" count={evidence.sections.treatments} about={evidence.classes.length > 0 ? <About label={E.about.label} text={E.about.text} /> : undefined}>
-        {evidence.classes.length === 0 ? <p data-empty="true" className={EMPTY}>{E.treatmentsEmpty}</p> : (
+    <div data-sections="true" className="mt-5 space-y-5">
+      <Section name="treatments" count={evidence.sections.treatments} about={mapped ? <About label={E.about.label} notes={ABOUT_NOTES} /> : undefined} aside={mapped ? <MapLegend /> : undefined}>
+        {!mapped ? <p data-empty="true" className={EMPTY}>{E.treatmentsEmpty}</p> : (
           <div ref={treatments}>
-            <div data-treatments-lines="true" className="mt-1 max-w-[720px] text-secondary-dark">
-              <p className="text-[13px]">{E.lines.one}</p>
-              <p className="text-[13px]"><span>{E.lines.colours}</span>{" "}<span data-map-only="true" className="hidden sm:inline">{E.lines.moved}</span></p>
+            <div data-treatments-lines="true" className="max-w-[720px] text-secondary-dark">
+              <p className="text-[15px] leading-6">{E.lines.one}</p>
+              <p className="text-[15px] leading-6">{E.lines.colours}</p>
             </div>
             {cls && className ? (
-              <div data-treatments={cls.key} className="mt-2">
-                <p data-crumb="true" className="text-[13px] text-secondary-dark">
+              <div data-treatments={cls.key} className="mt-4">
+                <p data-crumb="true" className="text-[14px] text-secondary-dark">
                   <button type="button" autoFocus onClick={leaveClass} className="text-accent-ink underline-offset-2 hover:underline">{E.allClasses}</button>
                   <span aria-hidden="true">{E.crumbGap}</span>
                   <span aria-current="true" className="font-semibold text-espresso">{className}</span>
                 </p>
-                <EvidenceMap label={E.rows.treatments(className)} entries={treatmentEntries} chosen={chosen.treatment} today={today} onPick={(key) => choose({ treatment: key === chosen.treatment ? null : key })} />
+                <EvidenceMap label={E.rows.treatments(className)} entries={treatmentEntries} chosen={chosen.treatment} onPick={(key) => choose({ treatment: key === chosen.treatment ? null : key })} />
                 {treatment && <TreatmentDetail key={treatment.key} treatment={treatment} />}
               </div>
             ) : (
               <div data-classes="true">
-                <EvidenceMap label={E.rows.classes} entries={classEntries} chosen={null} today={today} onPick={(key) => choose({ classKey: key, treatment: null })} />
+                <EvidenceMap label={E.rows.classes} entries={classEntries} chosen={null} onPick={(key) => choose({ classKey: key, treatment: null })} />
               </div>
             )}
           </div>
@@ -144,7 +173,7 @@ function Sections({ evidence }: { evidence: Evidence }) {
                   pressed={group.key === chosen.safety} onPick={() => choose({ safety: group.key === chosen.safety ? null : group.key })} />
               ))}
             </BubbleGrid>
-            {harms && <div className="pt-1"><StudyTable key={harms.key} studies={harms.studies} kind="safety" caption={harms.name} /></div>}
+            {harms && <div className="pt-4"><StudyTable key={harms.key} studies={harms.studies} kind="safety" caption={harms.name} /></div>}
           </>
         )}
       </Section>
@@ -152,7 +181,7 @@ function Sections({ evidence }: { evidence: Evidence }) {
         {evidence.research.length === 0 ? <p data-empty="true" className={EMPTY}>{E.researchEmpty}</p>
           : <ResearchList groups={evidence.research} chosen={chosen.research} onChoose={(research) => choose({ research })} />}
       </Section>
-    </>
+    </div>
   )
 }
 
@@ -165,8 +194,7 @@ function basisOf(evidence: Evidence, phrase: string | null): string {
 
 /**
  * The evidence the reader's feed has seen on one condition (spec D53): the classes of treatment as bubbles on a map,
- * the treatments of a chosen class on the same map, and for a chosen treatment what its papers found, a dot per paper and the
- * table of them; the safety papers and the other research, as bubbles with their tables; and, folded away,
+ * the treatments of a chosen class on the same map, and for a chosen treatment the table of its papers; the safety papers and the other research, as bubbles with their tables; and, folded away,
  * when the papers came out. Counted on the server from the stored findings.
  * Papers are counted, never pooled. Which papers (`scope`) and of what time (`period`) is the caller's to
  * say: the Evidence view keeps both in its address; a page's fenced block asks for everything.
@@ -188,11 +216,11 @@ export function ConditionEvidence({ condition, scope = "all", period = "all", on
   }, [condition, period, scope, onLoaded])
 
   const current = loaded && loaded.condition === condition ? loaded : null
-  if (!condition) return <p className="my-4 text-[13px] text-muted-text">{E.notAQuery}</p>
-  if (current?.error) return <p role="alert" className="my-4 text-[13px] text-accent-ink">{current.error}</p>
+  if (!condition) return <p className="my-4 text-[15px] text-muted-text">{E.notAQuery}</p>
+  if (current?.error) return <p role="alert" className="my-4 text-[15px] text-accent-ink">{current.error}</p>
   const evidence = current?.evidence ?? null
-  if (!evidence) return <p className="my-4 text-[13px] text-muted-text">{E.loading}</p>
-  if (evidence.collected === 0) return <p className="my-4 text-[14px] text-muted-text">{E.empty(evidence.condition.name)}</p>
+  if (!evidence) return <p className="my-4 text-[15px] text-muted-text">{E.loading}</p>
+  if (evidence.collected === 0) return <p className="my-4 text-[15px] text-muted-text">{E.empty(evidence.condition.name)}</p>
   const name = evidence.condition.name
   const phrase = evidence.period === "all" ? null : periodPhrase(evidence.period)
   const saved = evidence.scope === "saved"
@@ -203,9 +231,9 @@ export function ConditionEvidence({ condition, scope = "all", period = "all", on
     : phrase !== null ? (saved ? E.emptySavedPeriod(name, phrase, evidence.savedCount) : E.emptyPeriod(name, phrase, evidence.collected))
     : null
   return (
-    <div data-testid="condition-evidence" aria-busy={pending ? "true" : undefined} className={pending ? "my-4 opacity-60 transition-opacity" : "my-4"}>
-      <p data-testid="evidence-basis" className="text-[13px] text-muted-text">{basisOf(evidence, phrase)}</p>
-      {nothing !== null ? <p data-nothing="true" className="mt-4 text-[14px] text-muted-text">{nothing}</p> : <Sections key={evidence.condition.code} evidence={evidence} />}
+    <div data-testid="condition-evidence" aria-busy={pending ? "true" : undefined} className={pending ? "my-4 text-[15px] opacity-60 transition-opacity" : "my-4 text-[15px]"}>
+      <p data-testid="evidence-basis" className="text-[14px] text-muted-text">{basisOf(evidence, phrase)}</p>
+      {nothing !== null ? <p data-nothing="true" className="mt-4 text-[15px] text-muted-text">{nothing}</p> : <Sections key={evidence.condition.code} evidence={evidence} />}
     </div>
   )
 }

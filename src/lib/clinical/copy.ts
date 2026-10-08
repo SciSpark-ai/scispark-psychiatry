@@ -1,5 +1,3 @@
-/** Several short findings as one line: each without its own full stop, a semicolon between them, one full stop at the end. */
-const joinFindings = (texts: string[]) => `${texts.map((text) => text.trim().replace(/\.+$/, "")).join("; ")}.`
 
 /** All clinical-edition wording lives here, so a later language layer and legal review touch one file. */
 /** The short names of the months, for an axis of time. */
@@ -366,15 +364,16 @@ export const CLINICAL_COPY = {
     safetyMark: (count: number) => `${count} safety`,
     /** Under the bubble of a treatment that other papers used as their comparator. Those papers are not in its number or its colours. */
     comparedMark: (count: number) => `compared in ${count}`,
-    /** The two lines over the map of treatments. The last sentence is of the map only: the grid of a narrow screen moves nothing. */
+    /** The two lines over the map of treatments. */
     lines: {
       one: "Each bubble is a treatment; its size is the number of papers.",
-      colours: "Colours are an AI reading of each abstract.",
-      moved: "Bubbles that would overlap are moved apart; a line shows where one belongs.",
+      colours: "Colour shows whether the treatment was beneficial or not, based on an AI reading of the abstract.",
     },
     /** The small button beside the Treatments heading, and what it shows: what a count and a place on the map do not say. */
     about: {
-      mark: "?", label: "How to read this map",
+      mark: "?", label: "How to read this map", close: "Close", closeMark: "×",
+      /** The second note, of the map only: the grid of a narrow screen moves nothing. */
+      moved: "On the map, bubbles that would overlap are moved apart; a line shows where one belongs.",
       text: "A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares two treatments counts for the one it tested; the other shows it as a comparison. Across is the date of its most recent paper. Up is the participants its papers report, added up: a paper that states none adds none, and the same people can be in more than one paper. Choose a treatment to see each paper.",
     },
     /**
@@ -405,6 +404,8 @@ export const CLINICAL_COPY = {
       tick: (value: number) => value.toLocaleString("en-US"),
       /** A month of a year, or a year alone, on the axis and in the grid of a narrow screen. `month` is 1 to 12. */
       when: (year: number, month: number | null) => (month === null ? `${year}` : `${MONTHS[month - 1]} ${year}`),
+      /** A day on the axis, when it has a tick a week. */
+      day: (month: number, day: number) => `${MONTHS[month - 1]} ${day}`,
       /** Under a name in the grid of a narrow screen: when its newest paper was published, then its participants. */
       tileLine: (when: string | null, count: number | null) =>
         `${when ?? "no date"} · ${count === null ? "participants not stated" : `${count.toLocaleString("en-US")} ${count === 1 ? "participant" : "participants"}`}`,
@@ -426,26 +427,14 @@ export const CLINICAL_COPY = {
     /** Between the two parts of the crumb line. */
     crumbGap: " › ",
     kindLabels: { benefit: "Benefit", "no-benefit": "No benefit", mixed: "Mixed", safety: "Safety", other: "Other" },
-    /** A line of a treatment: what its papers found, in each paper's few words. Each text loses its own full stop; the line ends with one. */
-    lineLabel: (label: string) => `${label}:`,
-    lineText: (texts: string[]) => joinFindings(texts),
-    unreported: (count: number, name: string) => `${count} more ${count === 1 ? "paper" : "papers"} on ${name} ${count === 1 ? "is" : "are"} not sorted as benefit, no benefit or mixed (see Other research).`,
+    /** The line over a table: whose papers they are, and how many. */
+    tableHeading: (name: string, count: number) => `${name} · ${count} ${count === 1 ? "paper" : "papers"}`,
     /**
-     * Under the lines of a treatment: the papers of another treatment that used this one as their comparator. The result
-     * of each is of the treatment that paper tested, so it is written after that treatment's name, in the paper's own words.
+     * Under the table of a treatment: the papers of another treatment that used this one as their comparator, in a table
+     * of their own. The result of each is of the treatment that paper tested, which has its own column.
      */
-    comparedIn: (count: number) => `Used as the comparison in ${count} ${count === 1 ? "paper" : "papers"}:`,
-    comparedResult: (treatment: string | null, text: string) => `${treatment ?? "The treatment it tested"}: ${joinFindings([text])}`,
-    /** The plot of a treatment's papers: a row per tier of design, a dot per paper. */
-    plot: {
-      label: (name: string) => `Papers on ${name}, by design and by what they found`,
-      tiers: { synthesis: "Reviews and meta-analyses", trial: "Trials", observational: "Observational and other" },
-      /** `treatments`: the paper's own words for its treatments, when it has several: its one direction is not of this treatment alone. */
-      dot: (label: string, direction: string, text: string | null, size: number | null, treatments: string | null = null) =>
-        `${label}${treatments ? ` (${treatments})` : ""}: ${direction}${text ? ` (${text})` : ""}, n = ${size ?? "not stated"}`,
-      key: "Each dot is one paper. Larger dots have more participants. A hollow dot: participants not stated.",
-    },
-    columns: { study: "Study", design: "Design", size: "n", sizeTitle: "Participants, as the paper prints it", population: "Population", comparator: "Compared with", outcome: "Outcome", result: "Result", finding: "Finding", details: "Details" },
+    comparedName: "Used as the comparison",
+    columns: { study: "Study", design: "Design", size: "n", sizeTitle: "Participants, as the paper prints it", population: "Population", comparator: "Compared with", outcome: "Outcome", result: "Result", finding: "Finding", details: "Details", tested: "Treatment tested" },
     /** A cell whose value the paper does not state. */
     noValue: "–",
     studyMarks: { new: "new", saved: "saved" },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { arcPath, bubbleRadius, dotRadius, KIND_TEXT_COLOUR, pieSlices, SAFETY_COLOUR } from "../evidence-shapes"
+import { arcPath, bubbleRadius, KIND_TEXT_COLOUR, KIND_TINT, pieSlices, SAFETY_COLOUR } from "../evidence-shapes"
 
 describe("the shapes of the evidence summary", () => {
   it("writes the word Safety in the colour of text, and keeps the violet for the ring", () => {
@@ -30,11 +30,11 @@ describe("the shapes of the evidence summary", () => {
     expect(arcPath(10, 10, 10, 0.75, 1)).toBe("M 10 10 L 0 10 A 10 10 0 0 1 10 0 Z")
   })
 
-  it("sizes a dot by the logarithm of its participants, never over 16, and 5 when they are not known", () => {
-    expect(dotRadius(null)).toBe(5)
-    expect(dotRadius(9)).toBeCloseTo(8.6, 5)
-    expect(dotRadius(120)).toBeGreaterThan(dotRadius(20))
-    expect(dotRadius(120)).toBeLessThan(16)
-    expect(dotRadius(10_000_000)).toBe(16)
+  it("tints the pill of a direction with its colour at 12%, the violet for safety and the muted text for a neutral kind", () => {
+    expect(KIND_TINT.benefit).toBe("color-mix(in srgb, var(--clinical-benefit) 12%, transparent)")
+    expect(KIND_TINT["no-benefit"]).toBe("color-mix(in srgb, var(--clinical-no-benefit) 12%, transparent)")
+    expect(KIND_TINT.mixed).toBe("color-mix(in srgb, var(--text-muted) 12%, transparent)")
+    expect(KIND_TINT.safety).toBe("color-mix(in srgb, var(--viz-cat-3) 12%, transparent)")
+    expect(KIND_TINT.other).toBe("color-mix(in srgb, var(--text-muted) 12%, transparent)")
   })
 })

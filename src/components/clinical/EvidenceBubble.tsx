@@ -8,7 +8,9 @@ const HOLE = 0.6
 const RING_GAP = 3
 const FILL = "100%"
 /** The number of papers in a bubble, in px, at every size of bubble. */
-const NUMBER_SIZE = 14
+const NUMBER_SIZE = 15
+/** The disc grows a little under the pointer. */
+const GROW = "transition-transform duration-200 ease-out group-hover:scale-105 motion-reduce:transition-none"
 
 /**
  * The disc of a bubble, with its number: a ring divided by what the papers found, clockwise from 12 o'clock, or one
@@ -61,7 +63,7 @@ interface Props {
  * it and says so in words, after a small ring of the same colour. A treatment that papers of another treatment were
  * compared with says in words how many: they add nothing to the disc. The name has room for two lines, so what is
  * under it starts at one height in every tile. The chosen one has a light ground around its disc and a bold name; the
- * outline is kept for the keyboard's focus.
+ * outline is kept for the keyboard's focus. The disc grows a little under the pointer.
  */
 export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safetyPapers = 0, comparatorPapers = 0, discHeight, detail, position, pressed, onPick }: Props) {
   const radius = bubbleRadius(papers)
@@ -69,11 +71,11 @@ export function EvidenceBubble({ id, name, papers, efficacy, newPapers = 0, safe
     <button type="button" data-bubble={id} aria-pressed={pressed} aria-label={E.bubbleLabel(name, papers, efficacy ?? null, newPapers, safetyPapers, comparatorPapers, position ?? null)} onClick={onPick}
       className="group mx-auto flex w-full max-w-[168px] flex-col items-center gap-1 rounded-card p-1 text-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">
       <span data-disc-box="true" className="flex max-w-full items-center justify-center" style={discHeight === undefined ? undefined : { height: discHeight }}>
-        <span data-pressed-ground={pressed ? "true" : undefined} className={pressed ? "block max-w-full rounded-full bg-orange/20 ring-[6px] ring-orange/20" : "block max-w-full rounded-full outline-2 outline-offset-4 outline-transparent group-hover:outline-border-warm"}>
+        <span data-pressed-ground={pressed ? "true" : undefined} className={pressed ? `block max-w-full rounded-full bg-orange/20 ring-[6px] ring-orange/20 ${GROW}` : `block max-w-full rounded-full outline-2 outline-offset-4 outline-transparent group-hover:outline-border-warm ${GROW}`}>
           <BubbleDisc radius={radius} papers={papers} efficacy={efficacy} safetyPapers={safetyPapers} />
         </span>
       </span>
-      <span data-name="true" className={pressed ? "block min-h-8 text-[13px] font-semibold leading-4 text-espresso" : "block min-h-8 text-[13px] leading-4 text-secondary-dark"}>{name}</span>
+      <span data-name="true" className={pressed ? "block min-h-9 text-[14px] font-semibold leading-[18px] text-espresso" : "block min-h-9 text-[14px] font-medium leading-[18px] text-secondary-dark"}>{name}</span>
       {detail !== undefined && <span data-participants="true" className="block text-[12px] leading-tight text-muted-text">{detail}</span>}
       {newPapers > 0 && <span data-new="true" className="block text-[12px] font-semibold leading-tight text-accent-ink">{E.newCount(newPapers)}</span>}
       {safetyPapers > 0 && (

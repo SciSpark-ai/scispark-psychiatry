@@ -158,6 +158,20 @@ describe("the Evidence view", () => {
     expect(container.querySelector('[role="tabpanel"]')!.contains(select("Papers"))).toBe(false)
   })
 
+  it("underlines the chosen tab in the accent and writes it in semibold; the others are muted, and the two selects are pills", async () => {
+    await render()
+    const classes = (element: Element) => element.className.split(/\s+/)
+    const [chosen, other] = tabsOf(tablists()[0])
+    expect(classes(chosen)).toEqual(expect.arrayContaining(["border-b-2", "border-accent-ink", "text-[15px]", "font-semibold", "text-espresso"]))
+    expect(classes(other)).toEqual(expect.arrayContaining(["border-b-2", "border-transparent", "text-[15px]", "text-muted-text", "hover:text-espresso"]))
+    expect(classes(other)).not.toContain("font-semibold")
+    for (const each of [select("Papers"), select("Period")]) {
+      expect(classes(each)).toEqual(expect.arrayContaining(["rounded-pill", "border", "border-border-warm", "px-3", "text-[14px]", "hover:bg-card-surface", "focus-visible:outline-2"]))
+    }
+    // 24 px between the row and the line of what the summary is built from: 8 here and the 16 the summary has over it.
+    expect(classes(container.querySelector('[role="tabpanel"]')!)).toContain("pt-2")
+  })
+
   describe("the button that adds a condition", () => {
     const add = () => container.querySelector("button[data-add-condition]") as HTMLButtonElement
     const menu = () => container.querySelector("[data-add-menu]") as HTMLElement | null
@@ -174,6 +188,28 @@ describe("the Evidence view", () => {
       expect(menu()).toBeNull()
       expect(records.listConditionsRemote).not.toHaveBeenCalled()
     })
+    it("is as tall as a tab and on its line, at least 32 px each way, with a plus larger than the tabs' type in its middle", async () => {
+      await render()
+      const tabs = tabsOf(tablists()[0])
+      const classes = (element: Element) => element.className.split(/\s+/)
+      // The box of a tab: its padding, its type and the 2 px under it, whether it is the chosen one or not.
+      for (const name of ["px-3", "py-2", "leading-5", "border-b-2"]) {
+        expect(tabs.every((tab) => classes(tab).includes(name))).toBe(true)
+        expect(classes(add())).toContain(name)
+      }
+      const size = classes(tabs[0]).find((name) => /^text-\[\d+px\]$/.test(name))!
+      expect(classes(add())).toContain(size)
+      expect(classes(add())).toEqual(expect.arrayContaining(["inline-flex", "items-center", "justify-center", "min-h-8", "min-w-8"]))
+      expect(classes(add())).toContain("focus-visible:outline-2")
+      const glyph = add().querySelector("[data-add-glyph]") as HTMLElement
+      expect(glyph.textContent).toBe("+")
+      expect(glyph.getAttribute("aria-hidden")).toBe("true")
+      expect(classes(glyph)).toEqual(expect.arrayContaining(["text-[1.3em]", "leading-none"]))
+      expect(add().children).toHaveLength(1)
+      // The row sets the tabs and the button on one line.
+      expect(add().closest("[data-control-row] > div")!.className).toContain("items-end")
+    })
+
     it("opens a list of the pack's conditions that are not shown yet, and puts the keyboard on the first", async () => {
       await render()
       await click(add())

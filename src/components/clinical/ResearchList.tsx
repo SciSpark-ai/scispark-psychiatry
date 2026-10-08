@@ -8,7 +8,7 @@ const E = CLINICAL_COPY.evidence
 /** The group of the papers that name a treatment and are not sorted by what they found: its table says which treatment. */
 const NO_EFFICACY = "no-efficacy"
 
-/** Other research: a light bubble per kind of research, on a grid, and under it the table of the chosen one. */
+/** Other research: a light bubble per kind of research, on a grid, and under it the table of the chosen one, under a line with its name and how many papers it has. */
 export function ResearchList({ groups, chosen, onChoose }: { groups: ResearchGroup[]; chosen: string | null; onChoose: (type: string | null) => void }) {
   const open = groups.find((group) => group.type === chosen) ?? null
   const boxHeight = discBoxHeight(groups.map((group) => group.papers))
@@ -20,7 +20,7 @@ export function ResearchList({ groups, chosen, onChoose }: { groups: ResearchGro
             pressed={group.type === chosen} onPick={() => onChoose(group.type === chosen ? null : group.type)} />
         ))}
       </BubbleGrid>
-      {open && <div className="pt-1"><StudyTable studies={open.studies} kind="research" caption={E.researchTypes[open.type]} treatmentShown={open.type === NO_EFFICACY} /></div>}
+      {open && <div className="pt-4"><StudyTable studies={open.studies} kind="research" caption={E.researchTypes[open.type]} treatmentShown={open.type === NO_EFFICACY} /></div>}
     </>
   )
 }

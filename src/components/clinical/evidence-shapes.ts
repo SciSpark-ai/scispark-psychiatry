@@ -19,25 +19,26 @@ export const KIND_TEXT_COLOUR: Record<Kind, string> = { ...KIND_COLOUR, mixed: "
 /** The disc of a bubble that has no direction: the accent, as light as a badge's ground. */
 export const LIGHT_FILL = "color-mix(in srgb, var(--accent) 18%, transparent)"
 export const LIGHT_EDGE = "color-mix(in srgb, var(--accent) 45%, transparent)"
-/** The ground of the map's column of items that state no participants, and its lines. */
-export const COLUMN_FILL = "color-mix(in srgb, var(--text-muted) 9%, transparent)"
-export const AXIS_COLOUR = "var(--border)"
+/** The ground of the pill a direction is named in: its colour, thinned to 12%. The violet of safety is read as a ground. */
+const tint = (colour: string) => `color-mix(in srgb, ${colour} 12%, transparent)`
+export const KIND_TINT: Record<Kind, string> = {
+  benefit: tint("var(--clinical-benefit)"), "no-benefit": tint("var(--clinical-no-benefit)"), mixed: tint("var(--text-muted)"), safety: tint(SAFETY_COLOUR), other: tint("var(--text-muted)"),
+}
+/** The subtle ground of the map's band of items that state no participants and of its column of those with no date. */
+export const COLUMN_FILL = "color-mix(in srgb, var(--text-muted) 7%, transparent)"
+/** The very light lines of the map: its frame and a line per tick. */
+export const GRID_COLOUR = "color-mix(in srgb, var(--border) 60%, transparent)"
 export const AXIS_TEXT_COLOUR = "var(--text-muted)"
 /** The centre of a pie, where its number is read, and the number. */
 export const CENTRE_FILL = "var(--surface-light)"
 export const NUMBER_COLOUR = "var(--text-primary)"
 
 const MAX_BUBBLE = 72
-const MAX_DOT = 16
-const UNKNOWN_DOT = 5
 const tenth = (value: number) => Number(value.toFixed(1))
 const hundredth = (value: number) => Number(value.toFixed(2))
 
 /** The radius of a bubble in px: 27 for one paper, 36 for four, never over 72. Its area does not grow as fast as its papers past the cap. */
 export const bubbleRadius = (papers: number): number => tenth(Math.min(MAX_BUBBLE, 18 + 9 * Math.sqrt(Math.max(0, papers))))
-
-/** The radius of a study's dot in px, by its participants: never over 16, and 5 when they are not known. */
-export const dotRadius = (size: number | null): number => (size === null ? UNKNOWN_DOT : tenth(Math.min(MAX_DOT, 5 + 3.6 * Math.log10(Math.max(0, size) + 1))))
 
 export interface Slice { kind: EfficacyKind; fraction: number }
 

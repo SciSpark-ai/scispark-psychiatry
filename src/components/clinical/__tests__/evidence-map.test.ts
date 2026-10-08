@@ -1,17 +1,28 @@
 import { describe, expect, it } from "vitest"
-import { dayOf, layoutMap, MAP_SIZE, mapRadius, mapScales, nameBoxes, newestDate, type Box, type MapItem, type Placed } from "../evidence-map"
+import { dayOf, INSET, layoutMap, MAP_SIZE, mapRadius, mapScales, nameBoxes, newestDate, type Box, type MapItem, type Placed } from "../evidence-map"
 
 const TODAY = "2026-10-08"
 const DAY = 86400000
 const utc = (year: number, month: number, day: number) => Date.UTC(year, month - 1, day) / DAY
 const item = (key: string, over: Partial<MapItem> = {}): MapItem => ({ key, name: key, papers: 1, participants: 100, dates: [TODAY], ...over })
 const byKey = (placed: Placed[]) => new Map(placed.map((entry) => [entry.key, entry]))
-const scalesOf = (items: MapItem[]) => mapScales(items, MAP_SIZE, TODAY)
-const layout = (items: MapItem[]) => layoutMap(items, MAP_SIZE, TODAY)
+const scalesOf = (items: MapItem[]) => mapScales(items, MAP_SIZE)
+const layout = (items: MapItem[]) => layoutMap(items, MAP_SIZE)
+const xAt = (scales: ReturnType<typeof scalesOf>, day: number) => scales.x0 + ((day - scales.days.from) / (scales.days.to - scales.days.from)) * (scales.x1 - scales.x0)
 const one = (over: Partial<MapItem>) => layout([item("a", over)])[0]
+/** Every bubble in the part of the plot that is kept clear of its frame. */
 const inside = (placed: Placed[], items: MapItem[]) => {
-  const { plot } = scalesOf(items)
-  return placed.every((entry) => entry.x - entry.r >= plot.left && entry.x + entry.r <= plot.right && entry.y - entry.r >= plot.top && entry.y + entry.r <= plot.bottom)
+  const { inset } = scalesOf(items)
+  return placed.every((entry) => entry.x - entry.r >= inset.left && entry.x + entry.r <= inset.right && entry.y - entry.r >= inset.top && entry.y + entry.r <= inset.bottom)
+}
+/** The box of the name of each bubble, where the layout put it. */
+const nameBoxesOf = (placed: Placed[], items: MapItem[]): Box[] => {
+  const { inset } = scalesOf(items)
+  return placed.map((entry, at) => nameBoxes(items[at], entry, entry.r, inset)[entry.labelAbove ? "above" : "under"])
+}
+const namesInside = (placed: Placed[], items: MapItem[]) => {
+  const { inset } = scalesOf(items)
+  return nameBoxesOf(placed, items).every((box) => box.left >= inset.left && box.right <= inset.right && box.top >= inset.top && box.bottom <= inset.bottom)
 }
 /** Moved by more than its radius, up or down or sideways: what `displaced` must say. */
 const far = (entry: Placed) => Math.abs(entry.x - entry.home.x) > entry.r || Math.abs(entry.y - entry.home.y) > entry.r
@@ -43,25 +54,47 @@ describe("the map of the evidence summary", () => {
     expect(newestDate([])).toBeNull()
   })
 
-  it("runs the x scale from the earliest paper of all the items to today, and puts an item at its newest paper", () => {
-    const items = [item("a", { dates: ["2026-03-10", "2026-06-15", "2026-08"] }), item("b", { dates: ["2026-10-08"], participants: 1000 }), item("c", { dates: ["2026-03-10"], participants: 10 })]
+  it("runs the x scale over the items shown only: from the earliest to the latest of their newest papers, with 8% of that more on each side", () => {
+    // The earlier papers of an item are not on the map, so they do not widen it.
+    const items = [item("a", { dates: ["2024-01-10", "2026-06-15", "2026-08"] }), item("b", { dates: ["2026-10-08"], participants: 1000 }), item("c", { dates: ["2026-03-10"], participants: 10 })]
     const scales = scalesOf(items)
-    expect(scales.days).toEqual({ from: utc(2026, 3, 10), to: utc(2026, 10, 8) })
+    const [first, last] = [utc(2026, 3, 10), utc(2026, 10, 8)]
+    expect(last - first).toBe(212)
+    expect(scales.days.from).toBeCloseTo(first - 0.08 * 212, 9)
+    expect(scales.days.to).toBeCloseTo(last + 0.08 * 212, 9)
+    // The scale fills the plot less the clear space inside its frame: the padding is the room at its ends.
+    expect([scales.x0, scales.x1]).toEqual([scales.inset.left, scales.inset.right])
     const placed = byKey(layout(items))
-    const xOf = (day: number) => scales.x0 + ((day - scales.days.from) / (scales.days.to - scales.days.from)) * (scales.x1 - scales.x0)
-    expect(placed.get("a")!.x).toBeCloseTo(xOf(utc(2026, 8, 15)), 9)
-    expect(placed.get("b")!.x).toBe(scales.x1)
-    expect(placed.get("c")!.x).toBe(scales.x0)
-    expect(scales.x0).toBeLessThan(scales.x1)
+    expect(placed.get("a")!.x).toBeCloseTo(xAt(scales, utc(2026, 8, 15)), 9)
+    expect(placed.get("b")!.x).toBeCloseTo(xAt(scales, last), 9)
+    expect(placed.get("c")!.x).toBeCloseTo(xAt(scales, first), 9)
+    expect(placed.get("c")!.x - scales.x0).toBeCloseTo(scales.x1 - placed.get("b")!.x, 9)
     expect(placed.get("a")!.home.x).toBe(placed.get("a")!.x)
     expect(placed.get("a")!.displaced).toBe(false)
   })
 
-  it("widens the x scale to ninety days at least, and to a paper dated after today", () => {
-    const recent = scalesOf([item("a", { dates: ["2026-10-01"] })])
-    expect(recent.days).toEqual({ from: utc(2026, 10, 8) - 90, to: utc(2026, 10, 8) })
-    expect(one({ dates: ["2026-10-01"] }).x).toBeCloseTo(recent.x0 + (83 / 90) * (recent.x1 - recent.x0), 9)
-    expect(scalesOf([item("a", { dates: ["2026-01-01", "2026-11"] })]).days).toEqual({ from: utc(2026, 1, 1), to: utc(2026, 11, 15) })
+  it("covers twenty-one days at least, with the papers in the middle of them", () => {
+    const alone = scalesOf([item("a", { dates: ["2026-10-01"] })])
+    expect(alone.days).toEqual({ from: utc(2026, 10, 1) - 10.5, to: utc(2026, 10, 1) + 10.5 })
+    expect(one({ dates: ["2026-10-01"] }).x).toBe((alone.x0 + alone.x1) / 2)
+    // Ten days apart: 11.6 with the padding, so the scale is widened to 21 around their middle.
+    const near = [item("a", { dates: ["2026-09-01"] }), item("b", { dates: ["2026-09-11"] })]
+    expect(scalesOf(near).days).toEqual({ from: utc(2026, 9, 6) - 10.5, to: utc(2026, 9, 6) + 10.5 })
+    const placed = byKey(layout(near))
+    expect((placed.get("a")!.x + placed.get("b")!.x) / 2).toBeCloseTo((alone.x0 + alone.x1) / 2, 9)
+    // Twenty days apart: 23.2 with the padding, which is enough.
+    const wider = scalesOf([item("a", { dates: ["2026-09-01"] }), item("b", { dates: ["2026-09-21"] })])
+    expect(wider.days.from).toBeCloseTo(utc(2026, 9, 1) - 1.6, 9)
+    expect(wider.days.to).toBeCloseTo(utc(2026, 9, 21) + 1.6, 9)
+  })
+
+  it("does not know what day it is: the scale ends where the papers do, however old they are", () => {
+    expect(mapScales).toHaveLength(2)
+    expect(layoutMap).toHaveLength(2)
+    const old = scalesOf([item("a", { dates: ["2019-02-01"] }), item("b", { dates: ["2019-05-12"] })])
+    expect(old.days.from).toBeCloseTo(utc(2019, 2, 1) - 8, 9)
+    expect(old.days.to).toBeCloseTo(utc(2019, 5, 12) + 8, 9)
+    expect(old.ticksX.every((tick) => tick.year === 2019)).toBe(true)
   })
 
   it("says nothing of the earlier papers of an item: a bubble is at its newest paper only", () => {
@@ -75,10 +108,11 @@ describe("the map of the evidence summary", () => {
     const scales = scalesOf(items)
     const column = scales.column!
     expect(column.left).toBe(scales.plot.left)
-    expect(column.right).toBeLessThan(scales.x0)
+    // The scale starts clear of the column.
+    expect(scales.x0).toBe(column.right + INSET)
     expect((column.right - column.left) / (scales.plot.right - scales.plot.left)).toBeLessThan(0.16)
     // The scale is of the dated papers only.
-    expect(scales.days.from).toBe(utc(2026, 1, 1))
+    expect(scales.days).toEqual({ from: utc(2026, 1, 1) - 10.5, to: utc(2026, 1, 1) + 10.5 })
     const placed = byKey(layout(items))
     for (const key of ["a", "b"]) {
       const entry = placed.get(key)!
@@ -159,6 +193,24 @@ describe("the map of the evidence summary", () => {
     expect(Math.max(...placed.map((entry) => Math.hypot(entry.x - home.x, entry.y - home.y)))).toBeLessThan(3 * 42)
   })
 
+  it("tries the places no further than its own radius first, both ways at once too, so that fewer need a line", () => {
+    // 12 px to the right and 12 px up of a bubble of the same size: 42 px are needed, and straight up, down or sideways that is over its radius.
+    const far = item("c", { dates: ["2026-08-26"], participants: 10 })
+    const base = scalesOf([item("a"), item("b", { dates: ["2026-10-09"] }), far])
+    const day = (base.x1 - base.x0) / (44 * 1.16)
+    const above = 100 * 10 ** (12 / ((base.yBottom - base.yTop) / 2))
+    const placed = byKey(layout([item("a"), item("b", { dates: ["2026-10-09"], participants: above }), far]))
+    const [a, b] = [placed.get("a")!, placed.get("b")!]
+    expect([a.x, a.y]).toEqual([a.home.x, a.home.y])
+    expect(b.home.x - a.x).toBeCloseTo(day, 6)
+    expect(day).toBeLessThan(12)
+    expect(b.home.y).toBeCloseTo(a.y - 12, 6)
+    expect(b.x).toBeGreaterThan(b.home.x)
+    expect(b.y).toBeLessThan(b.home.y)
+    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThanOrEqual(42)
+    expect(b.displaced).toBe(false)
+  })
+
   it("moves a bubble that overlaps another only a little up or down, and does not call that displaced", () => {
     const base = scalesOf([item("a", { papers: 2 })])
     // 30 px above the middle: twelve more are needed to clear a bubble at the middle.
@@ -178,8 +230,8 @@ describe("the map of the evidence summary", () => {
     const scales = scalesOf(items)
     const placed = byKey(layout(items))
     // 48 px are needed between them: under an eighth of the height of the scale (12%), so b goes straight up.
-    expect(0.12 * (scales.plot.bottom - scales.plot.top)).toBeLessThan(48)
-    expect(0.06 * (scales.plot.right - scales.plot.left)).toBeLessThan(48)
+    expect(0.12 * (scales.inset.bottom - scales.inset.top)).toBeLessThan(48)
+    expect(0.06 * (scales.inset.right - scales.inset.left)).toBeLessThan(48)
     const [a, b] = [placed.get("a")!, placed.get("b")!]
     expect([a.x, a.y, a.displaced]).toEqual([a.home.x, a.home.y, false])
     expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThanOrEqual(48)
@@ -198,10 +250,10 @@ describe("the map of the evidence summary", () => {
     expect(placed.every((entry) => entry.home.x === placed[0].x && entry.home.y === scales.bandY)).toBe(true)
     expect(overlaps(placed)).toEqual([])
     expect(inside(placed, items)).toBe(true)
-    // Five days apart, 30 px here: the second moves 12 px more, within a little of the width, and is not displaced.
-    const near = [item("a", { participants: null, dates: ["2026-08-20"] }), item("b", { participants: null, dates: ["2026-08-25"] })]
+    // A day apart, 28 px here: the second moves 14 px more, within a little of the width, and is not displaced.
+    const near = [item("a", { participants: null, dates: ["2026-08-20"] }), item("b", { participants: null, dates: ["2026-08-21"] })]
     const pair = byKey(layout(near))
-    expect(pair.get("b")!.home.x - pair.get("a")!.x).toBeCloseTo(5 * ((scales.x1 - scales.x0) / 90), 6)
+    expect(pair.get("b")!.home.x - pair.get("a")!.x).toBeCloseTo((scales.x1 - scales.x0) / 21, 6)
     expect(pair.get("b")!.x - pair.get("a")!.x).toBeGreaterThanOrEqual(42)
     expect(pair.get("b")!.x - pair.get("a")!.x).toBeLessThan(44)
     expect([pair.get("a")!.displaced, pair.get("b")!.displaced]).toEqual([false, false])
@@ -217,23 +269,23 @@ describe("the map of the evidence summary", () => {
     expect(placed.every((entry) => entry.displaced === far(entry))).toBe(true)
   })
 
-  it("keeps a name inside the plot on the left and on the right, by shifting it under its bubble", () => {
+  it("keeps a name clear of the frame on the left and on the right, by shifting it under its bubble", () => {
     const marks = "+12 new · 12 safety · compared in 12"
     const items = [item("a", { marks }), item("b", { name: "A rather long name", dates: [], participants: 1000 }), item("c", { dates: ["2026-08-20"], participants: 10 })]
     const scales = scalesOf(items)
     const placed = byKey(layout(items))
     const boxOf = (key: string) => {
       const entry = placed.get(key)!
-      return nameBoxes(items.find((each) => each.key === key)!, entry, entry.r, scales.plot)[entry.labelAbove ? "above" : "under"]
+      return nameBoxes(items.find((each) => each.key === key)!, entry, entry.r, scales.inset)[entry.labelAbove ? "above" : "under"]
     }
-    // At today, by the right edge: a line of marks 200 px wide would run out of the picture.
-    expect(placed.get("a")!.x).toBe(scales.x1)
+    // The newest, by the right edge: a line of marks 200 px wide would run out of the picture.
+    expect(placed.get("a")!.x).toBeCloseTo(xAt(scales, utc(2026, 10, 8)), 9)
     expect(placed.get("a")!.labelShift).toBeLessThan(0)
-    expect(boxOf("a").right).toBe(scales.plot.right)
+    expect(boxOf("a").right).toBe(scales.inset.right)
     expect(boxOf("a").right - boxOf("a").left).toBeGreaterThan(190)
     // In the column, by the left edge.
     expect(placed.get("b")!.labelShift).toBeGreaterThan(0)
-    expect(boxOf("b").left).toBe(scales.plot.left)
+    expect(boxOf("b").left).toBe(scales.inset.left)
     // In the middle: under its bubble, centred.
     expect(placed.get("c")!.labelShift).toBe(0)
     expect((boxOf("c").left + boxOf("c").right) / 2).toBeCloseTo(placed.get("c")!.x, 9)
@@ -248,20 +300,63 @@ describe("the map of the evidence summary", () => {
     expect(overlaps(layout(items))).toEqual([])
   })
 
-  it("has a tick a month, named where there is room, over eighteen months or less, and a tick a year over more", () => {
-    const short = scalesOf([item("a", { dates: ["2026-03-10"] })])
-    expect(short.ticksX.map((tick) => [tick.year, tick.month, tick.labelled])).toEqual([[2026, 4, true], [2026, 5, true], [2026, 6, true], [2026, 7, true], [2026, 8, true], [2026, 9, true], [2026, 10, true]])
-    const first = short.ticksX[0]
-    expect(first.x).toBeCloseTo(short.x0 + ((utc(2026, 4, 1) - short.days.from) / (short.days.to - short.days.from)) * (short.x1 - short.x0), 9)
-    // Seventeen months: a name every third month, so that two do not meet.
-    const longer = scalesOf([item("a", { dates: ["2025-05-08"] })])
+  it("has a tick a week, on Mondays, when the scale covers seventy days or less", () => {
+    // 1 to 29 September 2026: 32.48 days with the padding. The Mondays in it are 31 August and 7, 14, 21 and 28 September.
+    const items = [item("a", { dates: ["2026-09-01"] }), item("b", { dates: ["2026-09-29"] })]
+    const scales = scalesOf(items)
+    expect(scales.days.to - scales.days.from).toBeCloseTo(28 * 1.16, 9)
+    expect(scales.ticksX.map((tick) => [tick.year, tick.month, tick.day])).toEqual([[2026, 8, 31], [2026, 9, 7], [2026, 9, 14], [2026, 9, 21], [2026, 9, 28]])
+    expect(scales.ticksX.every((tick) => tick.labelled)).toBe(true)
+    expect(scales.ticksX[1].x).toBeCloseTo(xAt(scales, utc(2026, 9, 7)), 9)
+    expect(new Date(Date.UTC(2026, 8, 7)).getUTCDay()).toBe(1)
+    // One paper: twenty-one days, three Mondays.
+    expect(scalesOf([item("a", { dates: ["2026-10-01"] })]).ticksX.map((tick) => [tick.month, tick.day])).toEqual([[9, 21], [9, 28], [10, 5]])
+    // Sixty days and the padding: 69.6 days, still by the week.
+    const sixty = scalesOf([item("a", { dates: ["2026-08-01"] }), item("b", { dates: ["2026-09-30"] })])
+    expect(sixty.ticksX.every((tick) => tick.day !== null)).toBe(true)
+    expect(sixty.ticksX).toHaveLength(9)
+  })
+
+  it("has a tick a month over eighteen months or less, and a tick a year over more", () => {
+    // Sixty-one days and the padding: 70.8 days, by the month.
+    const months = scalesOf([item("a", { dates: ["2026-08-01"] }), item("b", { dates: ["2026-10-01"] })])
+    expect(months.ticksX.map((tick) => [tick.year, tick.month, tick.day, tick.labelled])).toEqual([[2026, 8, null, true], [2026, 9, null, true], [2026, 10, null, true]])
+    expect(months.ticksX[1].x).toBeCloseTo(xAt(months, utc(2026, 9, 1)), 9)
+    // Fifteen months and the padding: seventeen months begin in it.
+    const longer = scalesOf([item("a", { dates: ["2025-06-20"] }), item("b", { dates: ["2026-09-20"] })])
     expect(longer.ticksX).toHaveLength(17)
-    expect(longer.ticksX.every((tick) => tick.month !== null)).toBe(true)
-    expect(longer.ticksX.map((tick) => tick.labelled)).toEqual(Array.from({ length: 17 }, (_, at) => at % 3 === 0))
-    const years = scalesOf([item("a", { dates: ["2023-01-20"] })])
-    expect(years.ticksX.map((tick) => [tick.year, tick.month, tick.labelled])).toEqual([[2024, null, true], [2025, null, true], [2026, null, true]])
-    // Ninety days: three months.
-    expect(scalesOf([item("a")]).ticksX.map((tick) => tick.month)).toEqual([8, 9, 10])
+    expect(longer.ticksX.every((tick) => tick.month !== null && tick.day === null)).toBe(true)
+    const years = scalesOf([item("a", { dates: ["2023-01-20"] }), item("b", { dates: ["2026-10-08"] })])
+    expect(years.ticksX.map((tick) => [tick.year, tick.month, tick.day, tick.labelled])).toEqual([[2023, null, null, true], [2024, null, null, true], [2025, null, null, true], [2026, null, null, true], [2027, null, null, true]])
+  })
+
+  it("names only the ticks there is room for: no two names touch, none runs out of the picture, none is under the name of the column", () => {
+    const widths = { week: 44, month: 60, year: 32 }
+    const check = (items: MapItem[]) => {
+      const scales = scalesOf(items)
+      const named = scales.ticksX.filter((tick) => tick.labelled)
+      const half = (tick: (typeof named)[number]) => (tick.day !== null ? widths.week : tick.month !== null ? widths.month : widths.year) / 2
+      expect(named.length).toBeGreaterThan(0)
+      for (const [at, tick] of named.entries()) {
+        if (at > 0) expect(tick.x - half(tick)).toBeGreaterThan(named[at - 1].x + half(named[at - 1]))
+        expect(tick.x + half(tick)).toBeLessThanOrEqual(MAP_SIZE.width)
+        expect(tick.x - half(tick)).toBeGreaterThanOrEqual(scales.column ? scales.column.right : 0)
+      }
+      return scales.ticksX.map((tick) => tick.labelled)
+    }
+    // Seventeen months: a name every third month.
+    const longer = check([item("a", { dates: ["2025-06-20"] }), item("b", { dates: ["2026-09-20"] })])
+    expect(longer.filter(Boolean).length).toBeLessThanOrEqual(6)
+    expect(longer.filter(Boolean).length).toBeGreaterThanOrEqual(5)
+    // Ten weeks: every week has room.
+    expect(check([item("a", { dates: ["2026-08-01"] }), item("b", { dates: ["2026-09-30"] })]).every(Boolean)).toBe(true)
+    // With the column of no date, the scale is narrower and starts beside the column's name.
+    check([item("a", { dates: ["2026-08-01"] }), item("b", { dates: ["2026-09-30"] }), item("c", { dates: [] })])
+    check([item("a", { dates: ["2012-01-20"] }), item("b", { dates: ["2026-10-08"] }), item("c", { dates: [] })])
+  })
+
+  it("has no tick when no item has a date", () => {
+    expect(scalesOf([item("a", { dates: [] })]).ticksX).toEqual([])
   })
 
   it("gives the same places for the same items, in whatever order they come", () => {
@@ -301,8 +396,7 @@ describe("the map of the evidence summary", () => {
       item("digital", { name: "Digital tools", papers: 2, participants: 2100, dates: ["2026-10-05", "2026-10-01"], marks: "+2 new" }),
     ]
     const placed = layout(items)
-    const { plot } = scalesOf(items)
-    const names: Box[] = placed.map((entry, at) => nameBoxes(items[at], entry, entry.r, plot)[entry.labelAbove ? "above" : "under"])
+    const names = nameBoxesOf(placed, items)
     const meet = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
     const nearest = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value))
     const covered = (box: Box, entry: Placed) => Math.hypot(entry.x - nearest(entry.x, box.left, box.right), entry.y - nearest(entry.y, box.top, box.bottom)) < entry.r
@@ -310,8 +404,93 @@ describe("the map of the evidence summary", () => {
     expect(names.flatMap((box, at) => placed.filter((entry, other) => other !== at && covered(box, entry)).map((entry) => `${items[at].key} under ${entry.key}`))).toEqual([])
     expect(overlaps(placed)).toEqual([])
     expect(inside(placed, items)).toBe(true)
-    expect(names.every((box) => box.top >= 0 && box.bottom <= MAP_SIZE.height && box.left >= plot.left && box.right <= plot.right)).toBe(true)
+    expect(namesInside(placed, items)).toBe(true)
     // Every one that was moved by more than its radius says so, and no other.
     expect(placed.every((entry) => entry.displaced === far(entry))).toBe(true)
+  })
+
+  it("keeps a clear space inside the frame of the plot: the scales end short of it, and room is left around the plot", () => {
+    expect(INSET).toBe(16)
+    const items = [item("a", { dates: ["2026-08-01"], participants: 10 }), item("b", { participants: 1000, papers: 9 }), item("c", { dates: [], participants: null })]
+    const scales = scalesOf(items)
+    const { plot, inset } = scales
+    expect(inset).toEqual({ left: plot.left + 16, right: plot.right - 16, top: plot.top + 16, bottom: plot.bottom - 16 })
+    // Left of the plot: the title of the y axis, turned, and the names of its ticks. Around the rest, a little.
+    expect(plot.left).toBeGreaterThanOrEqual(76)
+    expect(MAP_SIZE.width - plot.right).toBeGreaterThanOrEqual(8)
+    expect(plot.top).toBeGreaterThanOrEqual(8)
+    expect(MAP_SIZE.height - plot.bottom).toBeGreaterThanOrEqual(24)
+    // The top and the bottom tick of the y scale, and both ends of the x scale, are inside the clear space, by the largest radius at least.
+    expect(scales.yTop).toBe(inset.top + 30)
+    expect(scales.yBottom).toBeLessThanOrEqual(scales.band!.top - 30)
+    expect(scales.x1).toBe(inset.right)
+    expect(scales.band!.bottom).toBe(plot.bottom)
+    // The row of the band: its bubbles, and a name of two lines with its marks under them, clear of the frame.
+    expect(scales.bandY! + 18 + 3 + 2 * 18 + 16).toBeLessThanOrEqual(inset.bottom)
+  })
+
+  it("puts no bubble nearer to an edge of the plot than its radius and 16 px, and no name on the clear space", () => {
+    const crowd = Array.from({ length: 10 }, (_, at) => item(`k${at}`, { dates: ["2026-08-20"] }))
+    const corners = [
+      item("a", { dates: ["2026-01-01"], participants: 1000, papers: 40 }), item("b", { participants: 10, papers: 40 }), item("c", { dates: [], participants: null, papers: 40 }),
+      item("d", { participants: null, papers: 40 }), item("e", { dates: [], participants: 1000, papers: 40 }), item("f", { dates: ["2026-01-01"], participants: null }),
+    ]
+    const edges = [
+      item("a", { name: "Olanzapine and samidorphan", dates: ["2026-08-01"], participants: 10, marks: "+12 new · 12 safety · compared in 12" }),
+      item("b", { name: "Cognitive behavioural therapy", participants: 1000, marks: "+12 new · 12 safety · compared in 12" }),
+      item("c", { name: "Long-acting injectable", dates: [], participants: null, marks: "+1 new" }), item("d", { name: "Transcranial stimulation", participants: null, marks: "+1 new · 2 safety" }),
+    ]
+    for (const items of [REAL, SEVEN, crowd, corners, edges, [item("a")]]) {
+      const placed = layout(items)
+      const { plot } = scalesOf(items)
+      for (const entry of placed) {
+        expect(entry.x - plot.left).toBeGreaterThanOrEqual(entry.r + 16)
+        expect(plot.right - entry.x).toBeGreaterThanOrEqual(entry.r + 16)
+        expect(entry.y - plot.top).toBeGreaterThanOrEqual(entry.r + 16)
+        expect(plot.bottom - entry.y).toBeGreaterThanOrEqual(entry.r + 16)
+      }
+      expect(inside(placed, items)).toBe(true)
+    }
+    for (const items of [REAL, SEVEN, edges, [item("a")]]) expect(namesInside(layout(items), items)).toBe(true)
+  })
+
+  /** The classes of a real condition on 2026-10-07: seven within a month, three of them within a week. */
+  const REAL: MapItem[] = [
+    item("antipsychotic", { name: "Antipsychotics", papers: 3, participants: 421, dates: ["2026-09-22", "2026-09-24", "2026-09-24"], marks: "+3 new" }),
+    item("lifestyle", { name: "Lifestyle", papers: 3, participants: 161, dates: ["2026-09-28", "2026-08-31", "2026-08-31"], marks: "+3 new" }),
+    item("psychotherapy", { name: "Psychotherapy", papers: 3, participants: 100, dates: ["2026-08-31", "2026-09-25", "2026-09-29"], marks: "+3 new" }),
+    item("digital", { name: "Digital tools", papers: 2, participants: 2174, dates: ["2026-09-01", "2026-08-26"], marks: "+2 new" }),
+    item("medicine", { name: "Medicines", participants: 608, dates: ["2026-09-22"] }),
+    item("neuromodulation", { name: "Neuromodulation", participants: 31, dates: ["2026-09-16"], marks: "+1 new" }),
+    item("other", { name: "Other treatments", participants: null, dates: ["2026-09-29"], marks: "+1 new" }),
+  ]
+  /** The same shape, harder: seven within eight weeks, 10 to 2,000 participants, radii 18 to 28. */
+  const SEVEN: MapItem[] = [
+    item("a", { name: "Antipsychotics", papers: 7, participants: 2000, dates: ["2026-09-24"], marks: "+3 new · 2 safety" }),
+    item("b", { name: "Psychotherapy", papers: 5, participants: 300, dates: ["2026-09-29"], marks: "+3 new" }),
+    item("c", { name: "Lifestyle", papers: 4, participants: 160, dates: ["2026-09-27"], marks: "+3 new" }),
+    item("d", { name: "Digital tools", papers: 2, participants: 900, dates: ["2026-08-17"], marks: "+2 new" }),
+    item("e", { name: "Medicines", participants: 600, dates: ["2026-09-22"] }),
+    item("f", { name: "Neuromodulation", participants: 10, dates: ["2026-08-10"], marks: "+1 new" }),
+    item("g", { name: "Other treatments", papers: 2, participants: 40, dates: ["2026-10-05"], marks: "compared in 1" }),
+  ]
+
+  it("draws seven items of ten weeks with two lines to where one belongs at most, and none on another", () => {
+    for (const items of [REAL, SEVEN]) {
+      const placed = layout(items)
+      expect(placed.map((entry) => entry.r).every((r) => r >= 18 && r <= 28)).toBe(true)
+      expect(overlaps(placed)).toEqual([])
+      expect(inside(placed, items)).toBe(true)
+      expect(namesInside(placed, items)).toBe(true)
+      expect(placed.every((entry) => entry.displaced === far(entry))).toBe(true)
+      expect(placed.filter((entry) => entry.displaced).length).toBeLessThanOrEqual(2)
+      // By the week.
+      expect(scalesOf(items).ticksX.every((tick) => tick.day !== null)).toBe(true)
+    }
+    // A bubble moved by no more than its radius has no line: Medicines, by Antipsychotics, is moved up a little and has none.
+    const real = byKey(layout(REAL))
+    expect(real.get("medicine")!.y).toBeLessThan(real.get("medicine")!.home.y)
+    expect(real.get("medicine")!.displaced).toBe(false)
+    expect(layout(REAL).filter((entry) => entry.displaced)).toHaveLength(0)
   })
 })

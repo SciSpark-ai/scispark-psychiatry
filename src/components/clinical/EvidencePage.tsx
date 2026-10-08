@@ -12,9 +12,12 @@ import { ConditionEvidence } from "./ConditionEvidence"
 
 const E = CLINICAL_COPY.evidence
 const V = E.page
-const SELECT = "rounded-pill border border-border-warm bg-light-surface px-3 py-1 text-[12px] text-espresso"
-const TAB = "px-3 py-2 text-[14px] text-secondary-dark hover:text-espresso"
-const TAB_ON = "border-b-2 border-accent-ink px-3 py-2 text-[14px] font-semibold text-espresso"
+/** A select is a pill, as the app's other pill buttons are. */
+const SELECT = "rounded-pill border border-border-warm bg-light-surface px-3 py-1.5 text-[14px] text-espresso transition-colors hover:bg-card-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
+const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
+/** A tab that is not chosen is muted; the chosen one is semibold over a line of the accent, 2 px thick. */
+const TAB = `border-b-2 border-transparent px-3 py-2 text-[15px] leading-5 text-muted-text transition-colors hover:text-espresso ${FOCUS}`
+const TAB_ON = `border-b-2 border-accent-ink px-3 py-2 text-[15px] font-semibold leading-5 text-espresso ${FOCUS}`
 
 /** A condition of the view: one the reader follows, or the one the address names. */
 interface Entry { code: string; name: string }
@@ -61,13 +64,13 @@ export function EvidencePage() {
 
   const noteSaved = useCallback((evidence: Evidence) => setSaved({ code: evidence.condition.code, count: evidence.savedCount }), [])
 
-  if (error) return <p role="alert" className="mt-6 text-[13px] text-accent-ink">{error}</p>
-  if (followed === null || (unfollowed && extra?.code !== wanted)) return <p className="mt-6 text-[13px] text-muted-text">{V.loading}</p>
+  if (error) return <p role="alert" className="mt-6 text-[15px] text-accent-ink">{error}</p>
+  if (followed === null || (unfollowed && extra?.code !== wanted)) return <p className="mt-6 text-[15px] text-muted-text">{V.loading}</p>
   const added = unfollowed ? extra?.entry ?? null : null
   const conditions: Entry[] = added ? [...followed, added] : followed
   const selected = conditions.find((entry) => entry.code === wanted) ?? conditions[0]
   if (!selected) {
-    return <p className="mt-6 text-[14px] text-muted-text">{V.none} <Link href="/watch" className="text-accent-ink underline">{V.addTopics}</Link></p>
+    return <p className="mt-6 text-[15px] text-muted-text">{V.none} <Link href="/watch" className="text-accent-ink underline">{V.addTopics}</Link></p>
   }
   const go = (next: { condition?: string; scope?: Scope; period?: Period }) => router.replace(evidenceHref({ condition: selected.code, scope, period, ...next }))
   const savedCount = saved?.code === selected.code ? saved.count : null
@@ -97,7 +100,8 @@ export function EvidencePage() {
           </select>
         </div>
       </div>
-      <div role="tabpanel" id={`${id}-condition`} aria-labelledby={`${id}-${selected.code}`} className="pt-3">
+      {/* 24 px to the line of what the summary is built from: 8 here, and the 16 the summary has over it. */}
+      <div role="tabpanel" id={`${id}-condition`} aria-labelledby={`${id}-${selected.code}`} className="pt-2">
         <ConditionEvidence condition={selected.code} scope={scope} period={period} onLoaded={noteSaved} />
       </div>
     </section>

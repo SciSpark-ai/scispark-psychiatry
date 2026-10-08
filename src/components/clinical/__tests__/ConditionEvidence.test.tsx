@@ -139,22 +139,37 @@ describe("the evidence block of a condition page", () => {
     expect(sections.every((entry) => entry.getAttribute("aria-labelledby") === entry.querySelector("h3")!.id)).toBe(true)
   })
 
-  it("says in two short lines what a bubble is, and has the colours beside the map, not in a sentence", async () => {
+  it("says in two short lines what a bubble is, and has the colours as three pills at the right of the heading, not in a sentence", async () => {
     await show()
     const lines = qa("section[data-section=treatments] [data-treatments-lines] > p")
     expect(lines.map((line) => line.textContent)).toEqual([
       "Each bubble is a treatment; its size is the number of papers.",
-      "Colours are an AI reading of each abstract. Bubbles that would overlap are moved apart; a line shows where one belongs.",
+      "Colour shows whether the treatment was beneficial or not, based on an AI reading of the abstract.",
     ])
-    expect(lines.every((line) => line.className.includes("text-[13px]"))).toBe(true)
-    // What is of the map only is not shown over the grid of a narrow screen.
-    expect((lines[1].querySelector("[data-map-only]") as HTMLElement).textContent).toBe("Bubbles that would overlap are moved apart; a line shows where one belongs.")
-    expect((lines[1].querySelector("[data-map-only]") as HTMLElement).className).toContain("hidden sm:inline")
+    expect(lines).toHaveLength(2)
+    expect(lines.every((line) => line.className.includes("text-[15px]"))).toBe(true)
+    // That bubbles are moved apart is said behind the button beside the heading, with the other notes.
+    expect(q("[data-map-only]")).toBeNull()
+    expect(section("treatments").textContent).not.toContain("moved apart")
     expect(q("[data-bubble-key]")).toBeNull()
     expect(q("[data-bubble-note]")).toBeNull()
     expect(q("[data-map-note]")).toBeNull()
     expect(section("treatments").textContent).not.toContain("A paper counts once")
-    expect([...q(`${WIDE} [data-map-legend]`).querySelectorAll("[data-key-kind]")].map((entry) => entry.textContent)).toEqual(["Benefit", "No benefit", "Mixed"])
+    // One list of the three colours, in the row of the heading and at its right: none over the plot or over the grid.
+    expect(qa("[data-map-legend]")).toHaveLength(1)
+    const legend = q("section[data-section=treatments] [data-section-head] > [data-map-legend]")
+    expect(legend.className.split(" ")).toContain("ml-auto")
+    expect(q("[data-evidence-map-root]").querySelector("[data-map-legend]")).toBeNull()
+    const pills = [...legend.querySelectorAll("[data-key-kind]")] as HTMLElement[]
+    expect(pills.map((entry) => [entry.getAttribute("data-key-kind"), entry.textContent])).toEqual([["benefit", "Benefit"], ["no-benefit", "No benefit"], ["mixed", "Mixed"]])
+    expect(pills.every((entry) => entry.className.includes("rounded-pill") && entry.className.includes("text-[12px]"))).toBe(true)
+    expect(pills.map((entry) => (entry.querySelector("[data-swatch]") as HTMLElement).style.backgroundColor)).toEqual(["var(--clinical-benefit)", "var(--clinical-no-benefit)", expect.stringContaining("var(--text-muted)")])
+    expect(pills.every((entry) => entry.querySelector("[data-swatch]")!.getAttribute("aria-hidden") === "true")).toBe(true)
+    // It stays when a class is opened, and the other sections have none.
+    await pick("medicine", "[data-classes]")
+    expect(qa("[data-map-legend]")).toHaveLength(1)
+    expect(section("safety").querySelector("[data-map-legend]")).toBeNull()
+    await click(q("[data-crumb] button"))
     expect(q("[data-treatments-lines]").compareDocumentPosition(bubble("medicine")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
@@ -167,16 +182,20 @@ describe("the evidence block of a condition page", () => {
     expect(about.getAttribute("title")).toBe(text)
     expect(about.getAttribute("aria-expanded")).toBe("false")
     expect(section("treatments").querySelector("h3")!.contains(about)).toBe(false)
-    expect(section("treatments").querySelector("h3")!.parentElement).toBe(about.parentElement)
+    expect(about.closest("[data-about-holder]")!.parentElement).toBe(section("treatments").querySelector("h3")!.parentElement)
     expect(q("[data-about-text]")).toBeNull()
     await click(about)
     expect(about.getAttribute("aria-expanded")).toBe("true")
     const shown = q("[data-about-text]")
-    expect(shown.textContent).toBe(text)
+    expect([...shown.querySelectorAll("p")].map((note) => note.textContent)).toEqual([text, "On the map, bubbles that would overlap are moved apart; a line shows where one belongs."])
+    expect(shown.getAttribute("role")).toBe("note")
     expect(shown.id).toBe(about.getAttribute("aria-describedby"))
     expect(text).not.toMatch(/earliest|reaches back/)
     await act(async () => { about.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })) })
     expect(q("[data-about-text]")).toBeNull()
+    // Escape leaves the keyboard on the button, with the notes put away. Coming back to it shows them again.
+    expect(document.activeElement).toBe(about)
+    await act(async () => { about.blur() })
     await act(async () => { about.focus() })
     expect(q("[data-about-text]")).not.toBeNull()
     await act(async () => { about.blur() })
@@ -185,10 +204,71 @@ describe("the evidence block of a condition page", () => {
     expect(qa("button[data-about]")).toHaveLength(1)
   })
 
-  it("has larger headings for its sections", async () => {
+  it("has a button that closes the notes, which stay open while the keyboard is on it", async () => {
     await show()
-    expect(qa("section[data-section] h3").every((heading) => heading.className.includes("text-[19px]"))).toBe(true)
-    expect(q("[data-testid=evidence-basis]").className).toContain("text-[13px]")
+    const about = q("section[data-section=treatments] button[data-about]")
+    await act(async () => { about.focus() })
+    const close = q("[data-about-text] button[data-about-close]")
+    expect(close.getAttribute("type")).toBe("button")
+    expect(close.getAttribute("aria-label")).toBe("Close")
+    expect(close.textContent).toBe("×")
+    expect(close.className).toContain("focus-visible:outline-2")
+    // The keyboard goes from the button to the one that closes: nothing is put away.
+    await act(async () => { close.focus() })
+    expect(document.activeElement).toBe(close)
+    expect(q("[data-about-text]")).not.toBeNull()
+    // Pressed: the notes go, and the keyboard is back on the button, which does not open them again.
+    await click(close)
+    expect(q("[data-about-text]")).toBeNull()
+    expect(document.activeElement).toBe(about)
+    expect(about.getAttribute("aria-expanded")).toBe("false")
+    // Escape from the button that closes does the same.
+    await click(about)
+    await act(async () => { q("[data-about-close]").focus() })
+    await act(async () => { q("[data-about-close]").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })) })
+    expect(q("[data-about-text]")).toBeNull()
+    expect(document.activeElement).toBe(about)
+    // And the keyboard leaving both puts them away.
+    await click(about)
+    await act(async () => { q("[data-about-close]").focus() })
+    await act(async () => { q("[data-about-close]").blur() })
+    expect(q("[data-about-text]")).toBeNull()
+  })
+
+  it("has larger type: 15 px for its text, 14 px muted for the line of what it is built from, headings of 20 px with their count in a small pill", async () => {
+    await show()
+    const classes = (element: Element) => element.className.split(/\s+/)
+    expect(classes(q("[data-testid=condition-evidence]"))).toContain("text-[15px]")
+    expect(classes(q("[data-testid=evidence-basis]"))).toEqual(expect.arrayContaining(["text-[14px]", "text-muted-text"]))
+    for (const heading of qa("section[data-section] h3")) {
+      expect(classes(heading)).toEqual(expect.arrayContaining(["font-heading", "text-[20px]", "font-semibold"]))
+      const count = heading.querySelector("[data-section-count]")!
+      expect(classes(count)).toEqual(expect.arrayContaining(["rounded-pill", "text-[12px]", "text-muted-text"]))
+    }
+    expect(container.innerHTML).not.toMatch(/#[0-9a-f]{6}\b/i)
+  })
+
+  it("has each of its three sections in a card of its own, 20 px apart, the heading 16 px over what is under it", async () => {
+    await show()
+    const cards = qa("[data-section-card]")
+    expect(cards.map((card) => card.getAttribute("data-section-card"))).toEqual(["treatments", "safety", "research"])
+    expect(cards).toEqual(qa("section[data-section]"))
+    for (const card of cards) {
+      const classes = card.className.split(/\s+/)
+      // The surface and the radius of the app's cards, a warm border at low opacity, 20 px of padding and 24 where the map is drawn.
+      expect(classes).toEqual(expect.arrayContaining(["rounded-card", "border", "border-border-warm/60", "bg-light-surface", "p-5", "sm:p-6"]))
+      expect(card.querySelectorAll("[data-section-card]")).toHaveLength(0)
+      const [head, body] = [...card.children] as HTMLElement[]
+      expect(card.children).toHaveLength(2)
+      expect(head.getAttribute("data-section-head")).toBe("true")
+      expect(head.contains(card.querySelector("h3"))).toBe(true)
+      expect(body.getAttribute("data-section-body")).toBe("true")
+      expect(body.className.split(/\s+/)).toContain("mt-4")
+    }
+    expect(cards[0].parentElement!.className.split(/\s+/)).toEqual(expect.arrayContaining(["space-y-5"]))
+    expect(cards.every((card) => card.parentElement === cards[0].parentElement)).toBe(true)
+    // The line of what it is built from is over the cards, not in one.
+    expect(q("[data-testid=evidence-basis]").closest("[data-section-card]")).toBeNull()
   })
 
   it("draws a bubble per class with its number, its name and what is new, naming the classes the pack does not", async () => {
@@ -322,7 +402,7 @@ describe("the evidence block of a condition page", () => {
       const detail = q("[data-treatment-detail]")
       expect(detail.getAttribute("data-treatment-detail")).toBe("ketamine")
       expect(q(NARROW).compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-      expect(detail.querySelector("[data-testid=direction-plot]")).not.toBeNull()
+      expect(detail.querySelector("[data-table-heading]")!.textContent).toBe("Ketamine · 2 papers")
       expect(qa("[data-study]").map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
       await pick("lithium", NARROW)
       expect(q("[data-treatment-detail]").getAttribute("data-treatment-detail")).toBe("lithium")
@@ -342,77 +422,103 @@ describe("the evidence block of a condition page", () => {
     expect(bubble("ketamine", WIDE).querySelector("[data-safety-ring]")).not.toBeNull()
   })
 
-  it("opens a treatment to the lines that have text, each under its own label and colour, and never says Watch or Did", async () => {
+  it("opens a treatment straight to its table, under one line with its name and how many papers: no summary, no count of unsorted papers, no plot", async () => {
     const many = treatment("ketamine", "Ketamine", [study(1), study(2)], {
-      lines: lines({ benefit: [{ text: "Eased symptoms.", key: "a" }, { text: "Worked fast.", key: "b" }], "no-benefit": [{ text: "No better than placebo", key: "e" }], safety: [{ text: "Dissociation. ", key: "c" }], mixed: [{ text: "Faded by week 6", key: "d" }] }),
+      unreportedPapers: 3, safetyPapers: 1,
+      lines: lines({ benefit: [{ text: "Eased symptoms.", key: "a" }], "no-benefit": [{ text: "No better than placebo", key: "e" }], safety: [{ text: "Dissociation. ", key: "c" }], mixed: [{ text: "Faded by week 6", key: "d" }] }),
     })
-    await show({ ...EVIDENCE, classes: [klass("medicine", null, [many, lithium])] })
+    await show({ ...EVIDENCE, classes: [klass("medicine", null, [many, { ...lithium, unreportedPapers: 1 }])] })
     await openTreatment("medicine", "ketamine")
     expect(bubble("ketamine").getAttribute("aria-pressed")).toBe("true")
-    const shown = qa("[data-treatment-detail] [data-line]")
-    // Each text loses its own full stop, and the line ends with one.
-    expect(shown.map((line) => [line.getAttribute("data-line"), line.textContent])).toEqual([
-      ["benefit", "Benefit: Eased symptoms; Worked fast."], ["no-benefit", "No benefit: No better than placebo."], ["mixed", "Mixed: Faded by week 6."], ["safety", "Safety: Dissociation."],
-    ])
-    expect(shown.map((line) => (line.querySelector("[data-line-label]") as HTMLElement).style.color)).toEqual(["var(--clinical-benefit)", "var(--clinical-no-benefit)", "var(--text-muted)", "var(--text-primary)"])
+    const detail = q("[data-treatment-detail]")
+    expect(detail.querySelectorAll("[data-line]")).toHaveLength(0)
+    expect(detail.querySelector("[data-unreported]")).toBeNull()
+    expect(detail.querySelector("[data-testid=direction-plot]")).toBeNull()
+    expect(detail.querySelector("a[data-dot]")).toBeNull()
+    expect(detail.textContent).not.toMatch(/Benefit:|No benefit:|Mixed:|Safety:|more papers|not sorted|Each dot|Eased symptoms\.|Dissociation|Faded by week 6/)
     expect(container.textContent).not.toMatch(/Watch|Did:/)
+    // The one line, then the table: nothing else.
+    const headings = [...detail.querySelectorAll("[data-table-heading]")] as HTMLElement[]
+    expect(headings.map((heading) => heading.textContent)).toEqual(["Ketamine · 2 papers"])
+    expect(headings[0].tagName).toBe("H4")
+    expect(detail.querySelectorAll("table")).toHaveLength(1)
+    expect(headings[0].compareDocumentPosition(detail.querySelector("table")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(detail.querySelector("table")!.getAttribute("aria-labelledby")).toBe(headings[0].id)
+    expect(detail.firstElementChild!.contains(headings[0])).toBe(true)
+    expect(detail.firstElementChild!.firstElementChild).toBe(headings[0])
+    expect(qa("[data-study]").map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
+    // The safety papers of the treatment are still marked under its bubble: they are listed under Safety.
+    expect(bubble("ketamine", NARROW).querySelector("[data-safety-mark]")!.textContent).toBe("1 safety")
     await pick("lithium", "[data-treatments]")
     expect(bubble("ketamine").getAttribute("aria-pressed")).toBe("false")
-    expect(qa("[data-treatment-detail] [data-line]").map((line) => line.textContent)).toEqual(["Benefit: Cut relapse."])
-    expect(container.textContent).not.toMatch(/Watch|Did:/)
+    expect(q("[data-treatment-detail] [data-table-heading]").textContent).toBe("Lithium · 1 paper")
+    expect(q("[data-treatment-detail]").textContent).not.toMatch(/more paper|Cut relapse\./)
   })
 
-  it("says how many more papers on the treatment are not sorted by what they found, only when there are some", async () => {
-    await show({ ...EVIDENCE, classes: [klass("medicine", null, [{ ...ketamine, unreportedPapers: 3 }, { ...lithium, unreportedPapers: 1 }])] })
-    await openTreatment("medicine", "ketamine")
-    expect(q("[data-unreported]").textContent).toBe("3 more papers on Ketamine are not sorted as benefit, no benefit or mixed (see Other research).")
-    await pick("lithium", "[data-treatments]")
-    expect(q("[data-unreported]").textContent).toBe("1 more paper on Lithium is not sorted as benefit, no benefit or mixed (see Other research).")
-    document.body.innerHTML = ""
+  it("has the same line over the table of a safety group and of a kind of other research", async () => {
     await show()
+    await pick("sertraline", "section[data-section=safety]")
+    await pick("mechanism", "section[data-section=research]")
+    const [safety, research] = [section("safety").querySelector("[data-table-heading]") as HTMLElement, section("research").querySelector("[data-table-heading]") as HTMLElement]
+    expect([safety.textContent, research.textContent]).toEqual(["Sertraline · 1 paper", "Mechanisms · 1 paper"])
     await openTreatment("medicine", "ketamine")
-    expect(q("[data-unreported]")).toBeNull()
+    const mine = q("[data-treatment-detail] [data-table-heading]")
+    expect([mine.tagName, mine.className]).toEqual([research.tagName, research.className])
+    expect(safety.className).toBe(research.className)
   })
 
   // Owner decision 2026-10-09: a paper counts for the treatment it tested; the other arm shows it as a comparison.
   describe("the papers a treatment was the comparison in", () => {
     const versus = [
-      study(21, { label: "Kane 2026", treatment: "Esketamine", comparator: "ketamine", text: "Gave more remission.", kind: "benefit" }),
+      study(21, { label: "Kane 2026", treatment: "Esketamine", comparator: "ketamine", text: "Gave more remission.", kind: "benefit", isNew: true }),
       study(22, { label: null, treatment: "lithium and quetiapine", comparator: "ketamine", text: null, takeaway: "Did not cut relapse more.", kind: "no-benefit" }),
       study(23, { label: "Lee 2025", treatment: null, comparator: "ketamine", text: "Eased symptoms", kind: "mixed" }),
     ]
     const compared = { ...ketamine, comparatorPapers: 3, comparedIn: versus }
     const open = async (entry: TreatmentEvidence) => { await show({ ...EVIDENCE, classes: [klass("medicine", null, [entry, lithium])] }); await openTreatment("medicine", "ketamine") }
-    it("are listed under the lines and before the plot, each with its own treatment before its result and its own direction", async () => {
+    it("are a second small table under the first, with its own line: the study, the treatment that paper tested, and its result", async () => {
       await open(compared)
       const detail = q("[data-treatment-detail]")
       const block = detail.querySelector("[data-compared-in]") as HTMLElement
-      expect(block.querySelector("[data-compared-count]")!.textContent).toBe("Used as the comparison in 3 papers:")
-      const items = [...block.querySelectorAll("li[data-compared]")] as HTMLElement[]
-      expect(items.map((item) => item.getAttribute("data-compared"))).toEqual(["pmid:21", "pmid:22", "pmid:23"])
-      expect(items.map((item) => { const link = item.querySelector("a")!; return [link.textContent, link.getAttribute("href")] })).toEqual([["Kane 2026", "/paper/paper-21"], ["Headline 22", "/paper/paper-22"], ["Lee 2025", "/paper/paper-23"]])
-      expect(items.map((item) => item.querySelector("[data-compared-result]")!.textContent)).toEqual([
-        "Esketamine: Gave more remission.", "lithium and quetiapine: Did not cut relapse more.", "The treatment it tested: Eased symptoms.",
-      ])
-      expect(items.map((item) => { const label = item.querySelector("[data-kind-label]") as HTMLElement; return [label.textContent, label.style.color] })).toEqual([
-        ["Benefit", "var(--clinical-benefit)"], ["No benefit", "var(--clinical-no-benefit)"], ["Mixed", "var(--text-muted)"],
-      ])
-      const lastLine = qa("[data-treatment-detail] [data-line]").at(-1)!
-      expect(lastLine.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-      expect(block.compareDocumentPosition(detail.querySelector("[data-testid=direction-plot]")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      const [main, second] = [...detail.querySelectorAll("table")] as HTMLElement[]
+      expect(detail.querySelectorAll("table")).toHaveLength(2)
+      expect(block.contains(second)).toBe(true)
+      expect(block.contains(main)).toBe(false)
+      expect(main.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // The same line as over the first table.
+      const [first, heading] = [...detail.querySelectorAll("[data-table-heading]")] as HTMLElement[]
+      expect([first.textContent, heading.textContent]).toEqual(["Ketamine · 2 papers", "Used as the comparison · 3 papers"])
+      expect(block.contains(heading)).toBe(true)
+      expect([heading.tagName, heading.className]).toEqual([first.tagName, first.className])
+      expect(second.getAttribute("aria-labelledby")).toBe(heading.id)
+      expect([...second.querySelectorAll("thead th")].map((head) => head.textContent)).toEqual(["Study", "Treatment tested", "Result"])
+      expect([...second.querySelectorAll("thead th")].every((head) => head.getAttribute("scope") === "col")).toBe(true)
+      const rows = [...second.querySelectorAll("tbody tr[data-compared]")] as HTMLElement[]
+      expect(rows.map((row) => row.getAttribute("data-compared"))).toEqual(["pmid:21", "pmid:22", "pmid:23"])
+      expect(rows.map((row) => row.children.length)).toEqual([3, 3, 3])
+      expect(rows.map((row) => { const link = row.querySelector("[data-cell=study] a")!; return [link.textContent, link.getAttribute("href")] })).toEqual([["Kane 2026", "/paper/paper-21"], ["Headline 22", "/paper/paper-22"], ["Lee 2025", "/paper/paper-23"]])
+      expect(rows[0].querySelector("[data-cell=study]")!.textContent).toBe("Kane 2026new")
+      // A paper that names no treatment has a dash there.
+      expect(rows.map((row) => row.querySelector("[data-cell=tested]")!.textContent)).toEqual(["Esketamine", "lithium and quetiapine", "–"])
+      // The result is of the treatment that paper tested, in the paper's own words, with its own direction.
+      expect(rows.map((row) => row.querySelector("[data-cell=result] span")!.textContent)).toEqual(["Gave more remission.", "Did not cut relapse more.", "Eased symptoms"])
+      expect(rows.map((row) => row.querySelector("[data-kind-label]")!.textContent)).toEqual(["Benefit", "No benefit", "Mixed"])
+      // The sentence and the list are gone.
+      expect(block.querySelector("ul, li, [data-compared-count], [data-compared-result]")).toBeNull()
+      expect(detail.textContent).not.toMatch(/Used as the comparison in|The treatment it tested/)
     })
-    it("have no dot in the plot, no row in the table and no line of the treatment's own", async () => {
+    it("have no row in the table of the treatment's own papers", async () => {
       await open(compared)
-      expect(qa("[data-testid=direction-plot] a[data-dot]").map((dot) => dot.getAttribute("data-dot"))).toEqual(["pmid:1", "pmid:2"])
       expect(qa("[data-study]").map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
-      expect(qa("[data-treatment-detail] [data-line]").map((line) => line.textContent).join(" ")).not.toMatch(/remission|relapse/)
+      expect(q("[data-treatment-detail] table").textContent).not.toMatch(/remission|relapse/)
     })
     it("say paper for one, and are absent when there is none", async () => {
       await open({ ...ketamine, comparatorPapers: 1, comparedIn: [versus[0]] })
-      expect(q("[data-compared-count]").textContent).toBe("Used as the comparison in 1 paper:")
+      expect(q("[data-compared-in] [data-table-heading]").textContent).toBe("Used as the comparison · 1 paper")
       document.body.innerHTML = ""
       await open(ketamine)
       expect(q("[data-compared-in]")).toBeNull()
+      expect(qa("[data-treatment-detail] table")).toHaveLength(1)
       expect(container.textContent).not.toContain("Used as the comparison")
     })
     it("are marked in words on the bubble of the treatment, only when there are some", async () => {
@@ -424,14 +530,9 @@ describe("the evidence block of a condition page", () => {
     })
   })
 
-  it("draws the direction plot of the chosen treatment and then the table of its studies", async () => {
+  it("draws the table of the studies of the chosen treatment", async () => {
     await show()
     await openTreatment("medicine", "ketamine")
-    const detail = q("[data-treatment-detail]")
-    const plot = detail.querySelector("[data-testid=direction-plot]") as HTMLElement
-    expect([...plot.querySelectorAll("a[data-dot]")].map((dot) => dot.getAttribute("href"))).toEqual(["/paper/paper-1", "/paper/paper-2"])
-    expect([...plot.querySelectorAll("[data-tier-label]")].map((label) => label.textContent)).toEqual(["Trials"])
-    expect(plot.compareDocumentPosition(detail.querySelector("table")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(heads()).toEqual(["Study", "Design", "n", "Compared with", "Result", "Details"])
     const rows = qa("[data-study]")
     expect(rows.map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
@@ -446,8 +547,38 @@ describe("the evidence block of a condition page", () => {
     const result = rows[1].querySelector("[data-cell=result]") as HTMLElement
     expect(result.textContent).toContain("No better than placebo")
     expect((result.querySelector("[data-kind-label]") as HTMLElement).textContent).toBe("No benefit")
-    expect((result.querySelector("[data-kind-label]") as HTMLElement).style.color).toBe("var(--clinical-no-benefit)")
     expect(q("[data-table-scroll]").className).toContain("overflow-x-auto")
+  })
+
+  it("writes the direction of a result in a small pill, tinted with the colour of the direction, its words in the colour of text", async () => {
+    await show({ ...EVIDENCE, classes: [klass("medicine", null, [treatment("ketamine", "Ketamine", [study(1), study(2, { kind: "no-benefit" }), study(3, { kind: "mixed" }), study(4, { kind: null })])])] })
+    await openTreatment("medicine", "ketamine")
+    const pills = qa("[data-study] [data-cell=result] [data-kind-label]")
+    expect(pills.map((pill) => pill.textContent)).toEqual(["Benefit", "No benefit", "Mixed"])
+    for (const pill of pills) {
+      const classes = pill.className.split(/\s+/)
+      expect(classes).toEqual(expect.arrayContaining(["rounded-pill", "text-[12px]", "text-espresso"]))
+      expect(pill.style.color).toBe("")
+      expect(pill.style.backgroundColor).toMatch(/^color-mix\(in srgb, var\(--[a-z-]+\) 12%, transparent\)$/)
+    }
+    expect(pills.map((pill) => pill.style.backgroundColor.match(/var\(--[a-z-]+\)/)![0])).toEqual(["var(--clinical-benefit)", "var(--clinical-no-benefit)", "var(--text-muted)"])
+    // A safety paper has the same pill, in the violet of the ring.
+    await pick("sertraline", "section[data-section=safety]")
+    const safety = section("safety").querySelector("[data-kind-label]") as HTMLElement
+    expect([safety.textContent, safety.style.backgroundColor]).toEqual(["Safety", "color-mix(in srgb, var(--viz-cat-3) 12%, transparent)"])
+  })
+
+  it("sets a table in larger type: cells of 14 px with 12 px over and under, heads of 12 px in capitals, a tint on the row under the pointer, the study in medium weight", async () => {
+    await show()
+    await openTreatment("medicine", "ketamine")
+    const classes = (element: Element) => element.className.split(/\s+/)
+    for (const cell of qa("[data-study] td")) expect(classes(cell)).toEqual(expect.arrayContaining(["py-3", "text-[14px]"]))
+    for (const head of qa("[data-treatment-detail] thead th")) expect(classes(head)).toEqual(expect.arrayContaining(["text-[12px]", "uppercase", "tracking-wide"]))
+    for (const row of qa("[data-study]")) expect(classes(row).some((name) => name.startsWith("hover:bg-"))).toBe(true)
+    const link = q("[data-study] [data-cell=study] a")
+    expect(classes(link)).toContain("font-medium")
+    expect(classes(link)).not.toContain("font-semibold")
+    expect(classes(q("[data-treatment-detail] [data-table-heading]"))).toEqual(expect.arrayContaining(["text-[15px]", "font-semibold"]))
   })
 
   it("keeps the population and the outcome of a study behind a Details button, which is absent when there is neither", async () => {
@@ -664,7 +795,8 @@ describe("the evidence block of a condition page", () => {
     expect(q("details")).toBeNull()
     expect(container.textContent).not.toContain("When they were published")
     expect(qa("rect[data-month]")).toHaveLength(0)
-    expect(q("[data-testid=condition-evidence]").lastElementChild!.getAttribute("data-section")).toBe("research")
+    expect(q("[data-testid=condition-evidence]").lastElementChild).toBe(q("[data-sections]"))
+    expect(q("[data-sections]").lastElementChild!.getAttribute("data-section")).toBe("research")
   })
 
   it("says so when nothing was published in the period", async () => {
