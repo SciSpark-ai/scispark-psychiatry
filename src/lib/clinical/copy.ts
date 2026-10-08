@@ -336,11 +336,21 @@ export const CLINICAL_COPY = {
     badRequest: "The request was not understood.",
     noSuchCondition: "That condition is not in the pack.",
     requestFailed: (status: number) => `The evidence could not be reached (${status}).`,
-    /** The line above the tabs. `since` is the day the earliest paper was first listed. */
+    /** The line above the sections. `since` is the day the earliest paper was first listed. */
     basis: (count: number, condition: string, since: string | null) =>
       `From the ${count} ${count === 1 ? "paper" : "papers"} your feed has listed on ${condition}${since ? ` since ${since}` : ""}. Not all the evidence on it; papers are counted, nothing is pooled.`,
     basisPeriod: (count: number, collected: number, phrase: string, condition: string) =>
       `${count} of ${collected} ${collected === 1 ? "paper" : "papers"} your feed has listed on ${condition}, published in the last ${phrase}. Not all the evidence on it; papers are counted, nothing is pooled.`,
+    /** The same line when only the papers the reader saved are shown. */
+    basisSaved: (count: number, condition: string) =>
+      `From the ${count} ${count === 1 ? "paper" : "papers"} you saved to your Library on ${condition}. Not all the evidence on it; papers are counted, nothing is pooled.`,
+    basisSavedPeriod: (count: number, saved: number, phrase: string, condition: string) =>
+      `${count} of the ${saved} ${saved === 1 ? "paper" : "papers"} you saved to your Library on ${condition}, published in the last ${phrase}. Not all the evidence on it; papers are counted, nothing is pooled.`,
+    /** `control` and `everything` are the name of the control that says which papers are shown, and of its choice of all of them. */
+    noneSaved: (condition: string, control: string, everything: string) =>
+      `You have not saved a paper on ${condition} to your Library yet. To see every paper your feed listed on it, choose “${everything}” under ${control}.`,
+    emptySavedPeriod: (condition: string, phrase: string, saved: number) =>
+      `None of the ${saved} ${saved === 1 ? "paper" : "papers"} you saved on ${condition} was published in the last ${phrase}.`,
     empty: (condition: string) => `Your feed has not listed a paper on ${condition} yet. Follow it under My topics and refresh your feed.`,
     emptyPeriod: (condition: string, phrase: string, collected: number) => `No paper on ${condition} was published in the last ${phrase}. ${collected} ${collected === 1 ? "is" : "are"} collected in all.`,
     notAQuery: "This block does not name a condition. It should read: condition: <the pack's id of the condition>.",
@@ -349,28 +359,54 @@ export const CLINICAL_COPY = {
     periods: { all: "All time", "12m": "Last 12 months", "6m": "Last 6 months", "3m": "Last 3 months" },
     /** After "in the last". */
     periodPhrases: { "12m": "12 months", "6m": "6 months", "3m": "3 months" },
-    tabs: { treatments: "Treatments", safety: "Safety", research: "Other research" },
-    tabsLabel: "Kinds of evidence",
+    sections: { treatments: "Treatments", safety: "Safety", research: "Other research" },
+    treatmentsEmpty: "None of these papers reports whether a treatment worked.",
     safetyEmpty: "No safety findings among these papers.",
+    researchEmpty: "No other research among these papers.",
     /** Class names by their key, for classes the pack does not name. */
     classLabels: { medicine: "Medicines", psychotherapy: "Psychotherapy", neuromodulation: "Neuromodulation", digital: "Digital tools", lifestyle: "Lifestyle", other: "Other treatments" },
     researchTypes: { "risk-factor": "Risk factors", prediction: "Prediction and biomarkers", mechanism: "Mechanisms", epidemiology: "Epidemiology", services: "Services and policy", "no-efficacy": "Treatment studied, no efficacy result", other: "Other" },
-    noTreatment: "No treatment named",
     /** A review or an editorial is not a study, so papers are counted. */
-    papers: (count: number) => `${count} ${count === 1 ? "paper" : "papers"}`,
     newCount: (count: number) => `+${count} new`,
-    /** The few words under a treatment: what it did, and what to watch for. Each text loses its own full stop; the line ends with one. */
-    did: (texts: string[]) => `Did: ${joinFindings(texts)}`,
-    watch: (texts: string[]) => `Watch: ${joinFindings(texts)}`,
-    kinds: { benefit: "benefit", "no-benefit": "no benefit", mixed: "mixed", safety: "safety", other: "other", unsorted: "not sorted" },
-    kindLabels: { benefit: "Benefit", "no-benefit": "No benefit", mixed: "Mixed", safety: "Safety", other: "Other", unsorted: "Not sorted" },
-    /** The name of the key to the bars, for a screen reader. */
-    barKey: "What the bar colours mean",
-    /** What "n" counts, shown when the pointer rests on the column's heading. */
-    sizeTitle: "Participants, as the paper prints it",
-    columns: { treatment: "Treatment", study: "Study", design: "Design", population: "Population", size: "n", comparator: "Compared with", outcome: "Outcome", result: "Result", finding: "Finding" },
+    /** Under the bubble of a treatment that has safety papers. They are listed under Safety. */
+    safetyMark: (count: number) => `${count} safety`,
+    /** The line above the bubbles of the classes; the names of the three colours follow it. */
+    bubbleKey: "A bubble counts papers: the more papers, the larger it is. Its colours are what the papers found:",
+    /**
+     * What a bubble says to a reader who does not see it. `efficacy` is null for a bubble that has no colours of direction.
+     * What is new and the safety papers are added when there are any.
+     */
+    bubbleLabel: (name: string, papers: number, efficacy: { benefit: number; "no-benefit": number; mixed: number } | null, newPapers: number, safetyPapers: number) =>
+      [
+        `${name}: ${papers} ${papers === 1 ? "paper" : "papers"}`,
+        ...(efficacy ? [`${efficacy.benefit} benefit, ${efficacy["no-benefit"]} no benefit, ${efficacy.mixed} mixed`] : []),
+        ...(newPapers > 0 ? [`${newPapers} new`] : []),
+        ...(safetyPapers > 0 ? [`${safetyPapers} safety`] : []),
+      ].join("; "),
+    /** The names of the rows of bubbles, for a screen reader. */
+    rows: {
+      classes: "Classes of treatment", treatments: (className: string) => `Treatments in ${className}`,
+      safety: "Safety papers, by treatment", research: "Other research, by kind",
+    },
+    allClasses: "All classes",
+    /** Between the two parts of the crumb line. */
+    crumbGap: " › ",
+    kindLabels: { benefit: "Benefit", "no-benefit": "No benefit", mixed: "Mixed", safety: "Safety", other: "Other" },
+    /** A line of a treatment: what its papers found, in each paper's few words. Each text loses its own full stop; the line ends with one. */
+    lineLabel: (label: string) => `${label}:`,
+    lineText: (texts: string[]) => joinFindings(texts),
+    unreported: (count: number, name: string) => `${count} more ${count === 1 ? "paper" : "papers"} on ${name} did not report whether it worked (see Other research).`,
+    /** The plot of a treatment's papers: a row per tier of design, a dot per paper. */
+    plot: {
+      label: (name: string) => `Papers on ${name}, by design and by what they found`,
+      tiers: { synthesis: "Reviews and meta-analyses", trial: "Trials", observational: "Observational and other" },
+      dot: (label: string, direction: string, text: string | null, size: number | null) => `${label}: ${direction}${text ? ` (${text})` : ""}, n = ${size ?? "not stated"}`,
+      key: "Each dot is one paper. Larger dots have more participants.",
+    },
+    columns: { study: "Study", design: "Design", population: "Population", comparator: "Compared with", outcome: "Outcome", result: "Result", finding: "Finding", details: "Details" },
+    /** The design of a study and its participants, as the paper prints them: either, both, or a dash. */
+    designCell: (design: string | null, size: number | null) => [design, size === null ? null : `n = ${size}`].filter(Boolean).join(", ") || "–",
     studyMarks: { new: "new", saved: "saved" },
-    dash: "–",
     timeline: "When they were published",
     otherSeries: "Other",
     timelineLabel: (condition: string) => `Papers on ${condition} by month of publication`,
