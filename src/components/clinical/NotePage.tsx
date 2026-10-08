@@ -1,14 +1,16 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/Button"
+import { renderMarkdown } from "@/components/wiki/markdown-preview"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { evidenceHref } from "@/lib/clinical/evidence/href"
 import { readNoteRemote, saveNoteRemote, type NoteAnswer } from "@/lib/clinical/notes/client"
 import { noteChatHref, notesHref, paperHref } from "@/lib/clinical/notes/href"
 import { copyText, endOfText, insertLink } from "@/lib/clinical/notes/insert"
+import { previewMarkdown } from "@/lib/clinical/notes/preview"
 import { conditionLink, noteLinks, paperLink, titleOf, treatmentLink, type NoteConflict, type NoteReference } from "@/lib/clinical/notes/links"
 import { CitePaper } from "./CitePaper"
 import { LinkTopic, type Topic } from "./LinkTopic"
@@ -25,6 +27,12 @@ const FOCUS = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visi
 const CHIP = `rounded-pill border border-border-warm px-2.5 py-0.5 text-[12px] leading-4 text-secondary-dark transition-colors hover:bg-card-surface/60 ${FOCUS}`
 const ACTION = `rounded-pill border border-border-warm px-4 py-1.5 text-[13px] text-espresso transition-colors hover:bg-card-surface ${FOCUS}`
 const TEXT_LINK = `text-accent-ink hover:underline ${FOCUS}`
+/** As the tabs of the Library: muted, and the chosen one semibold over a line of the accent. */
+const TAB = `border-b-2 border-transparent px-3 py-1.5 text-[14px] leading-5 text-muted-text transition-colors hover:text-espresso ${FOCUS}`
+const TAB_ON = `border-b-2 border-accent-ink px-3 py-1.5 text-[14px] font-semibold leading-5 text-espresso ${FOCUS}`
+/** The two ways the text is shown. */
+const TABS = ["edit", "preview"] as const
+type Tab = (typeof TABS)[number]
 
 const messageOf = (failure: unknown) => (failure instanceof Error ? failure.message : String(failure))
 /** What a note links, as one text: two texts with the same links give the same chips, references and new papers. */
@@ -67,6 +75,11 @@ export interface NotePageProps {
  * It saves itself a moment after the last change and when a field is left, one save at a time, each naming the
  * revision the one before gave; a note changed elsewhere is shown beside the reader's text and nothing is overwritten
  * until the reader says which to keep. Opening a note writes nothing.
+ *
+ * The text has two tabs: "Edit", the field, and "Preview", the text as it reads (the wiki's Markdown renderer), where
+ * a cited paper is a link to the paper's page and a wiki link that resolves to nothing is marked. A note with text
+ * opens on Preview, an empty one on Edit. The field stays in the page under Preview, hidden, so that the caret, what
+ * is typed and a save under way are untouched by a change of tab; putting a link in shows Edit first.
  */
 export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
   const router = useRouter()
@@ -79,6 +92,8 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
   const [conflict, setConflict] = useState<NoteConflict | null>(null)
   const [unresolved, setUnresolved] = useState<string[]>([])
   const [panel, setPanel] = useState<"cite" | "link" | null>(null)
+  const [tab, setTab] = useState<Tab>("edit")
+  const tabsId = useId()
   const [notice, setNotice] = useState<string | null>(null)
   /** The names of what was linked on this visit, until the server names them. */
   const [named, setNamed] = useState<Record<string, string>>({})
@@ -100,6 +115,7 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
           Object.assign(w, stored, { saved: { ...stored, revision: answer.revision }, ready: true, links: linkKey(answer.body), references: answer.references })
           setTitle(stored.title)
           setBody(stored.body)
+          setTab(stored.body.trim() === "" ? "edit" : "preview")
         }
         setView(answer)
       })
@@ -190,7 +206,7 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
     fit()
     window.addEventListener("resize", fit)
     return () => window.removeEventListener("resize", fit)
-  }, [body, view, conflict])
+  }, [body, view, conflict, tab])
 
   // After a link was put in, the caret is behind it.
   useEffect(() => {
@@ -199,7 +215,7 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
     field.focus()
     field.setSelectionRange(place.current, place.current)
     place.current = null
-  }, [body])
+  }, [body, tab])
 
   const change = (next: { title?: string; body?: string }) => {
     const w = work.current
@@ -219,6 +235,7 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
     const start = touched.current && field ? field.selectionStart : endOfText(w.body)
     const end = touched.current && field ? field.selectionEnd : start
     const next = insertLink(w.body, link, start, end)
+    setTab("edit")
     touched.current = true
     place.current = next.caret
     change({ body: next.text })
@@ -311,6 +328,21 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
     })),
   ]
 
+  /** A panel that puts a link in the text is opened over the field, not over the preview. */
+  const toggle = (which: "cite" | "link") => {
+    setTab("edit")
+    setPanel(panel === which ? null : which)
+  }
+  // The papers the preview can link: those the server named, and those cited on this visit.
+  const known = new Map(summary.papers.map((paper) => [paper.slug, paper.label] as const))
+  for (const slug of live.papers) {
+    const label = named[`paper:${slug}`]
+    if (label !== undefined && !known.has(slug)) known.set(slug, label)
+  }
+  const preview = tab !== "preview" ? null
+    : body.trim() === "" ? <p className="text-[14px] text-muted-text">{P.previewEmpty}</p>
+    : renderMarkdown(previewMarkdown(body, { papers: known, missing, notFound: P.notFound }), { preserveLineBreaks: true })
+
   return (
     <div data-note-page={id} className="max-w-3xl p-7" onClickCapture={leave}>
       {back}
@@ -336,10 +368,17 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
           </div>
         </div>
       )}
-      <div className={conflict ? "mt-4 grid gap-4 lg:grid-cols-2" : "mt-4"}>
-        <textarea ref={area} aria-label={P.bodyLabel} placeholder={P.bodyPlaceholder} rows={8} value={body}
+      <div role="tablist" aria-label={P.tabsLabel} className="mt-4 flex gap-1 border-b border-border-warm">
+        {TABS.map((entry) => (
+          <button key={entry} type="button" role="tab" id={`${tabsId}-${entry}`} data-note-tab={entry} aria-selected={entry === tab} aria-controls={`${tabsId}-panel`}
+            onClick={() => setTab(entry)} className={entry === tab ? TAB_ON : TAB}>{P.tabs[entry]}</button>
+        ))}
+      </div>
+      <div role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-${tab}`} className={conflict ? "mt-4 grid gap-4 lg:grid-cols-2" : "mt-4"}>
+        <textarea ref={area} hidden={tab !== "edit"} aria-label={P.bodyLabel} placeholder={P.bodyPlaceholder} rows={8} value={body}
           onChange={(event) => change({ body: event.target.value })} onFocus={() => { touched.current = true }} onBlur={() => void save()}
-          className={`block w-full resize-none overflow-hidden border-0 bg-transparent p-0 font-sans text-[15px] leading-7 text-espresso placeholder:text-muted-text ${FOCUS}`} />
+          className={`w-full resize-none overflow-hidden border-0 bg-transparent p-0 font-sans text-[15px] leading-7 text-espresso placeholder:text-muted-text ${FOCUS}`} />
+        {preview !== null && <div data-note-preview="true" className="min-w-0 whitespace-pre-line">{preview}</div>}
         {conflict && (
           <div data-note-stored="true" className="rounded-card border border-border-warm bg-light-surface px-4 py-3">
             <p className="text-[12px] uppercase tracking-wide text-muted-text">{P.conflictStored}</p>
@@ -364,8 +403,8 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
       )}
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <button type="button" aria-expanded={panel === "cite"} onClick={() => setPanel(panel === "cite" ? null : "cite")} className={ACTION}>{P.citePaper}</button>
-        <button type="button" aria-expanded={panel === "link"} onClick={() => setPanel(panel === "link" ? null : "link")} className={ACTION}>{P.linkTopic}</button>
+        <button type="button" aria-expanded={panel === "cite"} onClick={() => toggle("cite")} className={ACTION}>{P.citePaper}</button>
+        <button type="button" aria-expanded={panel === "link"} onClick={() => toggle("link")} className={ACTION}>{P.linkTopic}</button>
         <button type="button" onClick={() => void copy()} className={ACTION}>{P.copy}</button>
         <Link href={noteChatHref(id)} className={ACTION}>{P.ask}</Link>
         <button type="button" onClick={() => void save().finally(onDelete)} className={`${ACTION} hover:text-accent-ink`}>{P.remove}</button>

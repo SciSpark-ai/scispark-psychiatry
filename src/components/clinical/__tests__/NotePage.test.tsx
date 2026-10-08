@@ -46,13 +46,18 @@ function deferred<T>() {
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot> | null = null
 const onDelete = vi.fn()
-async function open(props: { untitled?: boolean; confirm?: React.ReactNode } = {}) {
+/** Opens the note. A note with text opens on its preview: unless `asOpened`, the reader then goes to Edit, where the field is. */
+async function open(props: { untitled?: boolean; confirm?: React.ReactNode; asOpened?: boolean } = {}) {
   container = document.createElement("div")
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => { root!.render(<NotePage id="esk" untitled={props.untitled ?? false} onDelete={onDelete} confirm={props.confirm} />) })
   await act(async () => {})
+  if (!props.asOpened && tabOn() === "preview") await act(async () => { tab("edit").click() })
 }
+const tab = (name: "edit" | "preview") => container.querySelector(`[data-note-tab="${name}"]`) as HTMLButtonElement
+const tabOn = () => container.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("data-note-tab") ?? null
+const preview = () => container.querySelector("[data-note-preview]") as HTMLElement | null
 const flush = async () => { await act(async () => {}) }
 const tick = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms) }) }
 const click = async (element: Element) => { await act(async () => { (element as HTMLElement).click() }) }
@@ -511,6 +516,146 @@ describe("what is under the text", () => {
     await flush()
     expect(saves()).toHaveLength(1)
     expect(onDelete).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("Edit and Preview", () => {
+  const empty = () => answer({ summary: summary({ links: { papers: [], conditions: [], treatments: [] }, conditions: [], papers: [], treatments: [], kind: "none" }), body: "", newPapers: [], references: [] })
+  const previewLinks = () => [...preview()!.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")])
+
+  it("has the two tabs over the text; a note with text opens on Preview, with the field kept out of sight", async () => {
+    await open({ asOpened: true })
+    const list = container.querySelector('[role="tablist"]') as HTMLElement
+    expect(list.getAttribute("aria-label")).toBe("How the text is shown")
+    expect([...list.querySelectorAll('[role="tab"]')].map((entry) => entry.textContent)).toEqual(["Edit", "Preview"])
+    expect(list.compareDocumentPosition(area()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(tabOn()).toBe("preview")
+    expect(area().hidden).toBe(true)
+    expect(preview()).not.toBeNull()
+    expect(notes.saveNoteRemote).not.toHaveBeenCalled()
+  })
+
+  it("opens a new or empty note on Edit, and says so when there is nothing to preview", async () => {
+    notes.readNoteRemote.mockResolvedValue(empty())
+    await open({ asOpened: true })
+    expect(tabOn()).toBe("edit")
+    expect(area().hidden).toBe(false)
+    expect(preview()).toBeNull()
+    await click(tab("preview"))
+    expect(preview()!.textContent).toBe("Nothing to preview yet.")
+  })
+
+  it("shows a cited paper as a link to the paper's page, a wiki link that resolves to nothing marked, and the condition and treatment links", async () => {
+    notes.readNoteRemote.mockResolvedValue(answer({ body: `${BODY}\nAlso [depression](/wiki?condition=depression).\n` }))
+    await open({ asOpened: true })
+    expect(previewLinks()).toEqual([
+      ["Lee 2024", "/paper/lee-2024"],
+      ["Esketamine", "/wiki?condition=depression&treatment=esketamine"],
+      ["depression", "/wiki?condition=depression"],
+    ])
+    expect(preview()!.textContent).toContain("On Lee 2024 and ghost (not found).")
+    expect(preview()!.querySelector("em")!.textContent).toBe("(not found)")
+    expect(preview()!.textContent).not.toContain("[[")
+  })
+
+  it("marks a slug a save could not resolve in the preview too", async () => {
+    notes.readNoteRemote.mockResolvedValue(empty())
+    notes.saveNoteRemote.mockResolvedValue(saved("r2", ["nowhere"]))
+    await open()
+    await write(area(), "See [[nowhere|Nowhere 2020]].")
+    await tick(SAVE_DELAY_MS)
+    await click(tab("preview"))
+    expect(preview()!.textContent).toBe("See Nowhere 2020 (not found).")
+    expect(preview()!.querySelector("a")).toBeNull()
+  })
+
+  it("shows a formula as it was typed, and keeps the lines of the text", async () => {
+    notes.readNoteRemote.mockResolvedValue(answer({ body: "Dose $\\frac{a}{b}$ mg\nthen $$E = mc^2$$.\n" }))
+    await open({ asOpened: true })
+    expect(preview()!.textContent).toBe("Dose $\\frac{a}{b}$ mg\nthen $$E = mc^2$$.")
+    expect(preview()!.className).toContain("whitespace-pre-line")
+  })
+
+  it("keeps Links in this note under both tabs", async () => {
+    await open({ asOpened: true })
+    const under = () => [...container.querySelectorAll("[data-note-link]")].map((item) => item.getAttribute("data-note-link"))
+    const both = ["paper:lee-2024", "paper:ghost", "condition:depression", "treatment:depression/esketamine"]
+    expect(under()).toEqual(both)
+    expect(preview()!.compareDocumentPosition(container.querySelector("#note-links")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await click(tab("edit"))
+    expect(under()).toEqual(both)
+  })
+
+  it("shows what was typed on Edit when the reader goes to Preview, and saves it once", async () => {
+    await open()
+    expect(tabOn()).toBe("edit")
+    expect(preview()).toBeNull()
+    await write(area(), "A **new** line.")
+    await click(tab("preview"))
+    expect(preview()!.textContent).toBe("A new line.")
+    expect(preview()!.querySelector("strong")!.textContent).toBe("new")
+    expect(area().value).toBe("A **new** line.")
+    expect(notes.saveNoteRemote).not.toHaveBeenCalled()
+    await tick(SAVE_DELAY_MS)
+    expect(saves()).toEqual([{ id: "esk", title: "Esketamine in TRD", body: "A **new** line.", revision: "r1" }])
+    await click(tab("edit"))
+    await click(tab("preview"))
+    await tick(SAVE_DELAY_MS * 2)
+    expect(notes.saveNoteRemote).toHaveBeenCalledTimes(1)
+    expect(state()).toBe("saved")
+  })
+
+  it("saves nothing when the reader only goes from one tab to the other", async () => {
+    await open({ asOpened: true })
+    await click(tab("edit"))
+    await leaveField(area())
+    await click(tab("preview"))
+    await tick(SAVE_DELAY_MS * 2)
+    expect(notes.saveNoteRemote).not.toHaveBeenCalled()
+    expect(area().value).toBe(BODY)
+  })
+
+  it("lets a save that is under way finish while the reader is on Preview", async () => {
+    const first = deferred<ReturnType<typeof saved>>()
+    notes.saveNoteRemote.mockReturnValueOnce(first.promise)
+    await open()
+    await write(area(), "Sent.")
+    await tick(SAVE_DELAY_MS)
+    await click(tab("preview"))
+    expect(state()).toBe("saving")
+    await act(async () => { first.resolve(saved("r2")) })
+    await flush()
+    expect(state()).toBe("saved")
+    expect(preview()!.textContent).toBe("Sent.")
+    expect(notes.saveNoteRemote).toHaveBeenCalledTimes(1)
+  })
+
+  it("goes to Edit when Cite a paper or Link a condition or treatment is pressed on Preview, and puts the link in the field", async () => {
+    notes.searchCitableRemote.mockResolvedValue([{ slug: "kim-2023", label: "Kim 2023", title: "Ketamine in older adults", venue: "JAMA Psychiatry", year: 2023, saved: true }])
+    records.listConditionsRemote.mockResolvedValue([])
+    await open({ asOpened: true })
+    await click(button("Link a condition or treatment"))
+    expect(tabOn()).toBe("edit")
+    expect(area().hidden).toBe(false)
+    await click(tab("preview"))
+    await click(button("Cite a paper"))
+    expect(tabOn()).toBe("edit")
+    expect(container.querySelector("[data-cite-paper]")).not.toBeNull()
+    await write(container.querySelector('[data-cite-paper] input[type="search"]') as HTMLInputElement, "ket")
+    await tick(CITE_DELAY_MS)
+    await click(container.querySelector('[data-cite="kim-2023"]') as Element)
+    expect(area().value).toContain("[[kim-2023|Kim 2023]]")
+    expect(tabOn()).toBe("edit")
+    await click(tab("preview"))
+    expect(previewLinks()).toContainEqual(["Kim 2023", "/paper/kim-2023"])
+  })
+
+  it("goes to Edit when a new paper is cited from the list above the text on Preview", async () => {
+    await open({ asOpened: true })
+    await click(button("Show"))
+    await click(button("Cite"))
+    expect(tabOn()).toBe("edit")
+    expect(area().value).toContain("[[new-1|Park 2026]]")
   })
 })
 

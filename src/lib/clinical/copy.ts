@@ -385,6 +385,10 @@ export const CLINICAL_COPY = {
       titleLabel: "Title of the note",
       bodyLabel: "Text of the note",
       bodyPlaceholder: "Write here.",
+      /** The two ways the text is shown: the field it is written in, and the text as it reads, with its links. */
+      tabsLabel: "How the text is shown",
+      tabs: { edit: "Edit", preview: "Preview" },
+      previewEmpty: "Nothing to preview yet.",
       aboutLabel: "What this note is about",
       /** A day as `YYYY-MM-DD`, as it is read; one that does not read as a day is shown as it is. */
       day: (day: string) => {
