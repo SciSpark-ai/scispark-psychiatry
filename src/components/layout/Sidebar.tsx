@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Fragment, Suspense, useEffect, useRef, useState } from "react";
 import {
   Home,
   BookOpen,
+  Bookmark,
+  History,
   Library,
   ListChecks,
   MessageSquarePlus,
@@ -52,13 +54,18 @@ interface NavItem {
 
 const N = CLINICAL_COPY.nav;
 
-/** One group, no headings (amendment A1). Graph, Read later and History are not in the rail. */
-const NAV_ITEMS: NavItem[] = [
-  { key: "home", label: N.whatsNew, href: "/", icon: Home },
-  { key: "evidence", label: N.evidence, href: "/wiki", icon: BookOpen },
-  { key: "library", label: N.library, href: "/wiki?view=all", icon: Library },
-  { key: "watch", label: CLINICAL_COPY.watch.heading, href: "/watch", icon: ListChecks },
-  { key: "chat", label: N.chat, href: "/chat", icon: MessageSquarePlus },
+const HOME: NavItem = { key: "home", label: N.whatsNew, href: "/", icon: Home };
+const EVIDENCE: NavItem = { key: "evidence", label: N.evidence, href: "/wiki", icon: BookOpen };
+const CHAT: NavItem = { key: "chat", label: N.chat, href: "/chat", icon: MessageSquarePlus };
+const LIBRARY: NavItem = { key: "library", label: N.library, href: "/wiki?view=all", icon: Library };
+const READ_LATER: NavItem = { key: "readLater", label: N.readLater, href: "/read-later", icon: Bookmark };
+const HISTORY: NavItem = { key: "history", label: N.history, href: "/feed-history", icon: History };
+const WATCH: NavItem = { key: "watch", label: CLINICAL_COPY.watch.heading, href: "/watch", icon: ListChecks };
+
+/** Two groups, no headings, a rule between them: where to look, then what is yours. Graph is not in the rail. */
+const NAV_GROUPS: NavItem[][] = [
+  [HOME, EVIDENCE, CHAT, LIBRARY],
+  [READ_LATER, HISTORY, WATCH],
 ];
 
 interface SidebarProps {
@@ -87,33 +94,38 @@ interface NavLinksProps {
 function NavLinksView({ pathname, collapsed, inboxCount, fadeLabel, onNavigate, libraryView }: NavLinksProps & { libraryView: boolean }) {
   return (
     <>
-      {NAV_ITEMS.map((item) => {
-        const isActive = isItemActive(pathname, item, libraryView);
-        const Icon = item.icon;
-        // Review-inbox badge is Evidence-only; attached here rather than in
-        // NAV_ITEMS to keep the item data generic.
-        const badge = item.key === "evidence" && !collapsed && inboxCount > 0 ? inboxCount : null;
-        return (
-          <Link
-            key={item.key}
-            href={item.href}
-            onClick={onNavigate}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[15px] tracking-body transition-colors ${
-              isActive
-                ? "bg-card-surface text-espresso font-medium"
-                : "text-muted-text hover:bg-card-surface/50"
-            }`}
-          >
-            <Icon size={18} strokeWidth={1.8} className="flex-shrink-0" />
-            <span className={fadeLabel}>{item.label}</span>
-            {badge !== null && (
-              <Chip tone="accent" className="ml-auto flex-shrink-0">
-                {badge}
-              </Chip>
-            )}
-          </Link>
-        );
-      })}
+      {NAV_GROUPS.map((group, index) => (
+        <Fragment key={index}>
+          {index > 0 && <hr className="border-border-warm mx-[10px] my-[14px]" />}
+          {group.map((item) => {
+          const isActive = isItemActive(pathname, item, libraryView);
+          const Icon = item.icon;
+          // Review-inbox badge is Evidence-only; attached here rather than in
+          // NAV_GROUPS to keep the item data generic.
+          const badge = item.key === "evidence" && !collapsed && inboxCount > 0 ? inboxCount : null;
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              onClick={onNavigate}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-[15px] tracking-body transition-colors ${
+                isActive
+                  ? "bg-card-surface text-espresso font-medium"
+                  : "text-muted-text hover:bg-card-surface/50"
+              }`}
+            >
+              <Icon size={18} strokeWidth={1.8} className="flex-shrink-0" />
+              <span className={fadeLabel}>{item.label}</span>
+              {badge !== null && (
+                <Chip tone="accent" className="ml-auto flex-shrink-0">
+                  {badge}
+                </Chip>
+              )}
+            </Link>
+          );
+        })}
+        </Fragment>
+      ))}
     </>
   );
 }
@@ -220,7 +232,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           : <ThemeToggle className={collapsed ? "invisible" : "ml-auto"} />}
       </div>
 
-      {/* One group of five, no headings — icons always at same position */}
+      {/* Two groups, no headings — icons always at same position */}
       <nav className={`flex-1 min-h-0 overflow-y-auto ${disabled ? "opacity-40 pointer-events-none" : ""}`}>
         <Suspense fallback={<NavLinksView {...navProps} libraryView={false} />}>
           <NavLinks {...navProps} />

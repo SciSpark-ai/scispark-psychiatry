@@ -24,15 +24,21 @@ import { useUIStore } from "@/stores/ui-store"
 const html = () => renderToStaticMarkup(<Sidebar collapsed={false} />).replace(/&#x27;/g, "'")
 
 describe("Sidebar nav map (SP1)", () => {
-  it("shows the five-item rail, in order, with no group headings", () => {
+  it("shows two groups with a rule between them: What's new, Evidence, Chat, Library; then Read later, History, My topics", () => {
     const out = html()
-    const labels = ["What's new", "Evidence", "Library", "My topics", "Chat", "Psychiatry"]
-    const at = labels.slice(0, 5).map((label) => out.indexOf(label))
-    for (const [index, label] of labels.entries()) expect(index < 5 ? at[index] : out.indexOf(label), label).toBeGreaterThan(-1)
-    expect([...at].sort((x, y) => x - y)).toEqual(at)
-    for (const href of ["/", "/wiki", "/wiki?view=all", "/watch", "/chat"]) expect(out, href).toContain(`href="${href}"`)
-    for (const label of ["Graph", "Sparky", "Home", "Wiki", "Discover", "Knowledge", "Read later", "History"]) expect(out, label).not.toContain(label)
-    for (const href of ["/viz", "/read-later", "/feed-history"]) expect(out, href).not.toContain(`href="${href}"`)
+    const host = document.createElement("div")
+    host.innerHTML = out
+    const nav = host.querySelector("nav")!
+    const rule = nav.querySelector("hr")!
+    const links = [...nav.querySelectorAll(":scope > a")]
+    const before = links.filter((link) => rule.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_PRECEDING)
+    const after = links.filter((link) => rule.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(before.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["What's new", "/"], ["Evidence", "/wiki"], ["Chat", "/chat"], ["Library", "/wiki?view=all"]])
+    expect(after.map((link) => [link.textContent?.replace(/\d+$/, ""), link.getAttribute("href")])).toEqual([["Read later", "/read-later"], ["History", "/feed-history"], ["My topics", "/watch"]])
+    expect(rule.className).toBe(host.querySelectorAll("aside hr")[1].className)
+    expect(out).toContain("Psychiatry")
+    for (const label of ["Graph", "Sparky", "Home", "Wiki", "Discover", "Knowledge"]) expect(out, label).not.toContain(label)
+    for (const href of ["/viz"]) expect(out, href).not.toContain(`href="${href}"`)
     // Clinical edition (D32): Trending, Idea Spark and the fork-mock pages are hidden.
     for (const label of ["Trending", "Idea Spark", "Projects"]) expect(out, label).not.toContain(label)
     for (const href of ["/spark", "/projects", "/trending", "/history"]) expect(out, href).not.toContain(`href="${href}"`)
@@ -45,7 +51,7 @@ describe("Sidebar nav map (SP1)", () => {
     expect(out).not.toContain('href="/settings"')
     expect(out).not.toContain("Dashboard")
   })
-  it("marks Evidence on /wiki and on a condition page, and Library on /wiki?view=all", () => {
+  it("marks exactly one item: Evidence on /wiki and a condition page, Library on /wiki?view=all, and the others on their own routes", () => {
     const current = (pathname: string, search = "") => {
       route.pathname = pathname
       route.search = search
@@ -59,6 +65,10 @@ describe("Sidebar nav map (SP1)", () => {
     expect(current("/wiki/conditions/depression")).toEqual(["Evidence"])
     expect(current("/wiki", "view=all")).toEqual(["Library"])
     expect(current("/")).toEqual(["What's new"])
+    expect(current("/read-later")).toEqual(["Read later"])
+    expect(current("/feed-history")).toEqual(["History"])
+    expect(current("/watch")).toEqual(["My topics"])
+    expect(current("/chat")).toEqual(["Chat"])
   })
 })
 
