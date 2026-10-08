@@ -5,9 +5,8 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import type { ConditionEvidence as Evidence, Period, Scope } from "@/lib/clinical/evidence/build"
-import { listFollowedConditionsRemote } from "@/lib/clinical/evidence/client"
+import { listFollowedConditionsRemote, loadConditionEvidenceRemote } from "@/lib/clinical/evidence/client"
 import { evidenceHref, PERIODS, SCOPES, type EvidenceTab } from "@/lib/clinical/evidence/href"
-import { listConditionsRemote, type Term } from "@/lib/clinical/records/client"
 import { ConditionEvidence } from "./ConditionEvidence"
 import { ConditionNotes } from "./ConditionNotes"
 
@@ -25,7 +24,9 @@ const oneOf = <T extends string>(values: readonly T[], value: string | null, fal
 /**
  * The Evidence view (`/wiki`): the conditions the reader follows as tabs, and under the chosen one its
  * evidence summary or the reader's notes on it. The condition, which papers, of what time and which of
- * the two is open are kept in the address, so a reload and a link keep them.
+ * the two is open are kept in the address, so a reload and a link keep them. Notes that are typed and not
+ * saved are kept here, by condition, while the reader looks at something else in the view; the browser asks
+ * before the page is left with any.
  */
 export function EvidencePage() {
   const router = useRouter()
@@ -38,8 +39,11 @@ export function EvidencePage() {
   const view: EvidenceTab = params.get("tab") === "notes" ? "notes" : "summary"
 
   const [followed, setFollowed] = useState<Entry[] | null>(null)
-  // The pack's conditions, asked for only when the address names one the reader does not follow.
-  const [known, setKnown] = useState<Term[] | null>(null)
+  // The condition the address names when the reader does not follow it: asked of the pack, with its page; null for one the pack lacks.
+  const [extra, setExtra] = useState<{ code: string; entry: Entry | null } | null>(null)
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  // The pages that a first save of notes made, which the list of conditions does not know of yet.
+  const [made, setMade] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<{ code: string; count: number } | null>(null)
 
@@ -53,20 +57,37 @@ export function EvidencePage() {
 
   const unfollowed = followed !== null && wanted !== null && !followed.some((entry) => entry.code === wanted)
   useEffect(() => {
-    if (!unfollowed) return
+    if (!unfollowed || wanted === null) return
     let cancelled = false
-    // A list that cannot be had names no condition: the first followed one is shown.
-    listConditionsRemote().then((list) => { if (!cancelled) setKnown(list) }).catch(() => { if (!cancelled) setKnown([]) })
+    // A condition that cannot be had is not shown: the first followed one is.
+    loadConditionEvidenceRemote(wanted)
+      .then((answer) => { if (!cancelled) setExtra({ code: wanted, entry: { code: answer.condition.code, name: answer.condition.name, pageId: answer.pageId ?? null } }) })
+      .catch(() => { if (!cancelled) setExtra({ code: wanted, entry: null }) })
     return () => { cancelled = true }
-  }, [unfollowed])
+  }, [unfollowed, wanted])
+
+  const keepDraft = useCallback((code: string, text: string | null) => setDrafts((before) => {
+    if (text !== null) return before[code] === text ? before : { ...before, [code]: text }
+    if (!(code in before)) return before
+    const next = { ...before }
+    delete next[code]
+    return next
+  }), [])
+  const keepPage = useCallback((code: string, pageId: string) => setMade((before) => ({ ...before, [code]: pageId })), [])
+  const unsaved = Object.keys(drafts).length > 0
+  useEffect(() => {
+    if (!unsaved) return
+    const guard = (event: BeforeUnloadEvent) => { event.preventDefault() }
+    window.addEventListener("beforeunload", guard)
+    return () => window.removeEventListener("beforeunload", guard)
+  }, [unsaved])
 
   const noteSaved = useCallback((evidence: Evidence) => setSaved({ code: evidence.condition.code, count: evidence.savedCount }), [])
 
   if (error) return <p role="alert" className="mt-6 text-[13px] text-accent-ink">{error}</p>
-  if (followed === null || (unfollowed && known === null)) return <p className="mt-6 text-[13px] text-muted-text">{V.loading}</p>
-  const extra = unfollowed ? known?.find((entry) => entry.code === wanted) : undefined
-  // Whether an unfollowed condition has a page is not known here; its notes find that out when they are saved.
-  const conditions: Entry[] = extra ? [...followed, { code: extra.code, name: extra.name, pageId: null }] : followed
+  if (followed === null || (unfollowed && extra?.code !== wanted)) return <p className="mt-6 text-[13px] text-muted-text">{V.loading}</p>
+  const added = unfollowed ? extra?.entry ?? null : null
+  const conditions: Entry[] = added ? [...followed, added] : followed
   const selected = conditions.find((entry) => entry.code === wanted) ?? conditions[0]
   if (!selected) {
     return <p className="mt-6 text-[14px] text-muted-text">{V.none} <Link href="/watch" className="text-accent-ink underline">{V.addTopics}</Link></p>
@@ -111,7 +132,7 @@ export function EvidencePage() {
         <div role="tabpanel" id={`${views}-panel`} aria-labelledby={`${views}-${view}`}>
           {view === "summary"
             ? <ConditionEvidence condition={selected.code} scope={scope} period={period} onLoaded={noteSaved} />
-            : <ConditionNotes key={selected.code} code={selected.code} pageId={selected.pageId} />}
+            : <ConditionNotes key={selected.code} code={selected.code} pageId={made[selected.code] ?? selected.pageId} draft={drafts[selected.code]} onDraft={keepDraft} onPage={keepPage} />}
         </div>
       </div>
     </section>

@@ -20,10 +20,12 @@ const TOP = `---\ntype: condition\ntitle: Schizophrenia\n---\n## ${P.evidence}\n
 const pageWith = (notes: string) => `${TOP}## ${P.notes}\n\n${notes}\n`
 
 let container: HTMLDivElement
-async function render(pageId: string | null) {
+const onDraft = vi.fn()
+const onPage = vi.fn()
+async function render(pageId: string | null, draft?: string) {
   container = document.createElement("div")
   document.body.appendChild(container)
-  await act(async () => { createRoot(container).render(<ConditionNotes code="schizophrenia" pageId={pageId} />) })
+  await act(async () => { createRoot(container).render(<ConditionNotes code="schizophrenia" pageId={pageId} draft={draft} onDraft={onDraft} onPage={onPage} />) })
   await act(async () => {})
 }
 const area = () => container.querySelector("textarea") as HTMLTextAreaElement
@@ -33,7 +35,7 @@ async function type(text: string) {
   await act(async () => { setter.call(area(), text); area().dispatchEvent(new Event("input", { bubbles: true })) })
 }
 const save = async () => { await act(async () => { button().click() }); await act(async () => {}) }
-beforeEach(() => { document.body.innerHTML = ""; vault.read.mockReset(); vault.write.mockReset(); records.createConditionPageRemote.mockReset() })
+beforeEach(() => { document.body.innerHTML = ""; vault.read.mockReset(); vault.write.mockReset(); records.createConditionPageRemote.mockReset(); onDraft.mockReset(); onPage.mockReset() })
 
 describe("the notes on a condition", () => {
   it("loads the notes of the condition's page, with Save disabled while nothing changed", async () => {
@@ -112,6 +114,43 @@ describe("the notes on a condition", () => {
     await save()
     expect(vault.write).toHaveBeenCalledWith(`${ID}.md`, pageWith("Mine."))
     expect(container.querySelector("[data-stored-notes]")).toBeNull()
+  })
+
+  it("opens with the text the reader had not saved, Save enabled, and tells its caller of a draft and of its end", async () => {
+    vault.read.mockResolvedValue(pageWith("Old."))
+    vault.write.mockResolvedValue(undefined)
+    await render(ID, "Half a thought")
+    expect(area().value).toBe("Half a thought")
+    expect(button().disabled).toBe(false)
+    await type("Half a thought, finished.")
+    expect(onDraft).toHaveBeenLastCalledWith("schizophrenia", "Half a thought, finished.")
+    await type("Old.")
+    expect(onDraft).toHaveBeenLastCalledWith("schizophrenia", null)
+    await type("A whole thought.")
+    await save()
+    expect(vault.write).toHaveBeenCalledWith(`${ID}.md`, pageWith("A whole thought."))
+    expect(onDraft).toHaveBeenLastCalledWith("schizophrenia", null)
+  })
+
+  it("tells its caller where the page it made is", async () => {
+    await render(null)
+    records.createConditionPageRemote.mockResolvedValue({ id: ID, created: true })
+    vault.read.mockResolvedValue(pageWith(P.notesHint))
+    vault.write.mockResolvedValue(undefined)
+    await type("First note.")
+    await save()
+    expect(onPage).toHaveBeenCalledWith("schizophrenia", ID)
+  })
+
+  it("saves into a page with Windows line endings without a second heading", async () => {
+    const crlf = (text: string) => text.replace(/\n/g, "\r\n")
+    vault.read.mockResolvedValue(crlf(pageWith("Old.\n\nTwo.")))
+    vault.write.mockResolvedValue(undefined)
+    await render(ID)
+    expect(area().value).toBe("Old.\n\nTwo.")
+    await type("New.\n\n## Mine\n\nTwo.")
+    await save()
+    expect(vault.write).toHaveBeenCalledWith(`${ID}.md`, crlf(pageWith("New.\n\n## Mine\n\nTwo.")))
   })
 
   it("shows no text area when the page cannot be loaded", async () => {

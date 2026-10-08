@@ -51,6 +51,12 @@ describe("/api/clinical/evidence", () => {
     expect((await get("?condition=depression&scope=mine")).status).toBe(400)
     expect((await get("?scope=mine")).status).toBe(400)
   })
+  it("says where the condition's page is, or that it has none, without making one", async () => {
+    expect((await (await get("?condition=schizophrenia")).json()).result.pageId).toBeNull()
+    expect(await storage.read("wiki/conditions/schizophrenia.md")).toBeNull()
+    await storage.write("wiki/conditions/schizophrenia.md", "---\ntype: condition\ntitle: Schizophrenia\ncreated: 2026-10-07\nupdated: 2026-10-07\ntags: []\nrelated: []\nsources: []\n---\n")
+    expect((await (await get("?condition=schizophrenia&scope=saved&period=3m")).json()).result.pageId).toBe("wiki/conditions/schizophrenia")
+  })
   it("answers 404 for a condition the pack lacks and 400 for a malformed id", async () => {
     expect((await get("?condition=no-such-condition")).status).toBe(404)
     expect((await get("?condition=../etc")).status).toBe(400)

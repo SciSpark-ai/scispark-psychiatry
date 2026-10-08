@@ -14,7 +14,8 @@ const fail = (status: number, error: unknown) => Response.json({ error: error in
 
 /**
  * GET ?condition=<taxonomy id>&period=<all|12m|6m|3m>&scope=<all|saved>: the evidence the feed has seen on that condition,
- * built from the stored findings; with the scope saved, from the papers the reader saved only. GET with no parameter:
+ * built from the stored findings; with the scope saved, from the papers the reader saved only; and `pageId`, the
+ * condition's wiki page when it has one. GET with no parameter:
  * the conditions the reader follows. No model in either.
  */
 export async function GET(request: Request): Promise<Response> {
@@ -29,20 +30,21 @@ export async function GET(request: Request): Promise<Response> {
     const vault = await getServerVault()
     const [pack, findings, routing] = await Promise.all([loadPsychiatryPack(), readFindings(vault), loadRouting(vault)])
     const now = new Date()
+    // Where a condition's wiki page is, when it has one. Nothing is made here: the page is made when the reader asks.
+    const pageOf = async (name: string) => {
+      const id = `${routing.condition ?? "wiki/conditions"}/${slugifyTitle(name)}`
+      return (await vault.read(`${id}.md`)) !== null ? id : null
+    }
     if (code === null) {
       const entries = await loadWatchEntries(vault)
       const watched = entries.flatMap((entry) => [entry.condition, entry.condition2]).flatMap((name) => (name ? findNode(pack.taxonomy, name, "condition")?.id ?? [] : []))
-      const dir = routing.condition ?? "wiki/conditions"
-      const conditions = await Promise.all(followedConditions(findings, pack.taxonomy, watched, now).map(async (entry) => {
-        const id = `${dir}/${slugifyTitle(entry.name)}`
-        return { ...entry, pageId: (await vault.read(`${id}.md`)) !== null ? id : null }
-      }))
+      const conditions = await Promise.all(followedConditions(findings, pack.taxonomy, watched, now).map(async (entry) => ({ ...entry, pageId: await pageOf(entry.name) })))
       return Response.json({ result: { conditions } }, { status: 200 })
     }
     const paperDir = routing.paper ?? "wiki/papers"
     const saved = new Set((await vault.list(`${paperDir}/`)).filter((path) => path.endsWith(".md")).map((path) => path.slice(paperDir.length + 1, -3)))
     const evidence = buildConditionEvidence(findings, pack.taxonomy, code, { now, savedSlugs: saved, period: period as Period, scope: scope as Scope })
-    return evidence ? Response.json({ result: evidence }, { status: 200 }) : fail(404, CLINICAL_COPY.evidence.noSuchCondition)
+    return evidence ? Response.json({ result: { ...evidence, pageId: await pageOf(evidence.condition.name) } }, { status: 200 }) : fail(404, CLINICAL_COPY.evidence.noSuchCondition)
   } catch (error) {
     return fail(500, error)
   }

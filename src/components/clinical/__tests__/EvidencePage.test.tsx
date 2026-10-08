@@ -9,9 +9,10 @@ const nav = vi.hoisted(() => ({ replace: vi.fn(), params: new URLSearchParams() 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: nav.replace }), useSearchParams: () => nav.params }))
 const evidence = vi.hoisted(() => ({ listFollowedConditionsRemote: vi.fn(), loadConditionEvidenceRemote: vi.fn() }))
 vi.mock("@/lib/clinical/evidence/client", () => evidence)
-const records = vi.hoisted(() => ({ listConditionsRemote: vi.fn() }))
+const vault = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn() }))
+vi.mock("@/lib/vault/get-vault", () => ({ getOpenVault: async () => vault }))
+const records = vi.hoisted(() => ({ createConditionPageRemote: vi.fn() }))
 vi.mock("@/lib/clinical/records/client", () => records)
-vi.mock("../ConditionNotes", () => ({ ConditionNotes: ({ code, pageId }: { code: string; pageId: string | null }) => <div data-testid="notes" data-code={code} data-page={pageId ?? ""} /> }))
 
 import { EvidencePage } from "../EvidencePage"
 
@@ -19,18 +20,41 @@ const FOLLOWED = [
   { code: "depression", name: "Major depressive disorder", total: 22, recent: 5, treatments: [], pageId: "wiki/conditions/major-depressive-disorder" },
   { code: "adhd", name: "ADHD", total: 0, recent: 0, treatments: [], pageId: null },
 ]
-const answer = (code: string, name: string) => ({
-  condition: { code, name }, period: "all", scope: "all", total: 0, collected: 0, savedCount: 4, since: null,
+const NAMES: Record<string, string> = { depression: "Major depressive disorder", adhd: "ADHD", ocd: "Obsessive-compulsive disorder" }
+const PAGES: Record<string, string> = { depression: "wiki/conditions/major-depressive-disorder", ocd: "wiki/conditions/obsessive-compulsive-disorder" }
+const NOTES: Record<string, string> = { "wiki/conditions/major-depressive-disorder.md": "Notes on depression.", "wiki/conditions/obsessive-compulsive-disorder.md": "Notes on OCD." }
+const answer = (code: string) => ({
+  condition: { code, name: NAMES[code] }, pageId: PAGES[code] ?? null, period: "all", scope: "all", total: 0, collected: 0, savedCount: 4, since: null,
   sections: { treatments: 0, safety: 0, research: 0 }, classes: [], safety: [], research: [], timeline: { months: [], series: [] },
 })
 
 let container: HTMLDivElement
+let root: ReturnType<typeof createRoot> | null = null
 async function render(query = "") {
   nav.params = new URLSearchParams(query)
   container = document.createElement("div")
   document.body.appendChild(container)
-  await act(async () => { createRoot(container).render(<EvidencePage />) })
+  root = createRoot(container)
+  await act(async () => { root!.render(<EvidencePage />) })
   await act(async () => {})
+}
+/** The view at another address, as after `router.replace`. */
+async function at(query: string) {
+  nav.params = new URLSearchParams(query)
+  await act(async () => { root!.render(<EvidencePage />) })
+  await act(async () => {})
+}
+const area = () => container.querySelector("textarea") as HTMLTextAreaElement
+async function type(text: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!
+  await act(async () => { setter.call(area(), text); area().dispatchEvent(new Event("input", { bubbles: true })) })
+}
+const saveButton = () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Save") as HTMLButtonElement
+/** Whether the browser would ask before the page is left. */
+function leavingIsGuarded() {
+  const event = new Event("beforeunload", { cancelable: true })
+  window.dispatchEvent(event)
+  return event.defaultPrevented
 }
 const tablists = () => [...container.querySelectorAll('[role="tablist"]')]
 const tabsOf = (list: Element) => [...list.querySelectorAll('[role="tab"]')] as HTMLElement[]
@@ -40,11 +64,19 @@ const choose = async (element: HTMLSelectElement, value: string) => { await act(
 const click = async (element: HTMLElement) => { await act(async () => { element.click() }) }
 
 beforeEach(() => {
+  // The view of the test before is taken down, so that its guard on leaving the page is.
+  if (root) act(() => root!.unmount())
+  root = null
   document.body.innerHTML = ""
   nav.replace.mockReset()
   evidence.listFollowedConditionsRemote.mockReset().mockResolvedValue(FOLLOWED)
-  evidence.loadConditionEvidenceRemote.mockReset().mockImplementation(async (code: string) => answer(code, code === "adhd" ? "ADHD" : "Major depressive disorder"))
-  records.listConditionsRemote.mockReset().mockResolvedValue([{ code: "depression", name: "Major depressive disorder" }, { code: "ocd", name: "Obsessive-compulsive disorder" }])
+  evidence.loadConditionEvidenceRemote.mockReset().mockImplementation(async (code: string) => {
+    if (!NAMES[code]) throw new Error("That condition is not in the pack.")
+    return answer(code)
+  })
+  vault.read.mockReset().mockImplementation(async (path: string) => (NOTES[path] ? `---\ntype: condition\n---\n## My notes\n\n${NOTES[path]}\n` : null))
+  vault.write.mockReset().mockResolvedValue(undefined)
+  records.createConditionPageRemote.mockReset()
 })
 
 describe("the Evidence view", () => {
@@ -58,7 +90,7 @@ describe("the Evidence view", () => {
     expect(panel.getAttribute("aria-labelledby")).toBe(tabsOf(conditions)[0].id)
     expect(panel.querySelector("h2")!.textContent).toBe("Major depressive disorder")
     expect(evidence.loadConditionEvidenceRemote).toHaveBeenCalledWith("depression", { period: "all", scope: "all" })
-    expect(records.listConditionsRemote).not.toHaveBeenCalled()
+    expect(evidence.loadConditionEvidenceRemote).toHaveBeenCalledTimes(1)
   })
 
   it("selects the condition the address names", async () => {
@@ -80,7 +112,7 @@ describe("the Evidence view", () => {
     const [conditions] = tablists()
     expect(tabsOf(conditions)).toHaveLength(2)
     expect(selectedOf(conditions)).toEqual(["Major depressive disorder"])
-    expect(evidence.loadConditionEvidenceRemote).not.toHaveBeenCalledWith("zzz", expect.anything())
+    expect(evidence.loadConditionEvidenceRemote).toHaveBeenLastCalledWith("depression", { period: "all", scope: "all" })
   })
 
   it("replaces the address when a condition is chosen, keeping the scope and the period", async () => {
@@ -116,7 +148,7 @@ describe("the Evidence view", () => {
     const views = tablists()[1]
     expect(tabsOf(views).map((tab) => tab.textContent)).toEqual(["Evidence summary", "Notes"])
     expect(selectedOf(views)).toEqual(["Evidence summary"])
-    expect(container.querySelector("[data-testid=notes]")).toBeNull()
+    expect(container.querySelector("textarea")).toBeNull()
     await click(tabsOf(views)[1])
     expect(nav.replace).toHaveBeenCalledWith("/wiki?condition=depression&tab=notes")
   })
@@ -124,13 +156,55 @@ describe("the Evidence view", () => {
   it("shows the notes of the condition, with its page, when the address asks for them", async () => {
     await render("condition=depression&tab=notes")
     expect(selectedOf(tablists()[1])).toEqual(["Notes"])
-    const notes = container.querySelector("[data-testid=notes]")!
-    expect(notes.getAttribute("data-code")).toBe("depression")
-    expect(notes.getAttribute("data-page")).toBe("wiki/conditions/major-depressive-disorder")
+    expect(vault.read).toHaveBeenCalledWith("wiki/conditions/major-depressive-disorder.md")
+    expect(area().value).toBe("Notes on depression.")
     expect(evidence.loadConditionEvidenceRemote).not.toHaveBeenCalled()
     expect(container.querySelector("select")).toBeNull()
     await click(tabsOf(tablists()[1])[0])
     expect(nav.replace).toHaveBeenCalledWith("/wiki?condition=depression")
+  })
+
+  it("opens the notes of a condition the reader does not follow from its page, which it finds without making it", async () => {
+    await render("condition=ocd&tab=notes")
+    expect(selectedOf(tablists()[0])).toEqual(["Obsessive-compulsive disorder"])
+    expect(vault.read).toHaveBeenCalledWith("wiki/conditions/obsessive-compulsive-disorder.md")
+    expect(area().value).toBe("Notes on OCD.")
+    expect(records.createConditionPageRemote).not.toHaveBeenCalled()
+  })
+
+  it("keeps what was typed in the notes over a change of tab and of condition, and guards leaving the page meanwhile", async () => {
+    await render("condition=depression&tab=notes")
+    expect(leavingIsGuarded()).toBe(false)
+    await type("Notes on depression. And a new thought")
+    expect(leavingIsGuarded()).toBe(true)
+    await at("condition=depression")
+    expect(container.querySelector("textarea")).toBeNull()
+    await at("condition=depression&tab=notes")
+    expect(area().value).toBe("Notes on depression. And a new thought")
+    expect(saveButton().disabled).toBe(false)
+    await at("condition=adhd&tab=notes")
+    expect(area().value).toBe("")
+    await at("condition=depression&tab=notes")
+    expect(area().value).toBe("Notes on depression. And a new thought")
+    expect(leavingIsGuarded()).toBe(true)
+    await act(async () => { saveButton().click() })
+    await act(async () => {})
+    expect(vault.write).toHaveBeenCalledTimes(1)
+    expect(leavingIsGuarded()).toBe(false)
+  })
+
+  it("opens the notes of a page that was made on a first save, when the reader comes back to them", async () => {
+    await render("condition=adhd&tab=notes")
+    records.createConditionPageRemote.mockResolvedValue({ id: "wiki/conditions/adhd", created: true })
+    NOTES["wiki/conditions/adhd.md"] = "Write what you conclude from these papers here."
+    await type("First note.")
+    await act(async () => { saveButton().click() })
+    await act(async () => {})
+    NOTES["wiki/conditions/adhd.md"] = "First note."
+    await at("condition=adhd")
+    await at("condition=adhd&tab=notes")
+    expect(area().value).toBe("First note.")
+    delete NOTES["wiki/conditions/adhd.md"]
   })
 
   it("says so, with the way to My topics, when no condition is followed", async () => {

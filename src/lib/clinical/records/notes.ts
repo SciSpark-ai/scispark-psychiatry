@@ -4,52 +4,62 @@ import { CONDITION_FENCE, parseEvidenceQuery } from "./query"
 // The reader's notes on a condition: one section of the condition's wiki page. Pure text; a page can use it.
 
 const P = CLINICAL_COPY.records.conditionPage
-const HEADING = /^(#{1,6})[ \t]+(.*?)[ \t]*$/
-const FENCE = /^[ \t]*(```|~~~)/
+/** An ATX heading, with or without closing hashes. */
+const HEADING = /^#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/
 
-/** The lines of the page, the line of the notes heading, and the line after the section (the number of lines when it runs to the end). */
-function locate(markdown: string): { lines: string[]; start: number; end: number } | null {
-  const lines = markdown.split("\n")
-  let fenced = false
-  let start = -1
-  let level = 0
-  for (let index = 0; index < lines.length; index += 1) {
-    if (FENCE.test(lines[index])) { fenced = !fenced; continue }
-    if (fenced) continue
-    const heading = HEADING.exec(lines[index])
-    if (!heading) continue
-    if (start === -1) {
-      if (heading[2] === P.notes) { start = index; level = heading[1].length }
-    } else if (heading[1].length <= level) return { lines, start, end: index }
+/**
+ * Where the notes heading's line ends (before its line break), or null when the page has none. It is the first
+ * heading of that name outside a fenced block; a fence is closed only by its own marker, at least as long.
+ * Line endings may be Windows ones.
+ */
+function headingEnd(markdown: string): number | null {
+  let fence: string | null = null
+  let offset = 0
+  for (const raw of markdown.split("\n")) {
+    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw
+    const marker = FENCE.exec(line)
+    if (fence !== null) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && marker[2].trim() === "") fence = null
+    } else if (marker) fence = marker[1]
+    else if (HEADING.exec(line)?.[1] === P.notes) return offset + line.length
+    offset += raw.length + 1
   }
-  return start === -1 ? null : { lines, start, end: lines.length }
+  return null
 }
 
-/** The text under the page's notes heading, up to the next heading of the same or a higher level. The template's hint is not notes. */
+const plain = (text: string) => text.replace(/\r\n/g, "\n")
+
+/**
+ * The reader's notes: the text from the page's notes heading to the end of the file, with plain line endings.
+ * The notes heading is the last section the template writes, so whatever follows it is the reader's, headings
+ * included. The template's hint is not notes.
+ */
 export function notesOf(markdown: string): string {
-  const found = locate(markdown)
-  if (!found) return ""
-  const text = found.lines.slice(found.start + 1, found.end).join("\n").trim()
+  const end = headingEnd(markdown)
+  if (end === null) return ""
+  const text = plain(markdown.slice(end)).trim()
   return text === P.notesHint ? "" : text
 }
 
-/** The page with its notes replaced and nothing else of it changed; the heading is added at the end of a page that has none. The file ends with one newline. */
+/**
+ * The page with its notes replaced and everything up to the notes heading as it was, byte for byte; the heading is
+ * added at the end of a page that has none. The file keeps its own line endings and ends with one.
+ * `notesOf(replaceNotes(page, text))` is `text`, trimmed, whatever it holds.
+ */
 export function replaceNotes(markdown: string, notes: string): string {
-  const text = notes.trim()
-  const found = locate(markdown)
-  const section = (heading: string) => (text === "" ? heading : `${heading}\n\n${text}`)
-  if (!found) {
-    const before = markdown.trimEnd()
-    return `${before === "" ? "" : `${before}\n\n`}${section(`## ${P.notes}`)}\n`
-  }
-  const before = found.lines.slice(0, found.start + 1).join("\n")
-  const after = found.lines.slice(found.end).join("\n").trimEnd()
-  return `${section(before)}${after === "" ? "" : `\n\n${after}`}\n`
+  const eol = markdown.includes("\r\n") ? "\r\n" : "\n"
+  const text = plain(notes).trim().replace(/\n/g, eol)
+  const section = (heading: string) => (text === "" ? `${heading}${eol}` : `${heading}${eol}${eol}${text}${eol}`)
+  const end = headingEnd(markdown)
+  if (end !== null) return section(markdown.slice(0, end))
+  const before = markdown.trimEnd()
+  return `${before === "" ? "" : `${before}${eol}${eol}`}${section(`## ${P.notes}`)}`
 }
 
 /** The pack's id of the condition a condition page is about: the one its evidence block names, else the one its front matter holds; null when neither does. */
 export function conditionCodeOf(page: { body: string; frontmatter: Record<string, unknown> }): string | null {
-  const block = new RegExp(`^\`\`\`${CONDITION_FENCE}[ \\t]*\\n([\\s\\S]*?)^\`\`\``, "m").exec(page.body)
+  const block = new RegExp(`^\`\`\`${CONDITION_FENCE}[ \\t]*\\r?\\n([\\s\\S]*?)^\`\`\``, "m").exec(page.body)
   const named = block ? parseEvidenceQuery(block[1]) : null
   if (named) return named.condition
   const stored = page.frontmatter.taxonomy

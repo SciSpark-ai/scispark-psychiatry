@@ -19,14 +19,21 @@ type Outcome = { kind: "saved" } | { kind: "error"; message: string } | null
  * The page is read and written the way the wiki's own editor does it, through the vault; it is made on the
  * first save when the condition has none. A save reads the page again and changes only its notes section.
  * Notes that are not the ones that were opened are never written over unseen: they are shown first.
- * Mount it with the condition as its key.
+ * Mount it with the condition as its key. It is taken down when the reader looks at something else, so the
+ * text that is not saved yet is the caller's to keep: `onDraft` gets it at every change (null once it is what
+ * is stored) and `draft` gives it back; `onPage` says where the page is when a save made it.
  */
-export function ConditionNotes({ code, pageId: initialPageId }: { code: string; pageId: string | null }) {
+export function ConditionNotes({ code, pageId: initialPageId, draft, onDraft, onPage }: {
+  code: string; pageId: string | null; draft?: string
+  onDraft?: (code: string, text: string | null) => void; onPage?: (code: string, pageId: string) => void
+}) {
   const [pageId, setPageId] = useState(initialPageId)
   const [loading, setLoading] = useState<Loading>(initialPageId === null ? { state: "ready" } : { state: "loading" })
   // The notes as they were when opened or last saved, and what the reader has in the text area.
   const [opened, setOpened] = useState("")
-  const [text, setText] = useState("")
+  const [text, setText] = useState(draft ?? "")
+  // Whether it was opened with text the reader had not saved: the stored notes do not replace that.
+  const [resumed] = useState(draft !== undefined)
   const [stored, setStored] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [outcome, setOutcome] = useState<Outcome>(null)
@@ -39,12 +46,12 @@ export function ConditionNotes({ code, pageId: initialPageId }: { code: string; 
         if (cancelled) return
         const notes = raw === null ? "" : notesOf(raw)
         setOpened(notes)
-        setText(notes)
+        if (!resumed) setText(notes)
         setLoading({ state: "ready" })
       })
       .catch((failure) => { if (!cancelled) setLoading({ state: "failed", message: messageOf(failure) }) })
     return () => { cancelled = true }
-  }, [initialPageId])
+  }, [initialPageId, resumed])
 
   const save = async () => {
     setSaving(true)
@@ -57,6 +64,7 @@ export function ConditionNotes({ code, pageId: initialPageId }: { code: string; 
         id = (await createConditionPageRemote(code)).id
         raw = await vault.read(pathOf(id))
         setPageId(id)
+        onPage?.(code, id)
       }
       if (raw === null) throw new Error(N.missing)
       const current = notesOf(raw)
@@ -72,6 +80,7 @@ export function ConditionNotes({ code, pageId: initialPageId }: { code: string; 
       setOpened(notesOf(next))
       setStored(null)
       setOutcome({ kind: "saved" })
+      onDraft?.(code, null)
     } catch (failure) {
       setOutcome({ kind: "error", message: messageOf(failure) })
     } finally {
@@ -83,10 +92,15 @@ export function ConditionNotes({ code, pageId: initialPageId }: { code: string; 
   // No text area without the notes: an empty one, saved, would wipe them.
   if (loading.state === "failed") return <p role="alert" className="my-4 text-[13px] text-accent-ink">{loading.message}</p>
   const changed = text.trim() !== opened || stored !== null
+  const edit = (value: string) => {
+    setText(value)
+    setOutcome((before) => (before?.kind === "saved" ? null : before))
+    onDraft?.(code, value.trim() !== opened ? value : null)
+  }
   return (
     <div className="my-4">
       <textarea aria-label={P.notes} placeholder={P.notesHint} value={text} rows={14}
-        onChange={(event) => { setText(event.target.value); setOutcome((before) => (before?.kind === "saved" ? null : before)) }}
+        onChange={(event) => edit(event.target.value)}
         className="block w-full rounded-card border border-border-warm bg-light-surface px-4 py-3 text-[14px] leading-relaxed text-espresso placeholder:text-muted-text" />
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button type="button" onClick={() => void save()} disabled={saving || !changed}
