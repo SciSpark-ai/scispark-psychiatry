@@ -134,7 +134,7 @@ function Sections({ evidence, address, onChoose }: { evidence: Evidence; address
                   <span aria-current="true" className="font-semibold text-espresso">{className}</span>
                 </p>
                 <EvidenceMap label={E.rows.treatments(className)} entries={treatmentEntries} chosen={chosen.treatment} onPick={(key) => choose({ treatment: key === chosen.treatment ? null : key })} />
-                {treatment && <TreatmentDetail key={treatment.key} treatment={treatment} />}
+                {treatment && <TreatmentDetail key={treatment.key} treatment={treatment} condition={evidence.condition.code} />}
               </div>
             ) : (
               <div data-classes="true">

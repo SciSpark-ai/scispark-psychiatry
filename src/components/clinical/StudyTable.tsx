@@ -99,14 +99,15 @@ function Row({ study, kind, named, width }: { study: Study; kind: StudyTableKind
  * The studies behind a bubble, under one line with whose they are and how many, one row each: the study, its design
  * and participants, and what it was compared with and found (or, for research, its finding). The direction of a
  * result is written after it in small capitals of its colour. `treatmentShown`: the paper's own name of its treatment is under every study,
- * not only under those that name several. The table scrolls sideways inside its own box when the screen is narrow.
+ * not only under those that name several. `aside` is drawn at the end of the heading's line. The table scrolls sideways inside its own box when the screen is narrow.
  */
-export function StudyTable({ studies, kind, caption, treatmentShown = false }: { studies: Study[]; kind: StudyTableKind; caption: string; treatmentShown?: boolean }) {
+export function StudyTable({ studies, kind, caption, treatmentShown = false, aside }: { studies: Study[]; kind: StudyTableKind; caption: string; treatmentShown?: boolean; aside?: ReactNode }) {
   const id = useId()
   const heads = [C.study, C.design, C.size, ...(kind === "research" ? [C.finding] : [C.comparator, C.result])]
+  const heading = <h4 id={id} data-table-heading="true" className={HEADING}>{E.tableHeading(caption, studies.length)}</h4>
   return (
     <div data-study-table={kind}>
-      <h4 id={id} data-table-heading="true" className={HEADING}>{E.tableHeading(caption, studies.length)}</h4>
+      {aside ? <div className="flex flex-wrap items-baseline justify-between gap-x-4">{heading}{aside}</div> : heading}
       <div data-table-scroll="true" className="overflow-x-auto">
         <table aria-labelledby={id} className="w-full min-w-[560px] border-collapse">
           <thead>

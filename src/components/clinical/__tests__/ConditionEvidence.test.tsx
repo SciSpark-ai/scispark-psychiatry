@@ -8,6 +8,10 @@ import type { ClassEvidence, ConditionEvidence as Evidence, Efficacy, SafetyGrou
 
 const client = vi.hoisted(() => ({ loadConditionEvidenceRemote: vi.fn() }))
 vi.mock("@/lib/clinical/evidence/client", () => client)
+const notes = vi.hoisted(() => ({ listNotesRemote: vi.fn(), createNoteRemote: vi.fn() }))
+vi.mock("@/lib/clinical/notes/client", () => notes)
+const nav = vi.hoisted(() => ({ push: vi.fn() }))
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: nav.push }) }))
 
 import { ConditionEvidence } from "../ConditionEvidence"
 import { clinicalFence } from "../clinical-fence"
@@ -72,7 +76,13 @@ const sizedKetamine: TreatmentEvidence = { ...ketamine, participants: 120, sized
 const sizedLithium: TreatmentEvidence = { ...lithium, participants: 2400, sized: 1, studies: [study(3, { treatment: "Lithium", text: "Cut relapse", date: "2026-09-10" })] }
 const SIZED: Evidence = { ...EVIDENCE, classes: [{ ...med, participants: 2520, sized: 2, treatments: [sizedKetamine, sizedLithium] }, { ...ect, participants: 60, sized: 1 }] }
 const heads = () => qa("table thead th").map((head) => head.textContent)
-beforeEach(() => { document.body.innerHTML = ""; client.loadConditionEvidenceRemote.mockReset() })
+beforeEach(() => {
+  document.body.innerHTML = ""
+  client.loadConditionEvidenceRemote.mockReset()
+  nav.push.mockReset()
+  notes.listNotesRemote.mockReset().mockResolvedValue([])
+  notes.createNoteRemote.mockReset().mockResolvedValue("new-note")
+})
 
 describe("the evidence block of a condition page", () => {
   it("says what it is built from, with and without a period", async () => {
@@ -396,7 +406,13 @@ describe("the evidence block of a condition page", () => {
     expect(headings[0].compareDocumentPosition(detail.querySelector("table")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(detail.querySelector("table")!.getAttribute("aria-labelledby")).toBe(headings[0].id)
     expect(detail.firstElementChild!.contains(headings[0])).toBe(true)
-    expect(detail.firstElementChild!.firstElementChild).toBe(headings[0])
+    // The heading starts its line; the reader's notes on the treatment end it (none here: the button alone).
+    const line = detail.firstElementChild!.firstElementChild!
+    expect(line.firstElementChild).toBe(headings[0])
+    expect(line.children).toHaveLength(2)
+    expect(line.lastElementChild!.getAttribute("data-notes-strip")).toBe("line")
+    expect(line.lastElementChild!.textContent).toBe("Write a note")
+    expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: EVIDENCE.condition.code, treatment: "ketamine" })
     expect(qa("[data-study]").map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
     // The safety papers of the treatment are still marked under its bubble: they are listed under Safety.
     expect(bubble("ketamine", NARROW).querySelector("[data-safety-mark]")!.textContent).toBe("1 safety")

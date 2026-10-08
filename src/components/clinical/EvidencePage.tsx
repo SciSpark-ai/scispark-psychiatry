@@ -9,6 +9,7 @@ import { listFollowedConditionsRemote, loadConditionEvidenceRemote } from "@/lib
 import { evidenceHref, PERIODS, SCOPES } from "@/lib/clinical/evidence/href"
 import { AddCondition } from "./AddCondition"
 import { ConditionEvidence } from "./ConditionEvidence"
+import { NotesStrip } from "./NotesStrip"
 
 const E = CLINICAL_COPY.evidence
 const V = E.page
@@ -105,6 +106,7 @@ export function EvidencePage() {
       </div>
       {/* 24 px to the line of what the summary is built from: 8 here, and the 16 the summary has over it. */}
       <div role="tabpanel" id={`${id}-condition`} aria-labelledby={`${id}-${selected.code}`} className="pt-2">
+        <div className="pt-2"><NotesStrip variant="line" about={{ condition: selected.code }} name={selected.name} /></div>
         <ConditionEvidence condition={selected.code} scope={scope} period={period} onLoaded={noteSaved} treatment={treatment} onChoose={choose} />
       </div>
     </section>

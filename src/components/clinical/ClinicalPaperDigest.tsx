@@ -5,6 +5,7 @@ import { DIGEST_GROUPS, FULL_TEXT_ITEMS, MAIN_ITEM } from "@/lib/clinical/digest
 import type { StoredPaperDigest } from "@/lib/clinical/digest/paper"
 import { Button } from "@/components/ui/Button"
 import { LlmErrorMessage } from "@/components/papers/LlmErrorMessage"
+import { PAPER_NOTES_ID } from "./NotesStrip"
 import type { PaperDigestState } from "./usePaperDigest"
 
 export { DIGEST_GROUPS }
@@ -72,7 +73,7 @@ export function ClinicalPaperDigest({ state }: { state: PaperDigestState }) {
 }
 
 /** The side navigation of the paper page: its parts in the order they are on the page. */
-export function ClinicalPaperNav({ hasSummary, digest, hasAbstract }: { hasSummary: boolean; digest: StoredPaperDigest | null; hasAbstract: boolean }) {
+export function ClinicalPaperNav({ hasSummary, digest, hasAbstract, hasNotes = false }: { hasSummary: boolean; digest: StoredPaperDigest | null; hasAbstract: boolean; hasNotes?: boolean }) {
   const links = [
     ...(hasSummary ? [{ href: "#paper-summary", label: D.nav.summary, sub: false }] : []),
     ...(digest ? [
@@ -80,6 +81,7 @@ export function ClinicalPaperNav({ hasSummary, digest, hasAbstract }: { hasSumma
       ...DIGEST_GROUPS.filter((group) => group.items.some((item) => digest.items[item])).map((group) => ({ href: `#digest-${group.id}`, label: D.groups[group.id], sub: true })),
     ] : []),
     ...(hasAbstract ? [{ href: "#paper-abstract", label: D.nav.abstract, sub: false }] : []),
+    ...(hasNotes ? [{ href: `#${PAPER_NOTES_ID}`, label: D.nav.notes, sub: false }] : []),
   ]
   if (links.length === 0) return null
   return (

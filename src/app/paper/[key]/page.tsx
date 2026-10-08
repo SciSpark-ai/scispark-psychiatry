@@ -27,6 +27,7 @@ import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { PaperActions, type DigestState, type EnrichState, type IngestState, type SaveState } from "@/components/paper/PaperActions"
 import { ClinicalDigestButton, ClinicalPaperDigest, ClinicalPaperNav } from "@/components/clinical/ClinicalPaperDigest"
 import { usePaperDigest } from "@/components/clinical/usePaperDigest"
+import { NotesStrip } from "@/components/clinical/NotesStrip"
 import paperStyles from "@/components/paper/PaperLayout.module.css"
 import { PaperFeedContext } from "@/components/paper/PaperFeedContext"
 import { RecommendationDetails } from "@/components/feed/RecommendationDetails"
@@ -506,6 +507,8 @@ function PaperPageContent() {
                       <ClinicalAbstract text={load.paper.abstract} />
                     </section>
                   )}
+                  {/* Clinical edition: the reader's notes on this paper, and a button that starts one. */}
+                  <NotesStrip variant="section" about={{ paper: slug }} />
 
                   {feedContext && (
                     <div className={digestState.status === "done" ? "mt-10" : undefined}>
@@ -531,7 +534,7 @@ function PaperPageContent() {
                     aria-label="Paper context"
                     className={`${paperStyles.rail} ${!page ? paperStyles.navigationOnly : ""} flex flex-col gap-6`}
                   >
-                    <ClinicalPaperNav hasSummary={Boolean(cardDigest)} digest={clinicalDigest.digest} hasAbstract={Boolean(load.paper.abstract)} />
+                    <ClinicalPaperNav hasSummary={Boolean(cardDigest)} digest={clinicalDigest.digest} hasAbstract={Boolean(load.paper.abstract)} hasNotes />
                     {page && (
                       <div className="flex flex-col gap-4 [&>*]:mt-0">
                         <ProjectMembershipControl pageId={page.id} />

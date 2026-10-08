@@ -103,6 +103,9 @@ describe("the digest on the paper page", () => {
     document.body.innerHTML = ""
     await render(<ClinicalPaperNav hasSummary={false} digest={null} hasAbstract />)
     expect([...container.querySelectorAll("nav a")].map((link) => link.textContent)).toEqual(["Abstract"])
+    document.body.innerHTML = ""
+    await render(<ClinicalPaperNav hasSummary={false} digest={null} hasAbstract hasNotes />)
+    expect([...container.querySelectorAll("nav a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["Abstract", "#paper-abstract"], ["Your notes", "#paper-notes"]])
   })
 
   it("shows the sentence an item rests on when asked", async () => {

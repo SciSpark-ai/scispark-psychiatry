@@ -133,7 +133,7 @@ export const CLINICAL_COPY = {
       failed: (status: string) => `The digest could not be written (${status}).`,
       lookupFailed: (status: number) => `The saved digest could not be read (${status}).`,
       /** The side navigation of the paper page. */
-      nav: { label: "On this page", summary: "AI summary", digest: "Digest", abstract: "Abstract" },
+      nav: { label: "On this page", summary: "AI summary", digest: "Digest", abstract: "Abstract", notes: "Your notes" },
     },
   },
   readLater: {
@@ -356,6 +356,17 @@ export const CLINICAL_COPY = {
       noneHint: "A note can cite papers and link the conditions and treatments it is about.",
       noMatch: "No note matches these filters",
       clear: "Clear filters",
+      /** The treatment the address names, as a chip that can be removed. */
+      treatment: (name: string) => `Treatment: ${name}`,
+      removeTreatment: "Remove the treatment filter",
+      removeMark: "×",
+    },
+    /** The reader's notes where they are reading: on a paper's page, under a condition's tab, in a treatment's header. */
+    strip: {
+      heading: "Your notes",
+      write: "Write a note",
+      onCondition: (name: string, count: number) => `Your notes on ${name} (${count})`,
+      count: (count: number) => `${count} ${count === 1 ? "note" : "notes"}`,
     },
     /** The page of one note. */
     page: {

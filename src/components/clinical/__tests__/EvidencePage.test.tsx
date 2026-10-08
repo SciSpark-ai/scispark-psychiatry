@@ -5,8 +5,10 @@ import { createRoot } from "react-dom/client"
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-const nav = vi.hoisted(() => ({ replace: vi.fn(), params: new URLSearchParams() }))
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: nav.replace }), useSearchParams: () => nav.params }))
+const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), params: new URLSearchParams() }))
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: nav.replace, push: nav.push }), useSearchParams: () => nav.params }))
+const notes = vi.hoisted(() => ({ listNotesRemote: vi.fn(), createNoteRemote: vi.fn() }))
+vi.mock("@/lib/clinical/notes/client", () => notes)
 const evidence = vi.hoisted(() => ({ listFollowedConditionsRemote: vi.fn(), loadConditionEvidenceRemote: vi.fn() }))
 vi.mock("@/lib/clinical/evidence/client", () => evidence)
 const records = vi.hoisted(() => ({ listConditionsRemote: vi.fn(), createConditionPageRemote: vi.fn() }))
@@ -55,6 +57,9 @@ beforeEach(() => {
   root = null
   document.body.innerHTML = ""
   nav.replace.mockReset()
+  nav.push.mockReset()
+  notes.listNotesRemote.mockReset().mockResolvedValue([])
+  notes.createNoteRemote.mockReset().mockResolvedValue("new-note")
   evidence.listFollowedConditionsRemote.mockReset().mockResolvedValue(FOLLOWED)
   evidence.loadConditionEvidenceRemote.mockReset().mockImplementation(async (code: string) => {
     if (!NAMES[code]) throw new Error("That condition is not in the pack.")
@@ -282,6 +287,35 @@ describe("the Evidence view", () => {
     expect(container.querySelector('[role="alert"]')!.textContent).toContain("could not be reached")
   })
 
+  describe("the reader's notes on the condition", () => {
+    const line = () => container.querySelector('[role="tabpanel"] > div > [data-notes-strip=line]') as HTMLElement
+
+    it("are counted on one line under the tab row, over the evidence, linking to the Notes tab of the condition", async () => {
+      notes.listNotesRemote.mockResolvedValue([{ id: "a" }, { id: "b" }])
+      await render("condition=depression")
+      expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: "depression" })
+      const link = line().querySelector("a")!
+      expect([link.textContent, link.getAttribute("href")]).toEqual(["Your notes on Major depressive disorder (2)", "/wiki?view=all&tab=notes&condition=depression"])
+      const row = container.querySelector("[data-control-row]")!
+      expect(row.compareDocumentPosition(line()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(row.contains(line())).toBe(false)
+    })
+
+    it("are only the button when there are none, and are asked for again for another condition", async () => {
+      await render("condition=depression")
+      expect(line().textContent).toBe("Write a note")
+      await at("condition=adhd")
+      expect(notes.listNotesRemote).toHaveBeenLastCalledWith({ condition: "adhd" })
+    })
+
+    it("start with a note about the condition, which is then opened", async () => {
+      await render("condition=depression")
+      await click(line().querySelector("button")!)
+      expect(notes.createNoteRemote).toHaveBeenCalledWith({ about: { condition: "depression" } })
+      expect(nav.push).toHaveBeenCalledWith("/wiki/notes/new-note")
+    })
+  })
+
   describe("a treatment's address", () => {
     const SIZED = {
       ...answer("depression"), total: 2, collected: 2, sections: { treatments: 2, safety: 0, research: 0 },
@@ -294,6 +328,23 @@ describe("the Evidence view", () => {
     it("opens the treatment the address names", async () => {
       await render("condition=depression&treatment=lithium")
       expect(container.querySelector("[data-treatment-detail=lithium]")).not.toBeNull()
+    })
+
+    it("has in the treatment's header the reader's notes on it under this condition, and starts one about it", async () => {
+      notes.listNotesRemote.mockImplementation(async (filters: { treatment?: string }) => (filters.treatment ? [{ id: "a" }, { id: "b" }, { id: "c" }] : []))
+      await render("condition=depression&treatment=lithium")
+      const detail = container.querySelector("[data-treatment-detail=lithium]")!
+      expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: "depression", treatment: "lithium" })
+      const heading = detail.querySelector("[data-table-heading]")!
+      expect(heading.textContent).toBe("Lithium · 0 papers")
+      // On the heading's own line, after it.
+      const strip = heading.parentElement!.querySelector("[data-notes-strip=line]")!
+      expect(heading.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      const link = strip.querySelector("a")!
+      expect([link.textContent, link.getAttribute("href")]).toEqual(["3 notes", "/wiki?view=all&tab=notes&condition=depression&treatment=lithium"])
+      await click(strip.querySelector("button")!)
+      expect(notes.createNoteRemote).toHaveBeenCalledWith({ about: { treatment: { condition: "depression", key: "lithium" } } })
+      expect(nav.push).toHaveBeenCalledWith("/wiki/notes/new-note")
     })
 
     it("ignores a key the page does not have", async () => {

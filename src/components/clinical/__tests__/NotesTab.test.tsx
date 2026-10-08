@@ -32,8 +32,12 @@ const ALL: NoteSummary[] = [
   note("one-paper", { kind: "paper", conditions: [ADHD], papers: [{ slug: "p3", label: "Kim 2022" }], newSince: 1 }),
   note("loose", { kind: "none", project: true }),
 ]
-/** What the route answers: the search is the server's; the condition and the kind are applied in the view. */
-const answer = (filters: { q?: string } = {}) => (filters.q === "nothing" ? [] : ALL)
+/** The pack's parents, as the route knows them: a note on a subtype is a note on its parent. */
+const PARENTS: Record<string, string> = { depression: "mood-disorders" }
+/** What the route answers: the search, the condition (with its subtypes) and the treatment are the server's; the kind is applied in the view. */
+const answer = (filters: { q?: string; condition?: string; treatment?: string } = {}) => (filters.q === "nothing" ? [] : ALL)
+  .filter((entry) => !filters.condition || entry.conditions.some(({ code }) => code === filters.condition || PARENTS[code] === filters.condition))
+  .filter((entry) => !filters.treatment || entry.treatments.some(({ key }) => key === filters.treatment))
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot> | null = null
@@ -64,6 +68,7 @@ const ids = () => rows().map((row) => row.getAttribute("data-note"))
 const pills = () => [...container.querySelectorAll('[role="group"] button')] as HTMLButtonElement[]
 const search = () => container.querySelector('input[type="search"]') as HTMLInputElement
 const select = () => container.querySelector("select") as HTMLSelectElement
+const chip = () => container.querySelector('[data-filter="treatment"]')
 const button = (text: string) => [...container.querySelectorAll("button")].find((entry) => entry.textContent === text) as HTMLButtonElement
 
 beforeEach(() => {
@@ -130,14 +135,27 @@ describe("the Notes tab of the Library", () => {
     expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes&condition=depression")
     await at("view=all&tab=notes&condition=depression")
     expect(ids()).toEqual(["on-a-paper", "on-a-topic"])
-    // The condition is applied here: the list is not asked for again.
-    expect(notes.listNotesRemote).toHaveBeenCalledTimes(1)
+    // The condition is the route's to apply, so its subtypes count: the list is asked for once more, with it.
+    expect(notes.listNotesRemote).toHaveBeenCalledTimes(2)
+    expect(notes.listNotesRemote).toHaveBeenLastCalledWith({ condition: "depression" })
+    // The select still offers every condition, from the list that was asked for without one.
+    expect([...select().options].map((option) => option.value)).toEqual(["", "adhd", "depression"])
   })
 
-  it("applies the search, the condition and the kind together: the search by the route, the other two to what comes back", async () => {
+  it("shows the notes on the subtypes of a condition the address names, and keeps that condition in the select", async () => {
+    await render("view=all&tab=notes&condition=mood-disorders")
+    expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: "mood-disorders" })
+    expect(ids()).toEqual(["on-a-paper", "on-a-topic"])
+    expect(select().value).toBe("mood-disorders")
+    expect([...select().options].map((option) => option.value)).toEqual(["", "adhd", "depression", "mood-disorders"])
+    expect(pills().map((pill) => pill.textContent)).toEqual(["All 2", "On a paper 1", "On a topic 1", "Not linked 0"])
+  })
+
+  it("applies the search, the condition and the kind together: the search and the condition by the route, the kind to what comes back", async () => {
     await render("view=all&tab=notes&q=keta&condition=depression&kind=topic")
-    expect(notes.listNotesRemote).toHaveBeenCalledTimes(1)
+    expect(notes.listNotesRemote).toHaveBeenCalledTimes(2)
     expect(notes.listNotesRemote).toHaveBeenCalledWith({ q: "keta" })
+    expect(notes.listNotesRemote).toHaveBeenCalledWith({ q: "keta", condition: "depression" })
     expect(ids()).toEqual(["on-a-topic"])
     expect(search().value).toBe("keta")
     expect(select().value).toBe("depression")
@@ -155,11 +173,39 @@ describe("the Notes tab of the Library", () => {
     expect(container.textContent).toContain("No note matches these filters")
   })
 
-  it("passes a treatment of the address to the route", async () => {
+  it("passes a treatment of the address to the route together with its condition", async () => {
     await render("view=all&tab=notes&condition=depression&treatment=esketamine")
-    expect(notes.listNotesRemote).toHaveBeenCalledWith({ treatment: "esketamine" })
+    expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: "depression", treatment: "esketamine" })
+    expect(ids()).toEqual(["on-a-topic"])
     await click(pills()[2])
     expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes&condition=depression&treatment=esketamine&kind=topic")
+  })
+
+  it("shows the treatment of the address as a chip, by its name, and has no chip without one", async () => {
+    await render("view=all&tab=notes&condition=depression&treatment=esketamine")
+    expect(chip()!.textContent).toContain("Treatment: Esketamine")
+    await at("view=all&tab=notes&condition=depression")
+    expect(chip()).toBeNull()
+  })
+
+  it("names the treatment by its key when no note names it", async () => {
+    await render("view=all&tab=notes&condition=adhd&treatment=clozapine")
+    expect(chip()!.textContent).toContain("Treatment: clozapine")
+    expect(container.textContent).toContain("No note matches these filters")
+  })
+
+  it("takes the treatment out of the address when its chip is removed, and keeps the rest", async () => {
+    await render("view=all&tab=notes&q=keta&condition=depression&treatment=esketamine&kind=topic")
+    const remove = chip()!.querySelector("button")!
+    expect(remove.getAttribute("aria-label")).toBe("Remove the treatment filter")
+    await click(remove)
+    expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes&q=keta&condition=depression&kind=topic")
+  })
+
+  it("clears the treatment with the other filters", async () => {
+    await render("view=all&tab=notes&condition=adhd&treatment=clozapine")
+    await click(button("Clear filters"))
+    expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes")
   })
 
   it("puts the search in the address a moment after the last key, not at each key", async () => {

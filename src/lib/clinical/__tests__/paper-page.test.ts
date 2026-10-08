@@ -83,6 +83,11 @@ describe("the order of the paper page", () => {
     expect(source).not.toContain("<PaperDigestView")
     expect(source).toContain("digestAction={<ClinicalDigestButton")
     expect(source).toContain("<ClinicalPaperNav")
+    // The reader's notes on the paper come after the abstract, inside the reading column, and are in the jump list.
+    const notes = source.indexOf('<NotesStrip variant="section" about={{ paper: slug }} />')
+    expect(notes).toBeGreaterThan(abstract)
+    expect(notes).toBeLessThan(source.indexOf("</article>"))
+    expect(source).toMatch(/<ClinicalPaperNav[^>]* hasNotes \/>/)
   })
 })
 
