@@ -67,12 +67,29 @@ function Section({ name, count, children }: { name: SectionName; count: number; 
  * a crumb back to the classes; the map fills the card, with the three colours of its bubbles named right beside it.
  * Safety is bubbles on an aligned grid, and Other research a row of pills. What is chosen in one section does not change another. The cards are 20 px apart.
  */
-function Sections({ evidence }: { evidence: Evidence }) {
+function Sections({ evidence, address, onChoose }: { evidence: Evidence; address: string | null; onChoose?: (key: string | null) => void }) {
   const [picked, setPicked] = useState<Chosen>(NOTHING)
+  // The treatment of the address that was last looked at, and the one whose table is to be scrolled into view.
+  const [seen, setSeen] = useState<string | null>(null)
+  const [scrollTo, setScrollTo] = useState<string | null>(null)
   // Another scope or period can take away what was chosen: it is then dropped for good, not kept for when it comes back.
   const chosen = stillThere(picked, evidence)
   if (chosen !== picked) setPicked(chosen)
-  const choose = (next: Partial<Chosen>) => setPicked({ ...chosen, ...next })
+  // An address is applied once, when it first names a treatment or a class the evidence has: what the reader then closes stays closed.
+  if (address !== seen) {
+    setSeen(address)
+    const owner = address === null ? undefined : evidence.classes.find((entry) => entry.treatments.some((item) => item.key === address))
+    const named = address === null ? undefined : owner ?? evidence.classes.find((entry) => entry.key === address)
+    if (named) {
+      setPicked({ ...chosen, classKey: named.key, treatment: owner ? address : null })
+      if (owner) setScrollTo(address)
+    }
+  }
+  const choose = (next: Partial<Chosen>) => {
+    const after = { ...chosen, ...next }
+    setPicked(after)
+    if (next.classKey !== undefined || next.treatment !== undefined) onChoose?.(after.treatment ?? after.classKey)
+  }
   const cls = evidence.classes.find((entry) => entry.key === chosen.classKey) ?? null
   const treatment = cls?.treatments.find((entry) => entry.key === chosen.treatment) ?? null
   const harms = evidence.safety.find((group) => group.key === chosen.safety) ?? null
@@ -93,6 +110,11 @@ function Sections({ evidence }: { evidence: Evidence }) {
     const buttons = [...(treatments.current?.querySelectorAll<HTMLElement>("button[data-bubble]") ?? [])].filter((button) => button.getAttribute("data-bubble") === key)
     ;(buttons.find((button) => button.offsetParent !== null) ?? buttons[0])?.focus()
   }, [chosen.classKey])
+  useEffect(() => {
+    if (scrollTo === null) return
+    const table = [...(treatments.current?.querySelectorAll<HTMLElement>("[data-treatment-detail]") ?? [])].find((entry) => entry.getAttribute("data-treatment-detail") === scrollTo)
+    if (typeof table?.scrollIntoView === "function") table.scrollIntoView({ block: "start" })
+  }, [scrollTo])
   const leaveClass = () => { backFrom.current = chosen.classKey; choose({ classKey: null, treatment: null }) }
   const mapped = evidence.classes.length > 0
   return (
@@ -155,9 +177,9 @@ function basisOf(evidence: Evidence, phrase: string | null): string {
  * the treatments of a chosen class on the same map, and for a chosen treatment the table of its papers; the safety papers as bubbles and the other research as pills, each with its table; and, folded away,
  * when the papers came out. Counted on the server from the stored findings.
  * Papers are counted, never pooled. Which papers (`scope`) and of what time (`period`) is the caller's to
- * say: the Evidence view keeps both in its address; a page's fenced block asks for everything.
+ * say: the Evidence view keeps both in its address, with the treatment chosen (`treatment` opens it once; `onChoose` says what the reader chooses); a page's fenced block asks for everything.
  */
-export function ConditionEvidence({ condition, scope = "all", period = "all", onLoaded }: { condition: string | null; scope?: Scope; period?: Period; onLoaded?: (evidence: Evidence) => void }) {
+export function ConditionEvidence({ condition, scope = "all", period = "all", onLoaded, treatment = null, onChoose }: { condition: string | null; scope?: Scope; period?: Period; onLoaded?: (evidence: Evidence) => void; treatment?: string | null; onChoose?: (key: string | null) => void }) {
   // The answer is kept with what it was asked for, so a new period or scope keeps showing the last answer until the next comes, and another condition starts from "Counting…".
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   useEffect(() => {
@@ -191,7 +213,7 @@ export function ConditionEvidence({ condition, scope = "all", period = "all", on
   return (
     <div data-testid="condition-evidence" aria-busy={pending ? "true" : undefined} className={pending ? "my-4 text-[15px] opacity-60 transition-opacity" : "my-4 text-[15px]"}>
       <p data-testid="evidence-basis" className="text-[14px] text-muted-text">{basisOf(evidence, phrase)}</p>
-      {nothing !== null ? <p data-nothing="true" className="mt-4 text-[15px] text-muted-text">{nothing}</p> : <Sections key={evidence.condition.code} evidence={evidence} />}
+      {nothing !== null ? <p data-nothing="true" className="mt-4 text-[15px] text-muted-text">{nothing}</p> : <Sections key={evidence.condition.code} evidence={evidence} address={treatment} onChoose={onChoose} />}
     </div>
   )
 }

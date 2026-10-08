@@ -281,4 +281,42 @@ describe("the Evidence view", () => {
     await render()
     expect(container.querySelector('[role="alert"]')!.textContent).toContain("could not be reached")
   })
+
+  describe("a treatment's address", () => {
+    const SIZED = {
+      ...answer("depression"), total: 2, collected: 2, sections: { treatments: 2, safety: 0, research: 0 },
+      classes: [{ key: "medicine", label: null, papers: 2, efficacy: { benefit: 2, "no-benefit": 0, mixed: 0 }, newPapers: 0, participants: null, sized: 0, treatments: [
+        { key: "lithium", name: "Lithium", papers: 1, efficacy: { benefit: 1, "no-benefit": 0, mixed: 0 }, newPapers: 0, participants: null, sized: 0, safetyPapers: 0, unreportedPapers: 0, comparatorPapers: 0, comparedIn: [], lines: { benefit: [], "no-benefit": [], mixed: [], safety: [] }, studies: [] },
+      ] }],
+    }
+    beforeEach(() => { evidence.loadConditionEvidenceRemote.mockImplementation(async (code: string) => (code === "depression" ? SIZED : answer(code))) })
+
+    it("opens the treatment the address names", async () => {
+      await render("condition=depression&treatment=lithium")
+      expect(container.querySelector("[data-treatment-detail=lithium]")).not.toBeNull()
+    })
+
+    it("ignores a key the page does not have", async () => {
+      await render("condition=depression&treatment=nonsense")
+      expect(container.querySelector("[data-classes]")).not.toBeNull()
+    })
+
+    it("replaces the address when a class or a treatment is chosen, keeping the scope and the period, and drops it with the crumb", async () => {
+      await render("condition=depression&scope=saved&period=6m")
+      await click(container.querySelector('[data-classes] button[data-bubble="medicine"]') as HTMLElement)
+      expect(nav.replace).toHaveBeenLastCalledWith("/wiki?condition=depression&treatment=medicine&scope=saved&period=6m")
+      await click(container.querySelector('[data-treatments] button[data-bubble="lithium"]') as HTMLElement)
+      expect(nav.replace).toHaveBeenLastCalledWith("/wiki?condition=depression&treatment=lithium&scope=saved&period=6m")
+      await click(container.querySelector("[data-crumb] button") as HTMLElement)
+      expect(nav.replace).toHaveBeenLastCalledWith("/wiki?condition=depression&scope=saved&period=6m")
+    })
+
+    it("drops the treatment when the condition tab changes, and keeps it when the scope does", async () => {
+      await render("condition=depression&treatment=lithium&period=6m")
+      await choose(select("Papers"), "saved")
+      expect(nav.replace).toHaveBeenLastCalledWith("/wiki?condition=depression&treatment=lithium&scope=saved&period=6m")
+      await click(tabsOf(tablists()[0])[1])
+      expect(nav.replace).toHaveBeenLastCalledWith("/wiki?condition=adhd&period=6m")
+    })
+  })
 })

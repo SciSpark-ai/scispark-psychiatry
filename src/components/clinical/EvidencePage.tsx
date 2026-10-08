@@ -36,6 +36,7 @@ export function EvidencePage() {
   const wanted = params.get("condition")
   const scope = oneOf<Scope>(SCOPES, params.get("scope"), "all")
   const period = oneOf<Period>(PERIODS, params.get("period"), "all")
+  const treatment = params.get("treatment")
 
   const [followed, setFollowed] = useState<Entry[] | null>(null)
   // The condition the address names when the reader does not follow it: asked of the pack; null for one the pack lacks.
@@ -72,7 +73,9 @@ export function EvidencePage() {
   if (!selected) {
     return <p className="mt-6 text-[15px] text-muted-text">{V.none} <Link href="/watch" className="text-accent-ink underline">{V.addTopics}</Link></p>
   }
-  const go = (next: { condition?: string; scope?: Scope; period?: Period }) => router.replace(evidenceHref({ condition: selected.code, scope, period, ...next }))
+  // Another condition has no treatment of this one; a new scope or period keeps it.
+  const go = (next: { condition?: string; scope?: Scope; period?: Period }) => router.replace(evidenceHref({ condition: selected.code, scope, period, treatment: next.condition ? undefined : treatment ?? undefined, ...next }))
+  const choose = (key: string | null) => router.replace(evidenceHref({ condition: selected.code, scope, period, treatment: key ?? undefined }))
   const savedCount = saved?.code === selected.code ? saved.count : null
   const shown = conditions.map((entry) => entry.code)
 
@@ -102,7 +105,7 @@ export function EvidencePage() {
       </div>
       {/* 24 px to the line of what the summary is built from: 8 here, and the 16 the summary has over it. */}
       <div role="tabpanel" id={`${id}-condition`} aria-labelledby={`${id}-${selected.code}`} className="pt-2">
-        <ConditionEvidence condition={selected.code} scope={scope} period={period} onLoaded={noteSaved} />
+        <ConditionEvidence condition={selected.code} scope={scope} period={period} onLoaded={noteSaved} treatment={treatment} onChoose={choose} />
       </div>
     </section>
   )

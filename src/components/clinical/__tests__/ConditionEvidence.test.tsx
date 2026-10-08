@@ -829,3 +829,56 @@ describe("the evidence block of a condition page", () => {
     expect(clinicalFence("js", "let a = 1")).toBeNull()
   })
 })
+
+describe("the address of a treatment", () => {
+  const withAddress = async (treatment: string | null, onChoose = vi.fn()) => {
+    client.loadConditionEvidenceRemote.mockResolvedValue(SIZED)
+    await render(<ConditionEvidence condition="depression" treatment={treatment} onChoose={onChoose} />)
+    return onChoose
+  }
+
+  it("opens the class and the treatment the address names, and scrolls the table into view once", async () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    try {
+      await withAddress("lithium")
+      expect(q("[data-treatments]").getAttribute("data-treatments")).toBe("medicine")
+      expect(bubble("lithium", "[data-treatments]").getAttribute("aria-pressed")).toBe("true")
+      expect(q("[data-treatment-detail=lithium]")).not.toBeNull()
+      expect(scroll).toHaveBeenCalledTimes(1)
+      await click(bubble("ketamine", "[data-treatments]"))
+      expect(scroll).toHaveBeenCalledTimes(1)
+    } finally { delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView }
+  })
+
+  it("opens a class for a class key, and ignores a key it does not have", async () => {
+    await withAddress("neuromodulation")
+    expect(q("[data-treatments]").getAttribute("data-treatments")).toBe("neuromodulation")
+    expect(q("[data-treatment-detail]")).toBeNull()
+    document.body.innerHTML = ""
+    await withAddress("nonsense")
+    expect(q("[data-treatments]")).toBeNull()
+    expect(q("[data-classes]")).not.toBeNull()
+  })
+
+  it("applies the address once: the reader can close what it opened", async () => {
+    await withAddress("lithium")
+    await click(q("[data-crumb] button"))
+    expect(q("[data-classes]")).not.toBeNull()
+    await again(<ConditionEvidence condition="depression" treatment="lithium" />)
+    expect(q("[data-classes]")).not.toBeNull()
+  })
+
+  it("tells its caller what is chosen, and null when the classes are shown again", async () => {
+    const onChoose = await withAddress(null)
+    await pick("medicine", "[data-classes]")
+    expect(onChoose).toHaveBeenLastCalledWith("medicine")
+    await pick("ketamine", "[data-treatments]")
+    expect(onChoose).toHaveBeenLastCalledWith("ketamine")
+    await pick("ketamine", "[data-treatments]")
+    expect(onChoose).toHaveBeenLastCalledWith("medicine")
+    await pick("lithium", "[data-treatments]")
+    await click(q("[data-crumb] button"))
+    expect(onChoose).toHaveBeenLastCalledWith(null)
+  })
+})
