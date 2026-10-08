@@ -19,8 +19,6 @@ export interface Placed {
   home: { x: number; y: number }
   /** It was moved from there by more than its radius, up or down or sideways: a line is drawn from it to where it belongs. */
   displaced: boolean
-  /** The x of its earliest paper, when it has papers of more than one date: a line reaches back to it. */
-  earliestX: number | null
 }
 export interface Box { left: number; right: number; top: number; bottom: number }
 export interface MapScales {
@@ -48,18 +46,18 @@ const [MIN_RADIUS, MAX_RADIUS] = [18, 40]
 /** The least clear space between two bubbles. */
 const GAP = 6
 const STEP = 2
-const [GUTTER, RIGHT, TOP, FOOT, COLUMN] = [60, 8, 12, 24, 88]
+const [GUTTER, RIGHT, TOP, FOOT, COLUMN] = [76, 8, 12, 26, 88]
 /** The least room kept right of the newest date, so that the name of a bubble there stays by the picture. */
 const RIGHT_ROOM = 44
 /** How far a bubble is moved up or down first, as a share of the height of the scale's part of the plot; then sideways, as a share of the plot's width. */
 const [Y_REACH, X_REACH] = [0.12, 0.06]
 /** The room kept under the lowest bubble for its name, and the size of a name's box. */
 const LABEL_ROOM = 34
-const [LABEL_WIDTH, LABEL_OFFSET, CHAR, MARK_CHAR, NAME_LINE, MARKS_LINE] = [96, 3, 6.2, 5.6, 15, 14]
+const [LABEL_WIDTH, LABEL_OFFSET, CHAR, MARK_CHAR, NAME_LINE, MARKS_LINE] = [104, 3, 6.7, 5.6, 16, 14]
 /** What the band has over the height of its largest bubble: a little above it, and a name of two lines with its marks under it. */
-const BAND_ROOM = 52
+const BAND_ROOM = 54
 const MIN_DOMAIN = 1000
-const [MIN_DAYS, MONTHLY_DAYS, MONTH_LABEL, YEAR_LABEL] = [90, 548, 58, 36]
+const [MIN_DAYS, MONTHLY_DAYS, MONTH_LABEL, YEAR_LABEL] = [90, 548, 66, 40]
 const DAY = 86400000
 const tenth = (value: number) => Number(value.toFixed(1))
 const dayAt = (year: number, month: number, day: number) => Date.UTC(year, month - 1, day) / DAY
@@ -197,7 +195,7 @@ export function layoutMap(items: MapItem[], size: MapSize, today: string): Place
     const inBand = item.participants === null && band !== null && bandY !== null
     const xs: Range = inColumn ? { low: column.left + r + 2, high: column.right - r - 2 } : { low: (column ? column.right : plot.left) + r + 2, high: plot.right - r }
     const ys: Range = inBand ? { low: bandY, high: bandY } : { low: plot.top + r, high: scaleBottom - r - 2 }
-    const [newest, earliest] = [Math.max(...dated), Math.min(...dated)]
+    const newest = Math.max(...dated)
     const home: Spot = {
       x: clamp(inColumn ? (column.left + column.right) / 2 : xOf(newest), xs),
       y: inBand ? bandY : clamp(yBottom - ((Math.log10(Math.max(participants.min, item.participants ?? participants.min)) - 1) / span) * (yBottom - yTop), ys),
@@ -248,7 +246,6 @@ export function layoutMap(items: MapItem[], size: MapSize, today: string): Place
     placed.push({
       key: item.key, x: at.x, y: at.y, r, labelAbove, labelShift: boxes.shift, home,
       displaced: Math.abs(at.x - home.x) > r || Math.abs(at.y - home.y) > r,
-      earliestX: dated.length > 0 && earliest < newest ? xOf(earliest) : null,
     })
     names.push(labelAbove ? boxes.above : boxes.under)
   }

@@ -257,9 +257,6 @@ export const CLINICAL_COPY = {
     badRequest: "The request was not understood.",
     noSuchCondition: "That condition is not in the pack.",
     conditionPage: {
-      choose: "Choose a condition…", create: "New condition page", creating: "Making the page…",
-      label: "Condition",
-      note: "Makes a page for the condition showing the evidence your feed has listed on it.",
       evidence: "Evidence your feed has seen", notes: "My notes",
       notesHint: "Write what you conclude from these papers here.",
     },
@@ -324,17 +321,11 @@ export const CLINICAL_COPY = {
       conditionsLabel: "Conditions you follow",
       none: "You are not following a condition yet.", addTopics: "Add one under My topics",
       loading: "Loading…",
-      viewsLabel: "Summary or notes",
-      views: { summary: "Evidence summary", notes: "Notes" },
+      /** The button after the last tab, and the list it opens: the conditions of the pack that have no tab yet. */
+      add: "+", addLabel: "Add a condition", addList: "Conditions to add", addLoading: "Loading…",
+      addNone: "Every condition of the pack is already shown.",
       scopeLabel: "Papers",
       scopes: { all: "Everything my feed listed", saved: (count: number | null) => (count === null ? "Saved to Library" : `Saved to Library (${count})`) },
-    },
-    /** The reader's notes on a condition, kept in the condition's wiki page. */
-    notes: {
-      loading: "Loading…", save: "Save", saving: "Saving…", saved: "Saved",
-      conflict: "These notes were changed since you opened them, so nothing was saved. Your text is kept. The saved version is shown below; press Save again to replace it.",
-      stored: "The saved version",
-      missing: "The page of this condition could not be read.",
     },
     badRequest: "The request was not understood.",
     noSuchCondition: "That condition is not in the pack.",
@@ -375,10 +366,17 @@ export const CLINICAL_COPY = {
     safetyMark: (count: number) => `${count} safety`,
     /** Under the bubble of a treatment that other papers used as their comparator. Those papers are not in its number or its colours. */
     comparedMark: (count: number) => `compared in ${count}`,
-    /** The line above the bubbles of the classes; the names of the three colours follow it. */
-    bubbleKey: "A bubble counts papers: the more papers, the larger it is. Its colours are what the papers found:",
-    /** The line under that one: what a count and a colour do not say. */
-    bubbleNote: "A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares two treatments counts for the one it tested; the other shows it as a comparison. Choose a treatment to see each paper.",
+    /** The two lines over the map of treatments. The last sentence is of the map only: the grid of a narrow screen moves nothing. */
+    lines: {
+      one: "Each bubble is a treatment; its size is the number of papers.",
+      colours: "Colours are an AI reading of each abstract.",
+      moved: "Bubbles that would overlap are moved apart; a line shows where one belongs.",
+    },
+    /** The small button beside the Treatments heading, and what it shows: what a count and a place on the map do not say. */
+    about: {
+      mark: "?", label: "How to read this map",
+      text: "A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares two treatments counts for the one it tested; the other shows it as a comparison. Across is the date of its most recent paper. Up is the participants its papers report, added up: a paper that states none adds none, and the same people can be in more than one paper. Choose a treatment to see each paper.",
+    },
     /**
      * What a bubble says to a reader who does not see it. `efficacy` is null for a bubble that has no colours of direction.
      * What is new, the safety papers and the papers it was the comparison in are added when there are any.
@@ -397,11 +395,10 @@ export const CLINICAL_COPY = {
      * participants its papers state, added up, on a log scale. Nothing is pooled: these are dates, counts and stated sizes.
      */
     map: {
-      /** Over the map: what is up. */
-      axis: "Total participants across its papers (log scale)",
+      /** Along the y axis: what is up. */
+      axis: "Total participants (log scale)",
       /** Under the map: what is across. */
-      timeAxis: "Publication date of its most recent paper",
-      note: "Across = when its most recent paper was published; a line reaches back to its earliest. Up = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Size = the number of papers. Bubbles that would overlap are moved apart a little; a line shows where one that moved further belongs.",
+      timeAxis: "Most recent publication date",
       /** The band of the items whose papers state no participants, and the column of those whose papers have no date. */
       notStated: "not stated",
       noDate: "no date",
@@ -452,9 +449,6 @@ export const CLINICAL_COPY = {
     /** A cell whose value the paper does not state. */
     noValue: "–",
     studyMarks: { new: "new", saved: "saved" },
-    timeline: "When they were published",
-    otherSeries: "Other",
-    timelineLabel: (condition: string) => `Papers on ${condition} by month of publication`,
   },
 } as const
 

@@ -89,13 +89,18 @@ const title = (container: HTMLElement) => container.querySelector("h1")?.textCon
 const hasLink = (container: HTMLElement, href: string) => container.querySelector(`a[href="${href}"]`) !== null
 
 describe("WikiIndexPage — Evidence view (default)", () => {
-  it("shows the Evidence view on wiki home and keeps New note + inbox count in the header", async () => {
+  it("shows the Evidence view on wiki home, with none of the wiki's old buttons in the header", async () => {
     loadBundleMock.mockResolvedValue(smallBundle())
     const { container, cleanup } = await renderPage()
 
     expect(title(container)).toBe("Evidence")
-    expect(container.textContent).toContain("New note")
-    expect(container.textContent).toContain("Review inbox (3)")
+    // Owner decision 2026-10-09: the review inbox, New note and the making of a condition page are not of this view.
+    expect(container.textContent).not.toContain("New note")
+    expect(container.textContent).not.toContain("Review inbox")
+    expect(hasLink(container, "/wiki/inbox")).toBe(false)
+    expect(container.textContent).not.toContain("New condition page")
+    expect(container.querySelector("select")).toBeNull()
+    expect(container.querySelector("button")).toBeNull()
     expect(container.querySelector("[data-testid=evidence-page]")).not.toBeNull()
     // nothing of the upstream dashboard, and no Dashboard / All pages toggle
     expect(container.textContent).not.toContain("In knowledge base")
@@ -118,6 +123,7 @@ describe("WikiIndexPage — Library view (?view=all)", () => {
     expect(title(container)).toBe("Library")
     expect(container.textContent).toContain("New note")
     expect(container.textContent).toContain("Review inbox (3)")
+    expect(hasLink(container, "/wiki/inbox")).toBe(true)
     expect(hasLink(container, "/read-later")).toBe(true)
     expect(hasLink(container, "/feed-history")).toBe(true)
     expect(container.textContent).not.toContain("All pages")

@@ -7,6 +7,8 @@ const E = CLINICAL_COPY.evidence
 const HOLE = 0.6
 const RING_GAP = 3
 const FILL = "100%"
+/** The number of papers in a bubble, in px, at every size of bubble. */
+const NUMBER_SIZE = 14
 
 /**
  * The disc of a bubble, with its number: a ring divided by what the papers found, clockwise from 12 o'clock, or one
@@ -32,7 +34,7 @@ export function BubbleDisc({ radius, papers, efficacy, safetyPapers = 0, fluid =
       {wedges.map((wedge) => <path key={wedge.kind} data-slice={wedge.kind} d={wedge.d} fill={KIND_COLOUR[wedge.kind]} />)}
       {!plain && <circle data-hole="true" cx={radius} cy={radius} r={radius * HOLE} fill={CENTRE_FILL} />}
       {safetyPapers > 0 && <circle data-safety-ring="true" cx={radius} cy={radius} r={radius + RING_GAP} fill="none" stroke={SAFETY_COLOUR} strokeWidth={2} />}
-      <text data-number="true" x={radius} y={radius} textAnchor="middle" dominantBaseline="central" fontSize={radius < 22 ? 11 : radius < 30 ? 13 : 15} fontWeight={600} fill={NUMBER_COLOUR}>{papers}</text>
+      <text data-number="true" x={radius} y={radius} textAnchor="middle" dominantBaseline="central" fontSize={NUMBER_SIZE} fontWeight={600} fill={NUMBER_COLOUR}>{papers}</text>
     </svg>
   )
 }

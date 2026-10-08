@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { COMPANION_CLEARANCE } from "@/components/layout/companion-clearance"
 import { LoadingState } from "@/components/ui/LoadingState"
-import { NewConditionPage } from "@/components/clinical/NewConditionPage"
 import { EvidencePage } from "@/components/clinical/EvidencePage"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 
@@ -88,28 +87,26 @@ function WikiIndexPageContent() {
       <PageHeader
         title={view === "all" ? N.library : N.evidence}
         actions={
-          <>
-            {view === "all" && (
-              <>
-                <Link href="/read-later" className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm">
-                  {N.readLater}
-                </Link>
-                <Link href="/feed-history" className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm">
-                  {N.history}
-                </Link>
-              </>
-            )}
-            <Link
-              href="/wiki/inbox"
-              className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm"
-            >
-              Review inbox ({inboxCount})
-            </Link>
-            <Button onClick={handleNewNote} disabled={busy || !storage}>
-              New note
-            </Button>
-            {view === "evidence" && <NewConditionPage />}
-          </>
+          // The Evidence view has no header buttons: its controls are in its own row of tabs.
+          view === "all" ? (
+            <>
+              <Link href="/read-later" className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm">
+                {N.readLater}
+              </Link>
+              <Link href="/feed-history" className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm">
+                {N.history}
+              </Link>
+              <Link
+                href="/wiki/inbox"
+                className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm"
+              >
+                Review inbox ({inboxCount})
+              </Link>
+              <Button onClick={handleNewNote} disabled={busy || !storage}>
+                New note
+              </Button>
+            </>
+          ) : undefined
         }
       />
 

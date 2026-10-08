@@ -139,24 +139,56 @@ describe("the evidence block of a condition page", () => {
     expect(sections.every((entry) => entry.getAttribute("aria-labelledby") === entry.querySelector("h3")!.id)).toBe(true)
   })
 
-  it("gives the bubbles a one-line key that says papers are counted and names the three colours", async () => {
+  it("says in two short lines what a bubble is, and has the colours beside the map, not in a sentence", async () => {
     await show()
-    const key = q("[data-bubble-key]")
-    expect(key.textContent).toContain("papers")
-    const entries = [...key.querySelectorAll("[data-key-kind]")] as HTMLElement[]
-    expect(entries.map((entry) => [entry.getAttribute("data-key-kind"), entry.textContent])).toEqual([["benefit", "Benefit"], ["no-benefit", "No benefit"], ["mixed", "Mixed"]])
-    expect((entries[0].querySelector("[data-swatch]") as HTMLElement).style.backgroundColor).toBe("var(--clinical-benefit)")
-    expect((entries[1].querySelector("[data-swatch]") as HTMLElement).style.backgroundColor).toBe("var(--clinical-no-benefit)")
-    expect((entries[2].querySelector("[data-swatch]") as HTMLElement).style.backgroundColor).toContain("var(--text-muted)")
-    expect(key.compareDocumentPosition(bubble("medicine")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const lines = qa("section[data-section=treatments] [data-treatments-lines] > p")
+    expect(lines.map((line) => line.textContent)).toEqual([
+      "Each bubble is a treatment; its size is the number of papers.",
+      "Colours are an AI reading of each abstract. Bubbles that would overlap are moved apart; a line shows where one belongs.",
+    ])
+    expect(lines.every((line) => line.className.includes("text-[13px]"))).toBe(true)
+    // What is of the map only is not shown over the grid of a narrow screen.
+    expect((lines[1].querySelector("[data-map-only]") as HTMLElement).textContent).toBe("Bubbles that would overlap are moved apart; a line shows where one belongs.")
+    expect((lines[1].querySelector("[data-map-only]") as HTMLElement).className).toContain("hidden sm:inline")
+    expect(q("[data-bubble-key]")).toBeNull()
+    expect(q("[data-bubble-note]")).toBeNull()
+    expect(q("[data-map-note]")).toBeNull()
+    expect(section("treatments").textContent).not.toContain("A paper counts once")
+    expect([...q(`${WIDE} [data-map-legend]`).querySelectorAll("[data-key-kind]")].map((entry) => entry.textContent)).toEqual(["Benefit", "No benefit", "Mixed"])
+    expect(q("[data-treatments-lines]").compareDocumentPosition(bubble("medicine")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it("says under the key how a paper is counted, where its direction comes from, and how to see each paper", async () => {
+  it("keeps what a count and a place do not say behind a small button beside the heading, shown on a press or on focus", async () => {
     await show()
-    const note = q("[data-bubble-note]")
-    expect(note.textContent).toBe("A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares two treatments counts for the one it tested; the other shows it as a comparison. Choose a treatment to see each paper.")
-    expect(q("[data-bubble-key]").compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(note.compareDocumentPosition(bubble("medicine")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const about = q("section[data-section=treatments] button[data-about]")
+    const text = "A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares two treatments counts for the one it tested; the other shows it as a comparison. Across is the date of its most recent paper. Up is the participants its papers report, added up: a paper that states none adds none, and the same people can be in more than one paper. Choose a treatment to see each paper."
+    expect(about.textContent).toBe("?")
+    expect(about.getAttribute("aria-label")).toBe("How to read this map")
+    expect(about.getAttribute("title")).toBe(text)
+    expect(about.getAttribute("aria-expanded")).toBe("false")
+    expect(section("treatments").querySelector("h3")!.contains(about)).toBe(false)
+    expect(section("treatments").querySelector("h3")!.parentElement).toBe(about.parentElement)
+    expect(q("[data-about-text]")).toBeNull()
+    await click(about)
+    expect(about.getAttribute("aria-expanded")).toBe("true")
+    const shown = q("[data-about-text]")
+    expect(shown.textContent).toBe(text)
+    expect(shown.id).toBe(about.getAttribute("aria-describedby"))
+    expect(text).not.toMatch(/earliest|reaches back/)
+    await act(async () => { about.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })) })
+    expect(q("[data-about-text]")).toBeNull()
+    await act(async () => { about.focus() })
+    expect(q("[data-about-text]")).not.toBeNull()
+    await act(async () => { about.blur() })
+    expect(q("[data-about-text]")).toBeNull()
+    // The other sections have no such button.
+    expect(qa("button[data-about]")).toHaveLength(1)
+  })
+
+  it("has larger headings for its sections", async () => {
+    await show()
+    expect(qa("section[data-section] h3").every((heading) => heading.className.includes("text-[19px]"))).toBe(true)
+    expect(q("[data-testid=evidence-basis]").className).toContain("text-[13px]")
   })
 
   it("draws a bubble per class with its number, its name and what is new, naming the classes the pack does not", async () => {
@@ -252,11 +284,10 @@ describe("the evidence block of a condition page", () => {
       expect(medicine.style.left).toMatch(/^\d+(\.\d+)?%$/)
       // 2,520 participants against 60: Medicines is higher.
       expect(parseFloat(medicine.style.top)).toBeLessThan(parseFloat(bubble("neuromodulation", WIDE).style.top))
-      // Its papers are of more than one date: a line reaches back to the earliest. Neuromodulation has one paper.
-      expect(qa(`${WIDE} [data-span]`).map((span) => span.getAttribute("data-span"))).toEqual(["medicine"])
+      // Its papers are of more than one date: nothing is drawn back to the earlier ones.
+      expect(qa(`${WIDE} [data-span]`)).toHaveLength(0)
       expect(q(`${NARROW} button[data-bubble=medicine] [data-participants]`).textContent).toBe("Sep 2026 · 2,520 participants")
-      expect(q("[data-map-note]").textContent).toContain("Across = when its most recent paper was published")
-      expect(q("[data-bubble-note]").compareDocumentPosition(q(WIDE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(q("[data-treatments-lines]").compareDocumentPosition(q(WIDE)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it("redraws the same map with the treatments of the pressed class, under the crumb, and goes back by the crumb", async () => {
@@ -274,7 +305,6 @@ describe("the evidence block of a condition page", () => {
       expect(parseFloat(bubble("lithium", WIDE).style.top)).toBeLessThan(parseFloat(bubble("ketamine", WIDE).style.top))
       expect(bubble("ketamine", WIDE).querySelector("[data-marks]")!.textContent).toBe("2 safety · compared in 1")
       expect(bubble("ketamine", WIDE).getAttribute("aria-label")).toBe("Ketamine: 2 papers; 1 benefit, 1 no benefit, 0 mixed; 2 safety; the comparison in 1 other paper; most recent paper 2026-09-28; 120 participants in 1 of 2 papers")
-      expect(qa(`${WIDE} [data-span]`).map((span) => span.getAttribute("data-span"))).toEqual(["ketamine"])
       await click(q("[data-crumb] button"))
       expect(q("[data-treatments]")).toBeNull()
       expect(qa(`[data-classes] ${WIDE} button[data-bubble]`)).toHaveLength(2)
@@ -291,7 +321,7 @@ describe("the evidence block of a condition page", () => {
       expect(bubble("lithium", WIDE).getAttribute("aria-pressed")).toBe("false")
       const detail = q("[data-treatment-detail]")
       expect(detail.getAttribute("data-treatment-detail")).toBe("ketamine")
-      expect(q("[data-map-note]").compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(q(NARROW).compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(detail.querySelector("[data-testid=direction-plot]")).not.toBeNull()
       expect(qa("[data-study]").map((row) => row.getAttribute("data-study"))).toEqual(["pmid:1", "pmid:2"])
       await pick("lithium", NARROW)
@@ -623,18 +653,18 @@ describe("the evidence block of a condition page", () => {
   it("says so in a section that has no paper", async () => {
     await show({ ...EVIDENCE, classes: [], research: [], sections: { treatments: 0, safety: 1, research: 0 } })
     expect(section("treatments").querySelector("p[data-empty]")!.textContent).toBe("None of these papers reports whether a treatment worked.")
-    expect(q("[data-bubble-key]")).toBeNull()
+    expect(q("[data-map-legend]")).toBeNull()
+    expect(q("[data-treatments-lines]")).toBeNull()
+    expect(q("button[data-about]")).toBeNull()
     expect(section("research").querySelector("p[data-empty]")!.textContent).toBe("No other research among these papers.")
   })
 
-  it("draws the timeline last, folded", async () => {
+  it("has no timeline of when the papers were published", async () => {
     await show()
-    const details = q("details")
-    expect(details.hasAttribute("open")).toBe(false)
-    expect(details.querySelector("summary")!.textContent).toBe("When they were published")
-    expect(details.querySelectorAll("rect[data-month]")).toHaveLength(2)
-    expect(qa("[data-legend]").map((entry) => entry.textContent)).toEqual(["Medicines", "Other"])
-    expect(q("[data-testid=condition-evidence]").lastElementChild!.tagName).toBe("DETAILS")
+    expect(q("details")).toBeNull()
+    expect(container.textContent).not.toContain("When they were published")
+    expect(qa("rect[data-month]")).toHaveLength(0)
+    expect(q("[data-testid=condition-evidence]").lastElementChild!.getAttribute("data-section")).toBe("research")
   })
 
   it("says so when nothing was published in the period", async () => {

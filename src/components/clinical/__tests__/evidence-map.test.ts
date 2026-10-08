@@ -64,15 +64,9 @@ describe("the map of the evidence summary", () => {
     expect(scalesOf([item("a", { dates: ["2026-01-01", "2026-11"] })]).days).toEqual({ from: utc(2026, 1, 1), to: utc(2026, 11, 15) })
   })
 
-  it("says where the earliest paper of an item is, only when it has papers of more than one date", () => {
-    const items = [item("a", { dates: ["2026-03-10", "2026-06-15", "2026-08"] }), item("b", { dates: ["2026-10-08"] }), item("c", { dates: ["2026-05", "2026-05"], participants: 10 }), item("d", { dates: [], participants: 1000 })]
-    const scales = scalesOf(items)
-    const placed = byKey(layout(items))
-    expect(placed.get("a")!.earliestX).toBe(scales.x0)
-    expect(placed.get("a")!.earliestX!).toBeLessThan(placed.get("a")!.x)
-    expect(placed.get("b")!.earliestX).toBeNull()
-    expect(placed.get("c")!.earliestX).toBeNull()
-    expect(placed.get("d")!.earliestX).toBeNull()
+  it("says nothing of the earlier papers of an item: a bubble is at its newest paper only", () => {
+    const placed = layout([item("a", { dates: ["2026-03-10", "2026-06-15", "2026-08"] })])
+    expect(Object.keys(placed[0]).sort()).toEqual(["displaced", "home", "key", "labelAbove", "labelShift", "r", "x", "y"])
   })
 
   it("keeps a narrow column at the far left for the items none of whose papers has a date, and has none when all have", () => {
@@ -259,11 +253,11 @@ describe("the map of the evidence summary", () => {
     expect(short.ticksX.map((tick) => [tick.year, tick.month, tick.labelled])).toEqual([[2026, 4, true], [2026, 5, true], [2026, 6, true], [2026, 7, true], [2026, 8, true], [2026, 9, true], [2026, 10, true]])
     const first = short.ticksX[0]
     expect(first.x).toBeCloseTo(short.x0 + ((utc(2026, 4, 1) - short.days.from) / (short.days.to - short.days.from)) * (short.x1 - short.x0), 9)
-    // Seventeen months: a name every other month, so that two do not meet.
+    // Seventeen months: a name every third month, so that two do not meet.
     const longer = scalesOf([item("a", { dates: ["2025-05-08"] })])
     expect(longer.ticksX).toHaveLength(17)
     expect(longer.ticksX.every((tick) => tick.month !== null)).toBe(true)
-    expect(longer.ticksX.map((tick) => tick.labelled)).toEqual(Array.from({ length: 17 }, (_, at) => at % 2 === 0))
+    expect(longer.ticksX.map((tick) => tick.labelled)).toEqual(Array.from({ length: 17 }, (_, at) => at % 3 === 0))
     const years = scalesOf([item("a", { dates: ["2023-01-20"] })])
     expect(years.ticksX.map((tick) => [tick.year, tick.month, tick.labelled])).toEqual([[2024, null, true], [2025, null, true], [2026, null, true]])
     // Ninety days: three months.

@@ -129,7 +129,7 @@ describe("the condition a page is about", () => {
 describe("the address of the Evidence view", () => {
   it("names the condition and leaves out what is the default", () => {
     expect(evidenceHref({ condition: "depression" })).toBe("/wiki?condition=depression")
-    expect(evidenceHref({ condition: "depression", scope: "all", period: "all", tab: "summary" })).toBe("/wiki?condition=depression")
-    expect(evidenceHref({ condition: "depression", scope: "saved", period: "6m", tab: "notes" })).toBe("/wiki?condition=depression&scope=saved&period=6m&tab=notes")
+    expect(evidenceHref({ condition: "depression", scope: "all", period: "all" })).toBe("/wiki?condition=depression")
+    expect(evidenceHref({ condition: "depression", scope: "saved", period: "6m" })).toBe("/wiki?condition=depression&scope=saved&period=6m")
   })
 })

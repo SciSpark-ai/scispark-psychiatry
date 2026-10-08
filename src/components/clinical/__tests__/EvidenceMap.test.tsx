@@ -48,17 +48,27 @@ describe("the map of treatments", () => {
     expect(qa(`${WIDE} [data-tick-y]`).map((tick) => num(tick, "y"))).toEqual(scales.ticksY.map((tick) => tick.y))
     expect(num(qa(`${WIDE} [data-tick-y]`)[0], "y")).toBeGreaterThan(num(qa(`${WIDE} [data-tick-y]`)[3], "y"))
     expect(qa(`${WIDE} [data-guide]`)).toHaveLength(4)
-    expect(q(`${WIDE} [data-axis-title="x"]`).textContent).toBe("Publication date of its most recent paper")
-    expect(q(`${WIDE} [data-axis-title="y"]`).textContent).toBe("Total participants across its papers (log scale)")
+    expect(q(`${WIDE} [data-axis-title="x"]`).textContent).toBe("Most recent publication date")
+    // The title of the y axis is written along it, turned a quarter, in the middle of its height; none is over the plot.
+    const along = qa(`${WIDE} [data-axis-title="y"]`)
+    expect(along.map((title) => title.textContent)).toEqual(["Total participants (log scale)"])
+    expect(along[0].className).toContain("-rotate-90")
+    expect(along[0].className).toContain("whitespace-nowrap")
+    expect(q(`${WIDE} [data-map-box]`).contains(along[0])).toBe(true)
+    expect(along[0].parentElement!.className).toContain("items-center")
+    expect(q(WIDE).textContent).not.toContain("across its papers")
+    // Larger type: 13 px on the axes.
+    expect(qa(`${WIDE} [data-tick-x], ${WIDE} [data-tick-y]`).every((tick) => tick.getAttribute("font-size") === "13")).toBe(true)
+    expect(qa(`${WIDE} [data-axis-title]`).every((title) => title.className.includes("text-[13px]"))).toBe(true)
     // Nothing is left of the share of benefit.
-    expect(q(WIDE).textContent).not.toMatch(/All benefit|Split|No benefit/)
+    expect(q(WIDE).textContent).not.toMatch(/All benefit|Split/)
     expect(pictures[0].innerHTML).not.toMatch(/#[0-9a-f]{3,8}\b/i)
   })
 
   it("names only the months there is room for, and the years when the papers reach back over eighteen months", async () => {
     await show([entry("a", { dates: ["2025-05-08"] })])
     expect(qa(`${WIDE} [data-tick-mark]`)).toHaveLength(17)
-    expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["Jun 2025", "Aug 2025", "Oct 2025", "Dec 2025", "Feb 2026", "Apr 2026", "Jun 2026", "Aug 2026", "Oct 2026"])
+    expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["Jun 2025", "Sep 2025", "Dec 2025", "Mar 2026", "Jun 2026", "Sep 2026"])
     document.body.innerHTML = ""
     await show([entry("a", { dates: ["2023-01-20"] })])
     expect(qa(`${WIDE} [data-tick-x]`).map((tick) => tick.textContent)).toEqual(["2024", "2025", "2026"])
@@ -70,7 +80,7 @@ describe("the map of treatments", () => {
     const band = q(`${WIDE} [data-band]`)
     expect([num(band, "x"), num(band, "y"), num(band, "width"), num(band, "height")]).toEqual([scales.plot.left, scales.band!.top, scales.plot.right - scales.plot.left, scales.band!.bottom - scales.band!.top])
     expect(q(`${WIDE} [data-band-label]`).textContent).toBe("not stated")
-    expect(num(q(`${WIDE} [data-band-label]`), "y")).toBe(scales.bandY)
+    expect(num(q(`${WIDE} [data-band-label]`), "y")).toBeGreaterThan(scales.band!.top)
     expect(q(`${WIDE} button[data-bubble=digital]`).style.top).toBe(percent(scales.bandY!, MAP_SIZE.height))
     document.body.innerHTML = ""
     await show(ENTRIES.slice(0, 2))
@@ -129,18 +139,37 @@ describe("the map of treatments", () => {
     expect(buttons.map((button) => button.getAttribute("data-bubble"))).toEqual(["psychotherapy", "digital", "medicine"])
   })
 
-  it("draws a thin line from a bubble back to its earliest paper, with a small end, only for papers of more than one date", async () => {
+  it("draws no line back to the earlier papers of a bubble", async () => {
     await show()
-    const placed = new Map(layoutMap(items(ENTRIES), MAP_SIZE, TODAY).map((each) => [each.key, each]))
-    const scales = mapScales(items(ENTRIES), MAP_SIZE, TODAY)
-    // Medicines: four papers from 10 March to 28 September. Psychotherapy: two of one month. Digital tools: one.
-    expect(qa(`${WIDE} svg[data-map-axes] [data-span]`).map((span) => span.getAttribute("data-span"))).toEqual(["medicine"])
-    const at = placed.get("medicine")!
-    const line = q(`${WIDE} [data-span=medicine] [data-span-line]`)
-    expect(["x1", "x2", "y1", "y2"].map((name) => num(line, name))).toEqual([scales.x0, at.x, at.y, at.y])
-    const end = q(`${WIDE} [data-span=medicine] [data-span-end]`)
-    expect(["x1", "x2", "y1", "y2"].map((name) => num(end, name))).toEqual([scales.x0, scales.x0, at.y - 4, at.y + 4])
-    expect(line.getAttribute("stroke")).toContain("var(--")
+    expect(qa("[data-span], [data-span-line], [data-span-end]")).toHaveLength(0)
+    expect(qa(`${WIDE} svg[data-map-axes] line[data-leader]`)).toHaveLength(0)
+  })
+
+  it("has the three colours of the doughnuts in a small list beside the map, one under the other", async () => {
+    await show()
+    const legend = q(`${WIDE} [data-map-legend]`)
+    expect(legend.className).toContain("flex-col")
+    expect(q(`${WIDE} [data-map-box]`).contains(legend)).toBe(false)
+    expect(q(`${WIDE} [data-map-box]`).parentElement).toBe(legend.parentElement)
+    expect(legend.parentElement!.className).toContain("flex")
+    expect(q(`${WIDE} [data-map-box]`).compareDocumentPosition(legend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const entries = [...legend.querySelectorAll("[data-key-kind]")] as HTMLElement[]
+    expect(entries.map((each) => [each.getAttribute("data-key-kind"), each.textContent])).toEqual([["benefit", "Benefit"], ["no-benefit", "No benefit"], ["mixed", "Mixed"]])
+    expect(entries.map((each) => (each.querySelector("[data-swatch]") as HTMLElement).style.backgroundColor)).toEqual(["var(--clinical-benefit)", "var(--clinical-no-benefit)", expect.stringContaining("var(--text-muted)")])
+    expect(entries.every((each) => each.querySelector("[data-swatch]")!.getAttribute("aria-hidden") === "true")).toBe(true)
+    // The grid of a narrow screen has them too, in a row over the tiles.
+    expect([...q(`${NARROW} [data-map-legend]`).querySelectorAll("[data-key-kind]")].map((each) => each.textContent)).toEqual(["Benefit", "No benefit", "Mixed"])
+    expect(q(`${NARROW} [data-map-legend]`).className).not.toContain("flex-col")
+  })
+
+  it("writes a name in 13 px with nothing behind it, and the number of a bubble in 14 px", async () => {
+    await show(ENTRIES, "medicine")
+    for (const label of qa(`${WIDE} button[data-bubble] [data-label]`)) {
+      expect(label.className).not.toMatch(/(^| )bg-/)
+      expect(label.className).not.toMatch(/(^| )rounded/)
+      expect(label.querySelector("[data-name]")!.className).toContain("text-[13px]")
+    }
+    expect(qa(`${WIDE} button[data-bubble] [data-number]`).map((number) => number.getAttribute("font-size"))).toEqual(["14", "14", "14"])
   })
 
   it("names each bubble, keeps its marks on one line, and says its newest paper and its participants in words", async () => {
@@ -255,11 +284,10 @@ describe("the map of treatments", () => {
     expect(onPick.mock.calls).toEqual([["psychotherapy"], ["medicine"]])
   })
 
-  it("says under the wide map what across, up and size are, and what a line is; the grid of a narrow screen has no such note", async () => {
+  it("has no note of its own under the map or the grid", async () => {
     await show()
-    expect(qa("[data-map-note]")).toHaveLength(1)
-    expect(q(`${WIDE} [data-map-note]`).textContent).toBe("Across = when its most recent paper was published; a line reaches back to its earliest. Up = the participants its papers report, added up (a paper that states none adds none; the same people can be in more than one paper). Size = the number of papers. Bubbles that would overlap are moved apart a little; a line shows where one that moved further belongs.")
-    expect(q(NARROW).textContent).not.toMatch(/Across|Up =/)
+    expect(q("[data-map-note]")).toBeNull()
+    expect(container.textContent).not.toMatch(/Across =|Up =|reaches back/)
   })
 
   it("is a grid of two columns of tiles on a narrow screen, each with its month and its participants in words, and only one of the two is shown", async () => {

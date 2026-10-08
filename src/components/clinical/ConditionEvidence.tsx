@@ -8,8 +8,6 @@ import { BubbleGrid, discBoxHeight } from "./BubbleGrid"
 import { EvidenceBubble } from "./EvidenceBubble"
 import { EvidenceMap, type MapEntry } from "./EvidenceMap"
 import { classNameOf } from "./evidence-labels"
-import { EFFICACY_KINDS, KIND_COLOUR } from "./evidence-shapes"
-import { EvidenceTimeline } from "./EvidenceTimeline"
 import { ResearchList } from "./ResearchList"
 import { StudyTable } from "./StudyTable"
 import { TreatmentDetail } from "./TreatmentDetail"
@@ -42,32 +40,37 @@ const datesOf = (studies: Study[]): string[] => studies.flatMap((study) => (stud
 /** The dates of the papers of a class: a paper under two of its treatments is one paper. */
 const classDates = (cls: ClassEvidence): string[] => datesOf([...new Map(cls.treatments.flatMap((entry) => entry.studies).map((study) => [study.key, study])).values()])
 
-/** One of the three stacked sections: its name and how many distinct papers it has, then its bubbles. */
-function Section({ name, count, children }: { name: SectionName; count: number; children: ReactNode }) {
+/**
+ * The small button beside a heading: what it is about is its title, and is shown under the heading on a press or
+ * while it has the keyboard. Escape puts it away.
+ */
+function About({ label, text }: { label: string; text: string }) {
   const id = useId()
+  const [open, setOpen] = useState(false)
   return (
-    <section data-section={name} aria-labelledby={id} className="mt-7">
-      <h3 id={id} className="font-heading text-[17px] font-semibold tracking-heading text-espresso">
-        <span>{E.sections[name]}</span>
-        <span data-section-count="true" className="ml-2 text-[13px] font-normal text-muted-text">{count}</span>
-      </h3>
-      {children}
-    </section>
+    <>
+      <button type="button" data-about="true" aria-label={label} title={text} aria-expanded={open} aria-describedby={open ? id : undefined}
+        onClick={() => setOpen(true)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false) }}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-warm text-[12px] font-semibold leading-none text-muted-text hover:text-espresso focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">{E.about.mark}</button>
+      {open && <p id={id} role="note" data-about-text="true" className="absolute left-0 top-full z-20 mt-1 w-80 max-w-[80vw] rounded-card border border-border-warm bg-light-surface p-3 text-[13px] leading-snug text-secondary-dark shadow-md">{text}</p>}
+    </>
   )
 }
 
-/** The one line above the classes: a bubble counts papers, and what its three colours are. */
-function BubbleKey() {
+/** One of the three stacked sections: its name and how many distinct papers it has, a button about it when it has one, then its bubbles. */
+function Section({ name, count, about, children }: { name: SectionName; count: number; about?: ReactNode; children: ReactNode }) {
+  const id = useId()
   return (
-    <p data-bubble-key="true" className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-text">
-      <span>{E.bubbleKey}</span>
-      {EFFICACY_KINDS.map((kind) => (
-        <span key={kind} data-key-kind={kind} className="inline-flex items-center gap-1.5">
-          <span data-swatch="true" aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: KIND_COLOUR[kind] }} />
-          <span>{E.kindLabels[kind]}</span>
-        </span>
-      ))}
-    </p>
+    <section data-section={name} aria-labelledby={id} className="mt-7">
+      <div className="relative flex items-center gap-2">
+        <h3 id={id} className="font-heading text-[19px] font-semibold tracking-heading text-espresso">
+          <span>{E.sections[name]}</span>
+          <span data-section-count="true" className="ml-2 text-[13px] font-normal text-muted-text">{count}</span>
+        </h3>
+        {about}
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -107,11 +110,13 @@ function Sections({ evidence }: { evidence: Evidence }) {
   const leaveClass = () => { backFrom.current = chosen.classKey; choose({ classKey: null, treatment: null }) }
   return (
     <>
-      <Section name="treatments" count={evidence.sections.treatments}>
+      <Section name="treatments" count={evidence.sections.treatments} about={evidence.classes.length > 0 ? <About label={E.about.label} text={E.about.text} /> : undefined}>
         {evidence.classes.length === 0 ? <p data-empty="true" className={EMPTY}>{E.treatmentsEmpty}</p> : (
           <div ref={treatments}>
-            <BubbleKey />
-            <p data-bubble-note="true" className="mt-1 max-w-[720px] text-[12px] text-muted-text">{E.bubbleNote}</p>
+            <div data-treatments-lines="true" className="mt-1 max-w-[720px] text-secondary-dark">
+              <p className="text-[13px]">{E.lines.one}</p>
+              <p className="text-[13px]"><span>{E.lines.colours}</span>{" "}<span data-map-only="true" className="hidden sm:inline">{E.lines.moved}</span></p>
+            </div>
             {cls && className ? (
               <div data-treatments={cls.key} className="mt-2">
                 <p data-crumb="true" className="text-[13px] text-secondary-dark">
@@ -201,12 +206,6 @@ export function ConditionEvidence({ condition, scope = "all", period = "all", on
     <div data-testid="condition-evidence" aria-busy={pending ? "true" : undefined} className={pending ? "my-4 opacity-60 transition-opacity" : "my-4"}>
       <p data-testid="evidence-basis" className="text-[13px] text-muted-text">{basisOf(evidence, phrase)}</p>
       {nothing !== null ? <p data-nothing="true" className="mt-4 text-[14px] text-muted-text">{nothing}</p> : <Sections key={evidence.condition.code} evidence={evidence} />}
-      {evidence.total > 0 && (
-        <details className="mt-7">
-          <summary className="cursor-pointer text-[12px] font-semibold uppercase tracking-wide text-accent-ink">{E.timeline}</summary>
-          <div className="mt-2"><EvidenceTimeline evidence={evidence} /></div>
-        </details>
-      )}
     </div>
   )
 }

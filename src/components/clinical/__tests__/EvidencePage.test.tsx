@@ -9,9 +9,7 @@ const nav = vi.hoisted(() => ({ replace: vi.fn(), params: new URLSearchParams() 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: nav.replace }), useSearchParams: () => nav.params }))
 const evidence = vi.hoisted(() => ({ listFollowedConditionsRemote: vi.fn(), loadConditionEvidenceRemote: vi.fn() }))
 vi.mock("@/lib/clinical/evidence/client", () => evidence)
-const vault = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn() }))
-vi.mock("@/lib/vault/get-vault", () => ({ getOpenVault: async () => vault }))
-const records = vi.hoisted(() => ({ createConditionPageRemote: vi.fn() }))
+const records = vi.hoisted(() => ({ listConditionsRemote: vi.fn(), createConditionPageRemote: vi.fn() }))
 vi.mock("@/lib/clinical/records/client", () => records)
 
 import { EvidencePage } from "../EvidencePage"
@@ -22,7 +20,7 @@ const FOLLOWED = [
 ]
 const NAMES: Record<string, string> = { depression: "Major depressive disorder", adhd: "ADHD", ocd: "Obsessive-compulsive disorder" }
 const PAGES: Record<string, string> = { depression: "wiki/conditions/major-depressive-disorder", ocd: "wiki/conditions/obsessive-compulsive-disorder" }
-const NOTES: Record<string, string> = { "wiki/conditions/major-depressive-disorder.md": "Notes on depression.", "wiki/conditions/obsessive-compulsive-disorder.md": "Notes on OCD." }
+const PACK = [{ code: "adhd", name: "ADHD" }, { code: "depression", name: "Major depressive disorder" }, { code: "ocd", name: "Obsessive-compulsive disorder" }, { code: "schizophrenia", name: "Schizophrenia" }]
 const answer = (code: string) => ({
   condition: { code, name: NAMES[code] }, pageId: PAGES[code] ?? null, period: "all", scope: "all", total: 0, collected: 0, savedCount: 4, since: null,
   sections: { treatments: 0, safety: 0, research: 0 }, classes: [], safety: [], research: [], timeline: { months: [], series: [] },
@@ -44,18 +42,6 @@ async function at(query: string) {
   await act(async () => { root!.render(<EvidencePage />) })
   await act(async () => {})
 }
-const area = () => container.querySelector("textarea") as HTMLTextAreaElement
-async function type(text: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!
-  await act(async () => { setter.call(area(), text); area().dispatchEvent(new Event("input", { bubbles: true })) })
-}
-const saveButton = () => [...container.querySelectorAll("button")].find((button) => button.textContent === "Save") as HTMLButtonElement
-/** Whether the browser would ask before the page is left. */
-function leavingIsGuarded() {
-  const event = new Event("beforeunload", { cancelable: true })
-  window.dispatchEvent(event)
-  return event.defaultPrevented
-}
 const tablists = () => [...container.querySelectorAll('[role="tablist"]')]
 const tabsOf = (list: Element) => [...list.querySelectorAll('[role="tab"]')] as HTMLElement[]
 const selectedOf = (list: Element) => tabsOf(list).filter((tab) => tab.getAttribute("aria-selected") === "true").map((tab) => tab.textContent)
@@ -74,8 +60,7 @@ beforeEach(() => {
     if (!NAMES[code]) throw new Error("That condition is not in the pack.")
     return answer(code)
   })
-  vault.read.mockReset().mockImplementation(async (path: string) => (NOTES[path] ? `---\ntype: condition\n---\n## My notes\n\n${NOTES[path]}\n` : null))
-  vault.write.mockReset().mockResolvedValue(undefined)
+  records.listConditionsRemote.mockReset().mockResolvedValue(PACK)
   records.createConditionPageRemote.mockReset()
 })
 
@@ -88,7 +73,11 @@ describe("the Evidence view", () => {
     expect(selectedOf(conditions)).toEqual(["Major depressive disorder"])
     const panel = container.querySelector('[role="tabpanel"]')!
     expect(panel.getAttribute("aria-labelledby")).toBe(tabsOf(conditions)[0].id)
-    expect(panel.querySelector("h2")!.textContent).toBe("Major depressive disorder")
+    // The name of the condition is written once: in its tab. The panel is named by that tab.
+    expect(container.querySelector("h1, h2")).toBeNull()
+    expect(container.querySelector("[data-control-row]")!.textContent!.split("Major depressive disorder")).toHaveLength(2)
+    expect([...container.querySelectorAll("h1, h2, h3, h4")].some((heading) => heading.textContent!.includes("Major depressive disorder"))).toBe(false)
+    expect(container.querySelectorAll('[role="tabpanel"]')).toHaveLength(1)
     expect(evidence.loadConditionEvidenceRemote).toHaveBeenCalledWith("depression", { period: "all", scope: "all" })
     expect(evidence.loadConditionEvidenceRemote).toHaveBeenCalledTimes(1)
   })
@@ -143,87 +132,104 @@ describe("the Evidence view", () => {
     expect(evidence.loadConditionEvidenceRemote).toHaveBeenCalledWith("depression", { period: "all", scope: "all" })
   })
 
-  it("has two tabs under a condition: the summary first, and the notes", async () => {
+  it("shows the summary directly: no tabs under the condition, no notes, and an old address that asks for the notes is ignored", async () => {
+    await render("condition=depression&tab=notes")
+    expect(tablists()).toHaveLength(1)
+    expect(container.textContent).not.toMatch(/Evidence summary|Notes/)
+    expect(container.querySelector("textarea")).toBeNull()
+    expect(evidence.loadConditionEvidenceRemote).toHaveBeenCalledWith("depression", { period: "all", scope: "all" })
+    await click(tabsOf(tablists()[0])[1])
+    expect(nav.replace).toHaveBeenCalledWith("/wiki?condition=adhd")
+    const event = new Event("beforeunload", { cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  it("has one row of controls: the tabs of the conditions at the left, the two selects at the right", async () => {
     await render()
-    const views = tablists()[1]
-    expect(tabsOf(views).map((tab) => tab.textContent)).toEqual(["Evidence summary", "Notes"])
-    expect(selectedOf(views)).toEqual(["Evidence summary"])
-    expect(container.querySelector("textarea")).toBeNull()
-    await click(tabsOf(views)[1])
-    expect(nav.replace).toHaveBeenCalledWith("/wiki?condition=depression&tab=notes")
+    const row = container.querySelector("[data-control-row]") as HTMLElement
+    expect(row.querySelector('[role="tablist"]')).toBe(tablists()[0])
+    expect([...row.querySelectorAll("select")].map((each) => each.getAttribute("aria-label"))).toEqual(["Papers", "Period"])
+    expect(container.querySelectorAll("select")).toHaveLength(2)
+    // On a narrow screen the selects go under the tabs.
+    expect(row.className).toContain("flex-wrap")
+    expect(row.className).toContain("justify-between")
+    expect(row.querySelector('[role="tablist"]')!.compareDocumentPosition(select("Papers")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(container.querySelector('[role="tabpanel"]')!.contains(select("Papers"))).toBe(false)
   })
 
-  it("shows the notes of the condition, with its page, when the address asks for them", async () => {
-    await render("condition=depression&tab=notes")
-    expect(selectedOf(tablists()[1])).toEqual(["Notes"])
-    expect(vault.read).toHaveBeenCalledWith("wiki/conditions/major-depressive-disorder.md")
-    expect(area().value).toBe("Notes on depression.")
-    expect(evidence.loadConditionEvidenceRemote).not.toHaveBeenCalled()
-    expect(container.querySelector("select")).toBeNull()
-    await click(tabsOf(tablists()[1])[0])
-    expect(nav.replace).toHaveBeenCalledWith("/wiki?condition=depression")
-  })
-
-  it("opens the notes of a condition the reader does not follow from its page, which it finds without making it", async () => {
-    await render("condition=ocd&tab=notes")
-    expect(selectedOf(tablists()[0])).toEqual(["Obsessive-compulsive disorder"])
-    expect(vault.read).toHaveBeenCalledWith("wiki/conditions/obsessive-compulsive-disorder.md")
-    expect(area().value).toBe("Notes on OCD.")
-    expect(records.createConditionPageRemote).not.toHaveBeenCalled()
-  })
-
-  it("keeps what was typed in the notes over a change of tab and of condition, and guards leaving the page meanwhile", async () => {
-    await render("condition=depression&tab=notes")
-    expect(leavingIsGuarded()).toBe(false)
-    await type("Notes on depression. And a new thought")
-    expect(leavingIsGuarded()).toBe(true)
-    await at("condition=depression")
-    expect(container.querySelector("textarea")).toBeNull()
-    await at("condition=depression&tab=notes")
-    expect(area().value).toBe("Notes on depression. And a new thought")
-    expect(saveButton().disabled).toBe(false)
-    await at("condition=adhd&tab=notes")
-    expect(area().value).toBe("")
-    await at("condition=depression&tab=notes")
-    expect(area().value).toBe("Notes on depression. And a new thought")
-    expect(leavingIsGuarded()).toBe(true)
-    await act(async () => { saveButton().click() })
-    await act(async () => {})
-    expect(vault.write).toHaveBeenCalledTimes(1)
-    expect(leavingIsGuarded()).toBe(false)
-  })
-
-  it("keeps with a draft the notes it was begun from, so a change made elsewhere meanwhile is not written over", async () => {
-    const path = "wiki/conditions/major-depressive-disorder.md"
-    await render("condition=depression&tab=notes")
-    await type("Notes on depression. Mine.")
-    await at("condition=depression")
-    NOTES[path] = "Written in another window."
-    try {
-      await at("condition=depression&tab=notes")
-      expect(area().value).toBe("Notes on depression. Mine.")
-      await act(async () => { saveButton().click() })
+  describe("the button that adds a condition", () => {
+    const add = () => container.querySelector("button[data-add-condition]") as HTMLButtonElement
+    const menu = () => container.querySelector("[data-add-menu]") as HTMLElement | null
+    const options = () => [...menu()!.querySelectorAll("button")] as HTMLButtonElement[]
+    const key = async (target: EventTarget, name: string) => { await act(async () => { target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true })) }) }
+    it("is after the last tab, in the row and outside the list of tabs, and is named for a reader who does not see it", async () => {
+      await render()
+      expect(add().textContent).toBe("+")
+      expect(add().getAttribute("aria-label")).toBe("Add a condition")
+      expect(add().getAttribute("aria-expanded")).toBe("false")
+      expect(container.querySelector("[data-control-row]")!.contains(add())).toBe(true)
+      expect(tablists()[0].contains(add())).toBe(false)
+      expect(tabsOf(tablists()[0]).at(-1)!.compareDocumentPosition(add()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(menu()).toBeNull()
+      expect(records.listConditionsRemote).not.toHaveBeenCalled()
+    })
+    it("opens a list of the pack's conditions that are not shown yet, and puts the keyboard on the first", async () => {
+      await render()
+      await click(add())
       await act(async () => {})
-      expect(vault.write).not.toHaveBeenCalled()
-      expect(container.querySelector("[data-stored-notes]")!.textContent).toBe("Written in another window.")
-      expect(area().value).toBe("Notes on depression. Mine.")
-    } finally {
-      NOTES[path] = "Notes on depression."
-    }
-  })
-
-  it("opens the notes of a page that was made on a first save, when the reader comes back to them", async () => {
-    await render("condition=adhd&tab=notes")
-    records.createConditionPageRemote.mockResolvedValue({ id: "wiki/conditions/adhd", created: true })
-    NOTES["wiki/conditions/adhd.md"] = "Write what you conclude from these papers here."
-    await type("First note.")
-    await act(async () => { saveButton().click() })
-    await act(async () => {})
-    NOTES["wiki/conditions/adhd.md"] = "First note."
-    await at("condition=adhd")
-    await at("condition=adhd&tab=notes")
-    expect(area().value).toBe("First note.")
-    delete NOTES["wiki/conditions/adhd.md"]
+      expect(add().getAttribute("aria-expanded")).toBe("true")
+      expect(menu()!.id).toBe(add().getAttribute("aria-controls"))
+      expect(menu()!.getAttribute("aria-label")).toBe("Conditions to add")
+      expect(options().map((option) => option.textContent)).toEqual(["Obsessive-compulsive disorder", "Schizophrenia"])
+      expect(document.activeElement).toBe(options()[0])
+      // One that is shown as an extra tab is not offered either.
+      await at("condition=ocd")
+      await click(add())
+      await act(async () => {})
+      expect(options().map((option) => option.textContent)).toEqual(["Schizophrenia"])
+    })
+    it("goes to the chosen condition, which then has a tab, and follows nothing and makes no page", async () => {
+      await render("condition=adhd&period=6m")
+      await click(add())
+      await act(async () => {})
+      await click(options()[0])
+      expect(nav.replace).toHaveBeenCalledWith("/wiki?condition=ocd&period=6m")
+      expect(menu()).toBeNull()
+      expect(records.createConditionPageRemote).not.toHaveBeenCalled()
+      await at("condition=ocd")
+      expect(tabsOf(tablists()[0]).map((tab) => tab.textContent)).toEqual(["Major depressive disorder", "ADHD", "Obsessive-compulsive disorder"])
+    })
+    it("closes on Escape, with the keyboard back on the button, on a press outside it, and on a second press", async () => {
+      await render()
+      await click(add())
+      await act(async () => {})
+      await key(options()[1], "Escape")
+      expect(menu()).toBeNull()
+      expect(document.activeElement).toBe(add())
+      await click(add())
+      await act(async () => {})
+      expect(menu()).not.toBeNull()
+      await act(async () => { document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })) })
+      expect(menu()).toBeNull()
+      await click(add())
+      await act(async () => {})
+      await click(add())
+      expect(menu()).toBeNull()
+    })
+    it("says so when every condition is shown, and when the conditions cannot be listed", async () => {
+      records.listConditionsRemote.mockResolvedValue(PACK.slice(0, 2))
+      await render()
+      await click(add())
+      await act(async () => {})
+      expect(menu()!.textContent).toBe("Every condition of the pack is already shown.")
+      document.body.innerHTML = ""
+      records.listConditionsRemote.mockRejectedValue(new Error("The conditions could not be reached (500)."))
+      await render()
+      await click(add())
+      await act(async () => {})
+      expect(menu()!.querySelector('[role="alert"]')!.textContent).toContain("could not be reached")
+    })
   })
 
   it("says so, with the way to My topics, when no condition is followed", async () => {
