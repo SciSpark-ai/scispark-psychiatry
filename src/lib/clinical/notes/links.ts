@@ -55,7 +55,8 @@ export function noteLinks(body: string): NoteLinks {
   const links: NoteLinks = { papers: [], conditions: [], treatments: [] }
   for (const { slug } of findWikilinkMatches(body)) if (!links.papers.includes(slug)) links.papers.push(slug)
   for (const match of withoutCode(body).matchAll(EVIDENCE_LINK_RE)) {
-    const query = new URLSearchParams(match[2])
+    // What follows a `#` is a place on the page, not a parameter.
+    const query = new URLSearchParams(match[2].split("#")[0])
     const condition = query.get("condition")
     if (!condition || !CODE_RE.test(condition)) continue
     if (!links.conditions.includes(condition)) links.conditions.push(condition)
@@ -88,6 +89,11 @@ function plain(line: string): string {
     .replace(/\*\*|__|`/g, "")
     .replace(/\s+/g, " ")
     .trim()
+}
+
+/** A note's text as it is read, line by line: links as their labels, with no address, and no heading, quote or list marks. */
+export function plainText(body: string): string {
+  return body.split("\n").map((line) => plain(line.replace(/^\s{0,3}#{1,6}\s*/, ""))).filter(Boolean).join("\n")
 }
 
 /** The first text of a note that is not a heading, on one line, links shown as their labels. */

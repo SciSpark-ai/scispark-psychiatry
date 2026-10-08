@@ -16,7 +16,7 @@ import type { Finding } from "../evidence/schema"
 import type { Taxonomy, TaxonomyNode } from "../pack/schema"
 import { armsOf, withDescendants } from "../pack/taxonomy"
 import {
-  UNTITLED_STORED, conditionLink, excerptOf, noteKind, noteLinks, paperLabel, paperLink, referenceLine, revisionOf, titleOf, treatmentLink,
+  UNTITLED_STORED, conditionLink, excerptOf, noteKind, noteLinks, paperLabel, paperLink, plainText, referenceLine, revisionOf, titleOf, treatmentLink,
   type CitablePaper, type NewPaper, type NoteAbout, type NoteConflict, type NoteDetail, type NoteKind, type NoteLinks, type NoteReference, type NoteSaved, type NoteSummary,
 } from "./links"
 
@@ -222,7 +222,7 @@ async function load(vault: Vault, id: string, now: Date): Promise<Loaded | null>
 }
 
 export interface NoteFilters {
-  /** Every word of it is in the title or the body, in any case. */
+  /** Every word of it is in the title or in the text of the body as it is read (a link by its label, never its address), in any case. */
   q?: string
   /** A condition code: the note is on it or on one of its subtypes. */
   condition?: string
@@ -244,7 +244,7 @@ export async function listNotes(storage: VaultStorage, taxonomy: Taxonomy, filte
   const under = filters.condition ? vault.codesUnder(filters.condition) : null
   return loaded
     .filter(({ summary, body }) => {
-      if (wanted.length > 0 && !hasAll(wanted, `${summary.title}\n${body}`)) return false
+      if (wanted.length > 0 && !hasAll(wanted, `${summary.title}\n${plainText(body)}`)) return false
       if (under && !summary.conditions.some((entry) => under.has(entry.code))) return false
       if (filters.kind && summary.kind !== filters.kind) return false
       if (filters.paper && !summary.links.papers.includes(filters.paper)) return false
@@ -284,6 +284,11 @@ export async function ensurePaperSaved(storage: VaultStorage, slug: string, now:
   return "saved"
 }
 
+/** What `slugifyTitle` gives for a title with nothing to make a name from. */
+const NO_SLUG = "untitled"
+/** How many names a create tries when others are creating notes of the same title at the same moment. */
+const CREATE_TRIES = 5
+
 export interface CreateNoteInput { title?: string; body?: string; about?: NoteAbout; now: Date }
 
 /** Makes a note and gives its id. With `about`, its body starts with the link that says what it is about. */
@@ -300,7 +305,10 @@ export async function createNote(storage: VaultStorage, taxonomy: Taxonomy, inpu
   const lead: string[] = []
   if (about?.paper) {
     // The paper is saved first, so the link the note starts with leads to a page of the Library.
-    if ((await ensurePaperSaved(storage, about.paper, now)) === "unknown") throw new NoteInputError(N.unknownPaper)
+    // A paper that cannot be saved stops here, before the note is written.
+    const outcome = await ensurePaperSaved(storage, about.paper, now).catch(() => null)
+    if (outcome === null) throw new Error(N.paperNotSaved)
+    if (outcome === "unknown") throw new NoteInputError(N.unknownPaper)
     const routing = await loadRouting(storage)
     const facts = await readPaperPage(storage, routing.paper ?? "wiki/papers", about.paper)
     lead.push(paperLink(about.paper, facts ? paperLabel(facts) : ""))
@@ -310,23 +318,31 @@ export async function createNote(storage: VaultStorage, taxonomy: Taxonomy, inpu
 
   const routing = await loadRouting(storage)
   const noteDir = routing.note ?? "wiki/notes"
-  const taken = new Set((await storage.list(`${noteDir}/`)).map((path) => path.slice(noteDir.length + 1)))
-  const changesetId = makeChangesetId()
   const title = oneLine(input.title ?? "").slice(0, TITLE_MAX)
-  // Without a title: the day and four characters of the changeset's own random part.
-  const base = title ? slugifyTitle(title) : `note-${day(now).replace(/-/g, "")}-${changesetId.slice(-4)}`
-  let id = base
-  for (let n = 2; taken.has(`${id}.md`); n++) id = `${base}-${n}`
-
   const text = (input.body ?? "").replace(/\r\n/g, "\n")
   const body = [lead.join(" · "), text].filter((part) => part.trim() !== "").join("\n\n")
   const frontmatter: Frontmatter = { type: "note", title: title || UNTITLED_STORED, created: day(now), updated: day(now), tags: [], related: [], sources: [], edited: now.toISOString() }
-  await commitChangeset(
-    storage,
-    { id: changesetId, skill: "clinical-note-create", model: "none", timestamp: now.toISOString(), changes: [{ path: `${noteDir}/${id}.md`, before: null, after: serializeDocument(frontmatter, body) }] },
-    { op: "clinical-note-create", summary: id },
-  )
-  return id
+  const after = serializeDocument(frontmatter, body)
+  // A title gives the name when it has a letter or a digit to give. Else: the day and four characters of a changeset's own random part.
+  const named = title ? slugifyTitle(title) : NO_SLUG
+  const base = named !== NO_SLUG ? named : `note-${day(now).replace(/-/g, "")}-${makeChangesetId().slice(-4)}`
+  // Another create may take the name between the look and the write: the changeset then conflicts, and the next name is tried.
+  for (let attempt = 0; attempt < CREATE_TRIES; attempt++) {
+    const taken = new Set((await storage.list(`${noteDir}/`)).map((path) => path.slice(noteDir.length + 1)))
+    let id = base
+    for (let n = 2; taken.has(`${id}.md`); n++) id = `${base}-${n}`
+    try {
+      await commitChangeset(
+        storage,
+        { id: makeChangesetId(), skill: "clinical-note-create", model: "none", timestamp: now.toISOString(), changes: [{ path: `${noteDir}/${id}.md`, before: null, after }] },
+        { op: "clinical-note-create", summary: id },
+      )
+      return id
+    } catch (error) {
+      if (!(error instanceof ChangesetConflictError)) throw error
+    }
+  }
+  throw new Error(N.nameTaken)
 }
 
 export interface SaveNoteInput { title: string; body: string; revision: string; now: Date }
@@ -334,16 +350,22 @@ export interface SaveNoteInput { title: string; body: string; revision: string; 
 /**
  * Saves a note's title and body. Only `title`, `updated`, `edited` and the body change: every other frontmatter key
  * stays, and the file keeps its name. When the stored text is not the one the save began from, nothing is written and
- * the stored version is given back. Every paper the body cites that has no Library page is saved; one that no source
- * knows is left as written and named in `unresolved`.
+ * the stored version is given back, its title as it is shown. Every paper the body cites that has no Library page is
+ * saved; one that no source knows, or that could not be saved, is left as written and named in `unresolved`. Once the
+ * note is written this always answers with the new revision.
  */
 export async function saveNote(storage: VaultStorage, taxonomy: Taxonomy, id: string, input: SaveNoteInput): Promise<NoteSaved | NoteConflict> {
   const vault = await openVault(storage, taxonomy)
   const note = await load(vault, id, input.now)
   if (!note) throw new NoteNotFoundError()
   const stored = (raw: string): NoteConflict => {
-    const { frontmatter, body } = parseDocument(raw)
-    return { conflict: true, title: frontmatter.title, body, revision: revisionOf(raw) }
+    try {
+      const { frontmatter, body } = parseDocument(raw)
+      return { conflict: true, title: titleOf(frontmatter.title, body), body, revision: revisionOf(raw) }
+    } catch {
+      // A file whose frontmatter no longer parses is given as it stands.
+      return { conflict: true, title: titleOf(null, ""), body: raw, revision: revisionOf(raw) }
+    }
   }
   if (revisionOf(note.raw) !== input.revision) return stored(note.raw)
 
@@ -370,7 +392,9 @@ export async function saveNote(storage: VaultStorage, taxonomy: Taxonomy, id: st
   const unresolved: string[] = []
   for (const slug of linksOf(vault, body).links.papers) {
     if (vault.saved.has(slug)) continue
-    if ((await ensurePaperSaved(storage, slug, input.now)) === "unknown") unresolved.push(slug)
+    // The note is saved by now. A paper that cannot be saved is reported with those no source knows; the save still answers.
+    const outcome = await ensurePaperSaved(storage, slug, input.now).catch(() => "unknown" as const)
+    if (outcome === "unknown") unresolved.push(slug)
   }
   return { revision: revisionOf(after), unresolved }
 }

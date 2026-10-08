@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { evidenceHref } from "../evidence/href"
 import { CLINICAL_COPY } from "../copy"
 import {
-  UNTITLED_STORED, conditionLink, excerptOf, noteKind, noteLinks, paperLabel, paperLink, referenceLine, revisionOf, titleOf, treatmentLink,
+  UNTITLED_STORED, conditionLink, excerptOf, noteKind, noteLinks, paperLabel, paperLink, plainText, referenceLine, revisionOf, titleOf, treatmentLink,
 } from "../notes/links"
 
 describe("evidenceHref with a treatment", () => {
@@ -50,6 +50,11 @@ describe("noteLinks", () => {
   it("ignores other links, the Library view, an image and a malformed code", () => {
     const body = "[site](https://example.org/wiki?condition=depression) [all](/wiki?view=all) ![img](/wiki?condition=depression) [bad](/wiki?condition=../etc) [page](/wiki/wiki/notes/x)"
     expect(noteLinks(body)).toEqual({ papers: [], conditions: [], treatments: [] })
+  })
+  it("reads a link with a fragment after its parameters", () => {
+    expect(noteLinks("[a](/wiki?condition=depression&treatment=esketamine#table) [b](/wiki?condition=schizophrenia#top)")).toEqual({
+      papers: [], conditions: ["depression", "schizophrenia"], treatments: [{ condition: "depression", treatment: "esketamine" }],
+    })
   })
   it("reads the links this module writes", () => {
     const body = [paperLink("paper-1", "Lamsma [2026] | x"), conditionLink("depression", "Major depressive disorder"), treatmentLink("depression", "esketamine", "Esketamine")].join(" ")
@@ -125,6 +130,13 @@ describe("referenceLine", () => {
   })
   it("leaves out what is missing", () => {
     expect(referenceLine({ title: "Only a title?", authors: [] })).toBe("Only a title?")
+  })
+})
+
+describe("plainText", () => {
+  it("gives the text as read: links as their labels, no addresses, headings kept", () => {
+    expect(plainText("# Head\n\n[Esketamine](/wiki?condition=depression&treatment=esketamine) and [[paper-1|Lamsma 2026]]\n> quoted **bold**\n"))
+      .toBe("Head\nEsketamine and Lamsma 2026\nquoted bold")
   })
 })
 

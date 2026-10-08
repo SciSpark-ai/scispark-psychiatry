@@ -92,6 +92,17 @@ describe("/api/clinical/notes", () => {
   it("answers 404 when the note to save is not there", async () => {
     expect((await send("PUT", { id: "nope", title: "x", body: "x", revision: revisionOf("x") })).status).toBe(404)
   })
+  it("answers 400, in the copy's words, for a treatment or a condition the pack lacks", async () => {
+    const lacking = await send("POST", { about: { treatment: { condition: "depression", key: "no-such-treatment" } } })
+    expect([lacking.status, (await lacking.json()).error]).toEqual([400, CLINICAL_COPY.notes.unknownTreatment])
+    const wrong = await send("POST", { about: { treatment: { condition: "esketamine", key: "esketamine" } } })
+    expect([wrong.status, (await wrong.json()).error]).toEqual([400, CLINICAL_COPY.notes.unknownCondition])
+  })
+  it("creates two notes of one title asked for at once", async () => {
+    const answers = await Promise.all([send("POST", { title: "Twice" }), send("POST", { title: "Twice" })])
+    expect(answers.map((res) => res.status)).toEqual([200, 200])
+    expect((await Promise.all(answers.map(async (res) => (await res.json()).result.id))).sort()).toEqual(["twice", "twice-2"])
+  })
   it("answers 400 for input it does not understand", async () => {
     for (const query of ["?kind=essay", "?condition=../etc", "?treatment=Bad%20Key", "?id=../papers/x", "?paper=a/b"]) expect((await get(query)).status, query).toBe(400)
     expect((await send("POST", "not json")).status).toBe(400)

@@ -287,6 +287,98 @@ describe("saveNote", () => {
   })
 })
 
+describe("fix round 1", () => {
+  const later = new Date("2026-10-08T10:30:00.000Z")
+  /** A vault where one path cannot be written. */
+  class FailingStorage extends MemoryVaultStorage {
+    constructor(private readonly broken: string) { super() }
+    async write(path: string, content: string): Promise<void> {
+      if (path === this.broken) throw new Error("disk full")
+      return super.write(path, content)
+    }
+  }
+  const failing = async (broken: string) => {
+    const vault = new FailingStorage(broken)
+    for (const [path, raw] of storage.snapshot()) await vault.write(path, raw)
+    return vault
+  }
+
+  it("a save answers its new revision when a cited paper cannot be saved, and names that paper as unresolved", async () => {
+    const vault = await failing("wiki/papers/paper-2.md")
+    const result = await saveNote(vault, taxonomy, "note-1756684800000", { title: "Clozapine", body: "See [[paper-2]] and [[paper-5]].", revision: revisionOf(NOTE_BUTTON), now: later })
+    const raw = await vault.read("wiki/notes/note-1756684800000.md") as string
+    expect(result).toEqual({ revision: revisionOf(raw), unresolved: ["paper-2"] })
+    expect(parseDocument(raw).body).toBe("See [[paper-2]] and [[paper-5]].\n")
+    expect(await vault.read("wiki/papers/paper-5.md")).not.toBeNull()
+  })
+  it("a note about a paper that cannot be saved is not written, and the error says so", async () => {
+    const vault = await failing("wiki/papers/paper-3.md")
+    const before = (await vault.list("wiki/notes/")).sort()
+    await expect(createNote(vault, taxonomy, { title: "On paper 3", about: { paper: "paper-3" }, now: NOW })).rejects.toThrow(CLINICAL_COPY.notes.paperNotSaved)
+    expect((await vault.list("wiki/notes/")).sort()).toEqual(before)
+  })
+  it("two creates of one title at once both succeed, the second under the next name", async () => {
+    const made = await Promise.all([createNote(storage, taxonomy, { title: "Same title", body: "one", now: NOW }), createNote(storage, taxonomy, { title: "Same title", body: "two", now: NOW })])
+    expect([...made].sort()).toEqual(["same-title", "same-title-2"])
+    const bodies = await Promise.all(made.map(async (id) => (await readNote(storage, taxonomy, id, NOW))?.body))
+    expect(bodies).toEqual(["one\n", "two\n"])
+  })
+  it("of two saves racing from one revision exactly one wins, and the other gets the winner's text as a conflict", async () => {
+    const save = (text: string) => saveNote(storage, taxonomy, "project-plan", { title: `Title ${text}`, body: `Body ${text}.`, revision: revisionOf(NOTE_PROJECT), now: later })
+    const results = await Promise.all([save("one"), save("two")])
+    const won = results.filter((result) => !("conflict" in result))
+    const lost = results.filter((result) => "conflict" in result)
+    expect([won.length, lost.length]).toEqual([1, 1])
+    const raw = await storage.read("wiki/notes/project-plan.md") as string
+    const stored = parseDocument(raw)
+    expect(won[0]).toEqual({ revision: revisionOf(raw), unresolved: [] })
+    expect(lost[0]).toEqual({ conflict: true, title: stored.frontmatter.title, body: stored.body, revision: revisionOf(raw) })
+    expect(["Body one.\n", "Body two.\n"]).toContain(stored.body)
+    expect(stored.frontmatter.title).toBe(stored.body === "Body one.\n" ? "Title one" : "Title two")
+  })
+  it("a query is matched against the title and the text as read, not against the addresses of links", async () => {
+    expect(await ids({ q: "wiki" })).toEqual([])
+    expect(await ids({ q: "condition" })).toEqual([])
+    expect(await ids({ q: "treatment-resistant" })).toEqual([])
+    expect(await ids({ q: "paper-1" })).toEqual([])
+    expect(await ids({ q: "author1 esketamine" })).toEqual(["esketamine-in-trd"])
+    expect(await ids({ q: "schizophrenia plan" })).toEqual(["project-plan"])
+  })
+  it("a conflict gives the title as it is shown, and the raw text when the stored file can no longer be parsed", async () => {
+    const stale = { title: "Mine", body: "Mine.", revision: revisionOf("stale"), now: later }
+    expect(await saveNote(storage, taxonomy, "note-1756684800000", stale)).toMatchObject({ conflict: true, title: "First thoughts on clozapine dosing." })
+    // The file breaks between the read and the write: the changeset conflicts, and the stored text has no frontmatter.
+    class Breaking extends MemoryVaultStorage {
+      reads = 0
+      async read(path: string): Promise<string | null> {
+        if (path === "wiki/notes/project-plan.md" && ++this.reads === 2) await super.write(path, "no frontmatter at all")
+        return super.read(path)
+      }
+    }
+    const vault = new Breaking()
+    for (const [path, raw] of storage.snapshot()) await vault.write(path, raw)
+    expect(await saveNote(vault, taxonomy, "project-plan", { title: "x", body: "x", revision: revisionOf(NOTE_PROJECT), now: later }))
+      .toEqual({ conflict: true, title: CLINICAL_COPY.notes.untitled, body: "no frontmatter at all", revision: revisionOf("no frontmatter at all") })
+  })
+  it("refuses a note about a treatment when the treatment or its condition is not the pack's", async () => {
+    const before = storage.snapshot()
+    const about = (condition: string, key: string) => createNote(storage, taxonomy, { about: { treatment: { condition, key } }, now: NOW })
+    await expect(about("depression", "schizophrenia")).rejects.toThrow(CLINICAL_COPY.notes.unknownTreatment)
+    await expect(about("esketamine", "esketamine")).rejects.toThrow(CLINICAL_COPY.notes.unknownCondition)
+    await expect(about("no-such", "esketamine")).rejects.toBeInstanceOf(NoteInputError)
+    expect(storage.snapshot()).toEqual(before)
+  })
+  it("never names a file with an empty slug: punctuation only gives the day-and-four name, CJK keeps its characters", async () => {
+    const marks = await createNote(storage, taxonomy, { title: "?!… —", body: "x", now: NOW })
+    expect(marks).toMatch(/^note-20261007-[a-z0-9]{4}$/)
+    expect((await readNote(storage, taxonomy, marks, NOW))?.summary.title).toBe("?!… —")
+    const cjk = await createNote(storage, taxonomy, { title: "氯氮平 监测", body: "x", now: NOW })
+    expect(cjk).toBe("氯氮平-监测")
+    expect((await readNote(storage, taxonomy, cjk, NOW))?.summary.title).toBe("氯氮平 监测")
+    expect(await ids({ q: "监测" })).toEqual([cjk])
+  })
+})
+
 describe("ensurePaperSaved", () => {
   it("says saved, already or unknown", async () => {
     expect(await ensurePaperSaved(storage, "paper-1", NOW)).toBe("already")

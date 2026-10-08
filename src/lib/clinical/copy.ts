@@ -321,6 +321,8 @@ export const CLINICAL_COPY = {
     notFound: "That note is not in your Library.",
     conflict: "This note was changed somewhere else since you opened it.",
     unknownPaper: "That paper could not be found, so it cannot be cited.",
+    paperNotSaved: "That paper could not be saved to your Library, so the note was not made.",
+    nameTaken: "A note of that name is being made at the same time. Try again.",
     unknownCondition: "That condition is not in the pack.",
     unknownTreatment: "That treatment is not in the pack.",
     requestFailed: (status: number) => `Your notes could not be reached (${status}).`,
