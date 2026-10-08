@@ -4,7 +4,7 @@ import { useId, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import type { Study } from "@/lib/clinical/evidence/build"
-import { KIND_TINT } from "./evidence-shapes"
+import { KIND_TEXT_COLOUR } from "./evidence-shapes"
 
 const E = CLINICAL_COPY.evidence
 const C = E.columns
@@ -19,8 +19,8 @@ const TD = "border-b border-border-warm/60 px-3 py-3 align-top text-[14px] leadi
 const ROW = "transition-colors hover:bg-card-surface/50"
 /** The one line over a table, the same over every table of the summary. */
 const HEADING = "pb-2 text-[15px] font-semibold text-espresso"
-/** The direction of a result: a small pill tinted with the colour of the direction, its words in the colour of text. */
-const KIND_PILL = "ml-2 inline-block whitespace-nowrap rounded-pill px-2 py-0.5 text-[12px] font-medium leading-4 text-espresso"
+/** The direction of a result, after its words: small bold capitals in the colour of the direction, with nothing around them. */
+const KIND_LABEL = "ml-2 text-[11px] font-bold uppercase tracking-wide"
 
 const SIZE_FORMAT = new Intl.NumberFormat("en-US")
 
@@ -49,7 +49,7 @@ function ResultCell({ study }: { study: Study }) {
   return (
     <Cell name="result">
       <span>{study.text ?? study.takeaway}</span>
-      {kind && <span data-kind-label="true" className={KIND_PILL} style={{ backgroundColor: KIND_TINT[kind] }}>{E.kindLabels[kind]}</span>}
+      {kind && <span data-kind-label="true" className={KIND_LABEL} style={{ color: KIND_TEXT_COLOUR[kind] }}>{E.kindLabels[kind]}</span>}
     </Cell>
   )
 }
@@ -98,7 +98,7 @@ function Row({ study, kind, named, width }: { study: Study; kind: StudyTableKind
 /**
  * The studies behind a bubble, under one line with whose they are and how many, one row each: the study, its design
  * and participants, and what it was compared with and found (or, for research, its finding). The direction of a
- * result is in a small tinted pill. `treatmentShown`: the paper's own name of its treatment is under every study,
+ * result is written after it in small capitals of its colour. `treatmentShown`: the paper's own name of its treatment is under every study,
  * not only under those that name several. The table scrolls sideways inside its own box when the screen is narrow.
  */
 export function StudyTable({ studies, kind, caption, treatmentShown = false }: { studies: Study[]; kind: StudyTableKind; caption: string; treatmentShown?: boolean }) {

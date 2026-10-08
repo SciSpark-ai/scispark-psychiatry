@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { dayOf, INSET, layoutMap, MAP_SIZE, mapRadius, mapScales, nameBoxes, newestDate, type Box, type MapItem, type Placed } from "../evidence-map"
+import { dayOf, INSET, layoutMap, mapRadius, mapScales, mapSizeFor, nameBoxes, newestDate, type Box, type MapItem, type Placed } from "../evidence-map"
 
 const TODAY = "2026-10-08"
 const DAY = 86400000
 const utc = (year: number, month: number, day: number) => Date.UTC(year, month - 1, day) / DAY
 const item = (key: string, over: Partial<MapItem> = {}): MapItem => ({ key, name: key, papers: 1, participants: 100, dates: [TODAY], ...over })
 const byKey = (placed: Placed[]) => new Map(placed.map((entry) => [entry.key, entry]))
-const scalesOf = (items: MapItem[]) => mapScales(items, MAP_SIZE)
-const layout = (items: MapItem[]) => layoutMap(items, MAP_SIZE)
+// The layout takes any size. These cases were worked out in a picture of 720 by 460, and are kept in it.
+const SIZE = { width: 720, height: 460 }
+const scalesOf = (items: MapItem[]) => mapScales(items, SIZE)
+const layout = (items: MapItem[]) => layoutMap(items, SIZE)
 const xAt = (scales: ReturnType<typeof scalesOf>, day: number) => scales.x0 + ((day - scales.days.from) / (scales.days.to - scales.days.from)) * (scales.x1 - scales.x0)
 const one = (over: Partial<MapItem>) => layout([item("a", over)])[0]
 /** Every bubble in the part of the plot that is kept clear of its frame. */
@@ -339,7 +341,7 @@ describe("the map of the evidence summary", () => {
       expect(named.length).toBeGreaterThan(0)
       for (const [at, tick] of named.entries()) {
         if (at > 0) expect(tick.x - half(tick)).toBeGreaterThan(named[at - 1].x + half(named[at - 1]))
-        expect(tick.x + half(tick)).toBeLessThanOrEqual(MAP_SIZE.width)
+        expect(tick.x + half(tick)).toBeLessThanOrEqual(SIZE.width)
         expect(tick.x - half(tick)).toBeGreaterThanOrEqual(scales.column ? scales.column.right : 0)
       }
       return scales.ticksX.map((tick) => tick.labelled)
@@ -417,9 +419,9 @@ describe("the map of the evidence summary", () => {
     expect(inset).toEqual({ left: plot.left + 16, right: plot.right - 16, top: plot.top + 16, bottom: plot.bottom - 16 })
     // Left of the plot: the title of the y axis, turned, and the names of its ticks. Around the rest, a little.
     expect(plot.left).toBeGreaterThanOrEqual(76)
-    expect(MAP_SIZE.width - plot.right).toBeGreaterThanOrEqual(8)
+    expect(SIZE.width - plot.right).toBeGreaterThanOrEqual(8)
     expect(plot.top).toBeGreaterThanOrEqual(8)
-    expect(MAP_SIZE.height - plot.bottom).toBeGreaterThanOrEqual(24)
+    expect(SIZE.height - plot.bottom).toBeGreaterThanOrEqual(24)
     // The top and the bottom tick of the y scale, and both ends of the x scale, are inside the clear space, by the largest radius at least.
     expect(scales.yTop).toBe(inset.top + 30)
     expect(scales.yBottom).toBeLessThanOrEqual(scales.band!.top - 30)
@@ -492,5 +494,24 @@ describe("the map of the evidence summary", () => {
     expect(real.get("medicine")!.y).toBeLessThan(real.get("medicine")!.home.y)
     expect(real.get("medicine")!.displaced).toBe(false)
     expect(layout(REAL).filter((entry) => entry.displaced)).toHaveLength(0)
+  })
+  it("places the same items in a picture of any width: the plot is as wide as the picture, the radii are the same, and nothing overlaps or leaves the frame", () => {
+    const sizes = [560, 720, 1000, 1240].map(mapSizeFor)
+    expect(sizes.map((size) => size.height)).toEqual([380, 432, 520, 520])
+    for (const items of [REAL, SEVEN]) {
+      const radii = layoutMap(items, sizes[0]).map((entry) => entry.r)
+      expect(radii).toEqual(items.map((each) => mapRadius(each.papers)))
+      for (const size of sizes) {
+        const { plot, inset } = mapScales(items, size)
+        const placed = layoutMap(items, size)
+        expect([plot.left, size.width - plot.right, plot.top, size.height - plot.bottom]).toEqual([84, 8, 8, 28])
+        expect(placed.map((entry) => entry.r)).toEqual(radii)
+        expect(overlaps(placed)).toEqual([])
+        expect(placed.every((entry) => entry.x - entry.r >= inset.left && entry.x + entry.r <= inset.right && entry.y - entry.r >= inset.top && entry.y + entry.r <= inset.bottom)).toBe(true)
+      }
+      // A wider picture spreads them further apart across.
+      const spread = (size: { width: number; height: number }) => { const xs = layoutMap(items, size).map((entry) => entry.home.x); return Math.max(...xs) - Math.min(...xs) }
+      expect(spread(sizes[2])).toBeGreaterThan(spread(sizes[1]))
+    }
   })
 })

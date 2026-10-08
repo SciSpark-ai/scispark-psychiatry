@@ -1,17 +1,19 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
-import { EvidenceMap, MapLegend, type MapEntry } from "../EvidenceMap"
-import { layoutMap, MAP_SIZE, mapScales } from "../evidence-map"
+import { EvidenceMap, type MapEntry } from "../EvidenceMap"
+import { layoutMap, MAP_SIZE, mapRadius, mapScales, mapSizeFor } from "../evidence-map"
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let container: HTMLDivElement
+let root: ReturnType<typeof createRoot>
 async function render(node: React.ReactNode) {
   container = document.createElement("div")
   document.body.appendChild(container)
-  await act(async () => { createRoot(container).render(node) })
+  root = createRoot(container)
+  await act(async () => { root.render(node) })
 }
 const q = (selector: string) => container.querySelector(selector) as HTMLElement
 const qa = (selector: string) => [...container.querySelectorAll(selector)] as HTMLElement[]
@@ -28,7 +30,8 @@ const ENTRIES: MapEntry[] = [
 ]
 const show = (entries: MapEntry[] = ENTRIES, chosen: string | null = null, onPick: (key: string) => void = () => {}) =>
   render(<EvidenceMap label="Classes of treatment" entries={entries} chosen={chosen} onPick={onPick} />)
-const percent = (value: number, of: number) => `${Number(((value / of) * 100).toFixed(2))}%`
+/** A place or a size of the picture, in px, to a hundredth. */
+const px = (value: number) => `${Number(value.toFixed(2))}px`
 const items = (entries: MapEntry[]) => entries.map((each) => ({ key: each.key, name: each.name, papers: each.papers, participants: each.participants, dates: each.dates }))
 const num = (element: Element, name: string) => Number(element.getAttribute(name))
 
@@ -104,7 +107,7 @@ describe("the map of treatments", () => {
     const name = q(`${WIDE} [data-band-label]`)
     expect(name.textContent).toBe("not stated")
     expect([num(name, "x"), num(name, "y"), name.getAttribute("text-anchor"), name.getAttribute("font-size"), name.getAttribute("fill")]).toEqual([scales.plot.left - 8, scales.bandY, "end", "12", "var(--text-muted)"])
-    expect(q(`${WIDE} button[data-bubble=digital]`).style.top).toBe(percent(scales.bandY!, MAP_SIZE.height))
+    expect(q(`${WIDE} button[data-bubble=digital]`).style.top).toBe(px(scales.bandY!))
     document.body.innerHTML = ""
     await show(ENTRIES.slice(0, 2))
     expect(q(`${WIDE} [data-band]`)).toBeNull()
@@ -122,27 +125,29 @@ describe("the map of treatments", () => {
     const column = q(`${WIDE} [data-column]`)
     expect([num(column, "x"), num(column, "width")]).toEqual([scales.column!.left, scales.column!.right - scales.column!.left])
     expect(q(`${WIDE} [data-column-label]`).textContent).toBe("no date")
-    expect(q(`${WIDE} button[data-bubble=lifestyle]`).style.left).toBe(percent((scales.column!.left + scales.column!.right) / 2, MAP_SIZE.width))
+    expect(q(`${WIDE} button[data-bubble=lifestyle]`).style.left).toBe(px((scales.column!.left + scales.column!.right) / 2))
     expect(q(`${WIDE} button[data-bubble=lifestyle]`).getAttribute("aria-label")).toBe("Lifestyle: 1 paper; 1 benefit, 0 no benefit, 0 mixed; no publication date; 100 participants in 1 of 1 paper")
   })
 
-  it("puts each bubble over the picture as a button, at its place in percent, as wide as its papers make it", async () => {
+  it("puts each bubble over the picture as a button, at its place in px, as wide as its papers make it", async () => {
     await show()
     const box = q(`${WIDE} [data-map-box]`)
     expect(box.getAttribute("role")).toBe("group")
     expect(box.getAttribute("aria-label")).toBe("Classes of treatment")
     expect(box.className).toContain("relative")
-    expect(box.className).toContain("aspect-[720/460]")
-    expect(box.className).toContain("max-w-[720px]")
+    // As wide as what it is in, and as high as the layout was worked out for: nothing is scaled.
+    expect(box.className.split(" ")).toContain("w-full")
+    expect(box.className).not.toMatch(/aspect-|max-w-|scale-/)
+    expect(box.style.height).toBe(`${MAP_SIZE.height}px`)
     const placed = new Map(layoutMap(items(ENTRIES), MAP_SIZE).map((each) => [each.key, each]))
     const buttons = qa(`${WIDE} button[data-bubble]`)
     expect(buttons).toHaveLength(3)
     for (const button of buttons) {
       const at = placed.get(button.getAttribute("data-bubble")!)!
       expect(button.getAttribute("type")).toBe("button")
-      expect(button.style.left).toBe(percent(at.x, MAP_SIZE.width))
-      expect(button.style.top).toBe(percent(at.y, MAP_SIZE.height))
-      expect(button.style.width).toBe(percent(2 * at.r, MAP_SIZE.width))
+      expect(button.style.left).toBe(px(at.x))
+      expect(button.style.top).toBe(px(at.y))
+      expect(button.style.width).toBe(px(2 * at.r))
       expect(button.className).toContain("absolute")
       expect(button.className).toContain("-translate-x-1/2")
       expect(button.className).toContain("-translate-y-1/2")
@@ -169,17 +174,37 @@ describe("the map of treatments", () => {
     expect(qa(`${WIDE} svg[data-map-axes] line[data-leader]`)).toHaveLength(0)
   })
 
-  it("has no list of the colours over the plot or over the grid: its owner draws the three pills", async () => {
+  it("names the three colours in a short list right beside the plot: at its right and level with its top where there is room, over it otherwise", async () => {
     await show()
-    expect(q("[data-map-legend]")).toBeNull()
-    document.body.innerHTML = ""
-    await render(<MapLegend />)
+    const figure = q("[data-evidence-map-root] > [data-map-figure]")
+    expect(qa("[data-map-legend]")).toHaveLength(1)
     const legend = q("ul[data-map-legend]")
+    const plot = q("[data-map-plot]")
+    // Two children of one row: the list, and what holds the plot (and, on a narrow screen, the grid).
+    expect([...figure.children]).toEqual([legend, plot])
+    expect(plot.contains(q(`${WIDE} [data-map-box]`))).toBe(true)
+    expect(plot.contains(q(`${NARROW} [data-bubble-grid]`))).toBe(true)
+    // The width that decides is that of the card, not of the screen: over the plot and from the left, or at its right from the top.
+    expect(q("[data-evidence-map-root]").className.split(" ")).toContain("@container")
+    expect(figure.className.split(" ")).toEqual(expect.arrayContaining(["flex", "flex-col", "@2xl:flex-row-reverse", "@2xl:items-start"]))
+    expect(figure.className).not.toMatch(/justify-(end|center|between)|items-(end|center)/)
+    expect(plot.className.split(" ")).toEqual(expect.arrayContaining(["min-w-0", "flex-1"]))
+    expect(legend.className.split(" ")).toEqual(expect.arrayContaining(["flex", "flex-wrap", "shrink-0", "@2xl:flex-col"]))
+    expect(legend.className).not.toContain("ml-auto")
     const entries = [...legend.querySelectorAll("li[data-key-kind]")] as HTMLElement[]
     expect(entries.map((each) => [each.getAttribute("data-key-kind"), each.textContent])).toEqual([["benefit", "Benefit"], ["no-benefit", "No benefit"], ["mixed", "Mixed"]])
-    expect(entries.every((each) => each.className.split(" ").includes("rounded-pill"))).toBe(true)
+    // A dot and a word: not a pill.
+    expect(entries.every((each) => !/rounded-pill|border/.test(each.className))).toBe(true)
     expect(entries.map((each) => (each.querySelector("[data-swatch]") as HTMLElement).style.backgroundColor)).toEqual(["var(--clinical-benefit)", "var(--clinical-no-benefit)", expect.stringContaining("var(--text-muted)")])
-    expect(entries.every((each) => each.querySelector("[data-swatch]")!.getAttribute("aria-hidden") === "true")).toBe(true)
+    expect(entries.every((each) => each.querySelector("[data-swatch]")!.getAttribute("aria-hidden") === "true" && each.querySelector("[data-swatch]")!.className.includes("rounded-full"))).toBe(true)
+    // Over the grid that stands in for a crowded map, from the left; and none where nothing is drawn.
+    document.body.innerHTML = ""
+    await show(Array.from({ length: 21 }, (_, at) => entry(`k${at}`)))
+    const crowded = q('[data-evidence-map="grid"]')
+    expect([...crowded.children].map((child) => child.hasAttribute("data-map-legend") ? "legend" : child.hasAttribute("data-bubble-grid") ? "grid" : "other")).toEqual(["legend", "grid"])
+    document.body.innerHTML = ""
+    await show([])
+    expect(q("[data-map-legend]")).toBeNull()
   })
 
   it("writes a name in 14 px, medium, with nothing behind it, its marks in 12 px, and the number of a bubble in 15 px, semibold", async () => {
@@ -361,7 +386,7 @@ describe("the map of treatments", () => {
     const unsized = [entry("a", { participants: null, sized: 0, dates: ["2026-08-01"] }), entry("b", { participants: null, sized: 0, dates: ["2026-10-01"] })]
     await show(unsized)
     const scales = mapScales(items(unsized), MAP_SIZE)
-    expect(qa(`${WIDE} button[data-bubble]`).map((button) => button.style.top)).toEqual(Array(2).fill(percent(scales.bandY!, MAP_SIZE.height)))
+    expect(qa(`${WIDE} button[data-bubble]`).map((button) => button.style.top)).toEqual(Array(2).fill(px(scales.bandY!)))
     expect(parseFloat(q(`${WIDE} button[data-bubble=a]`).style.left)).toBeLessThan(parseFloat(q(`${WIDE} button[data-bubble=b]`).style.left))
     expect(qa(`${WIDE} [data-tick-y]`).map((tick) => tick.textContent)).toEqual(["10", "100", "1,000"])
     expect(q('[data-evidence-map="grid"]')).toBeNull()
@@ -375,5 +400,89 @@ describe("the map of treatments", () => {
     expect(q("svg")).toBeNull()
     expect(q('[data-evidence-map="grid"] [data-bubble-grid]').getAttribute("aria-label")).toBe("Classes of treatment")
     expect(qa("button")).toHaveLength(0)
+  })
+})
+
+describe("the size of the map", () => {
+  /** What stands in for the browser's observer: it keeps what it was given, and `resize` says a width to all of them. */
+  class Observer {
+    static all: Observer[] = []
+    watched: Element[] = []
+    stopped = false
+    constructor(public tell: ResizeObserverCallback) { Observer.all.push(this) }
+    observe(element: Element) { this.watched.push(element) }
+    unobserve() {}
+    disconnect() { this.stopped = true }
+  }
+  const resize = (width: number) => act(async () => {
+    for (const each of Observer.all.filter((one) => !one.stopped)) each.tell([{ contentRect: { width } } as ResizeObserverEntry], each as unknown as ResizeObserver)
+  })
+  beforeEach(() => { Observer.all = []; vi.stubGlobal("ResizeObserver", Observer) })
+  afterEach(() => { vi.unstubAllGlobals() })
+  const viewBox = () => q(`${WIDE} svg[data-map-axes]`).getAttribute("viewBox")
+  const widths = () => qa(`${WIDE} button[data-bubble]`).map((button) => [button.getAttribute("data-bubble"), button.style.width]).sort()
+  const lefts = () => qa(`${WIDE} button[data-bubble]`).map((button) => [button.getAttribute("data-bubble"), button.style.left]).sort()
+
+  it("is about 0.6 of its width high, never under 380 px and never over 520", () => {
+    expect(mapSizeFor(720)).toEqual({ width: 720, height: 432 })
+    expect(mapSizeFor(800)).toEqual({ width: 800, height: 480 })
+    expect(mapSizeFor(560)).toEqual({ width: 560, height: 380 })
+    expect(mapSizeFor(1100)).toEqual({ width: 1100, height: 520 })
+    expect(mapSizeFor(700.4)).toEqual({ width: 700, height: 420 })
+    // What is drawn before the width is known, and where there is nothing to measure.
+    expect(MAP_SIZE).toEqual(mapSizeFor(720))
+  })
+
+  it("is drawn for a default width until it is measured, and watches the width of what holds the plot", async () => {
+    await show()
+    expect(viewBox()).toBe("0 0 720 432")
+    expect(Observer.all).toHaveLength(1)
+    expect(Observer.all[0].watched).toEqual([q("[data-map-plot]")])
+  })
+
+  it("follows the width of what it is in: another layout for another width, the bubbles and the type of one size", async () => {
+    await show()
+    await resize(1000)
+    const wide = mapSizeFor(1000)
+    expect(viewBox()).toBe("0 0 1000 520")
+    expect(q(`${WIDE} [data-map-box]`).style.height).toBe("520px")
+    const placedWide = new Map(layoutMap(items(ENTRIES).map((item, at) => ({ ...item, marks: at === 0 ? "+2 new" : undefined })), wide).map((each) => [each.key, each]))
+    for (const button of qa(`${WIDE} button[data-bubble]`)) {
+      const at = placedWide.get(button.getAttribute("data-bubble")!)!
+      expect([button.style.left, button.style.top, button.style.width]).toEqual([px(at.x), px(at.y), px(2 * at.r)])
+    }
+    const [widthsWide, leftsWide] = [widths(), lefts()]
+    const frameWide = Number(q(`${WIDE} rect[data-plot-frame]`).getAttribute("width"))
+    await resize(700)
+    expect(viewBox()).toBe("0 0 700 420")
+    expect(q(`${WIDE} [data-map-box]`).style.height).toBe("420px")
+    // Two widths, two layouts: the frame is narrower and the bubbles are elsewhere.
+    expect(Number(q(`${WIDE} rect[data-plot-frame]`).getAttribute("width"))).toBe(frameWide - 300)
+    expect(lefts()).not.toEqual(leftsWide)
+    // The radius of a bubble is its papers and nothing else: 4, 2 and 1 papers.
+    expect(widths()).toEqual(widthsWide)
+    expect(widths()).toEqual([["digital", px(2 * mapRadius(1))], ["medicine", px(2 * mapRadius(4))], ["psychotherapy", px(2 * mapRadius(2))]])
+    // The type is of one size at every width: nothing scales the picture.
+    expect(qa(`${WIDE} [data-tick-x], ${WIDE} [data-tick-y]`).every((tick) => tick.getAttribute("font-size") === "13")).toBe(true)
+    expect(qa(`${WIDE} button[data-bubble] [data-number]`).every((number) => number.getAttribute("font-size") === "15")).toBe(true)
+    expect(q(`${WIDE} button[data-bubble] [data-name]`).className).toContain("text-[14px]")
+    expect(q(WIDE).innerHTML).not.toMatch(/scale\(|aspect-\[|max-w-\[720px\]/)
+  })
+
+  it("keeps the size it has when it is told a width of nothing, and stops watching when it goes", async () => {
+    await show()
+    await resize(900)
+    await resize(0)
+    expect(viewBox()).toBe("0 0 900 520")
+    await act(async () => { root.unmount() })
+    expect(Observer.all.every((each) => each.stopped)).toBe(true)
+  })
+
+  it("is still the aligned grid under sm, where the map is hidden", async () => {
+    await show()
+    await resize(1000)
+    expect(q(WIDE).className.split(" ")).toEqual(expect.arrayContaining(["hidden", "sm:block"]))
+    expect(q(NARROW).className.split(" ")).toContain("sm:hidden")
+    expect(q(`${NARROW} [data-bubble-grid]`).className).toContain("grid-cols-2")
   })
 })

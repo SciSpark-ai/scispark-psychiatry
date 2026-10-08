@@ -42,8 +42,19 @@ export interface MapScales {
   yTop: number; yMiddle: number; yBottom: number
 }
 
-/** The picture the places are worked out in. It is drawn at any width, in this proportion. */
-export const MAP_SIZE: MapSize = { width: 720, height: 460 }
+/** The height of the picture as a share of its width, the least and the most it is, and the least width it is worked out for. */
+const [HEIGHT_SHARE, MIN_HEIGHT, MAX_HEIGHT, MIN_WIDTH] = [0.6, 380, 520, 320]
+/**
+ * The picture for a width in px: as wide as what it is in, and about 0.6 of that high, never under 380 px and never
+ * over 520. The places are worked out for this size and drawn in it as they are: a bubble and a letter keep their size.
+ */
+export function mapSizeFor(width: number): MapSize {
+  const wide = Math.max(MIN_WIDTH, Math.round(width))
+  return { width: wide, height: Math.round(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, HEIGHT_SHARE * wide))) }
+}
+/** The width the picture is drawn for until its own is measured, and where there is nothing to measure; and its size. */
+export const DEFAULT_MAP_WIDTH = 720
+export const MAP_SIZE: MapSize = mapSizeFor(DEFAULT_MAP_WIDTH)
 const [MIN_RADIUS, MAX_RADIUS] = [18, 40]
 /** The least clear space between two bubbles. */
 const GAP = 6

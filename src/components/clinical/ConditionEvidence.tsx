@@ -6,7 +6,7 @@ import { loadConditionEvidenceRemote } from "@/lib/clinical/evidence/client"
 import type { ClassEvidence, ConditionEvidence as Evidence, Period, Scope, Study } from "@/lib/clinical/evidence/build"
 import { BubbleGrid, discBoxHeight } from "./BubbleGrid"
 import { EvidenceBubble } from "./EvidenceBubble"
-import { EvidenceMap, MapLegend, type MapEntry } from "./EvidenceMap"
+import { EvidenceMap, type MapEntry } from "./EvidenceMap"
 import { classNameOf } from "./evidence-labels"
 import { ResearchList } from "./ResearchList"
 import { StudyTable } from "./StudyTable"
@@ -19,8 +19,6 @@ type Loaded = { condition: string; period: Period; scope: Scope; evidence: Evide
 /** What the reader has chosen in each section: a class and one of its treatments, a safety group, a research group. */
 interface Chosen { classKey: string | null; treatment: string | null; safety: string | null; research: string | null }
 const NOTHING: Chosen = { classKey: null, treatment: null, safety: null, research: null }
-/** What the button beside the Treatments heading shows. */
-const ABOUT_NOTES = [E.about.text, E.about.moved]
 const EMPTY = "text-[15px] text-muted-text"
 /** A section is a card: the surface and the radius of the app's cards, a warm border at low opacity, 20 px of padding and 24 where the map is drawn. */
 const CARD = "rounded-card border border-border-warm/60 bg-light-surface p-5 sm:p-6"
@@ -45,58 +43,18 @@ const datesOf = (studies: Study[]): string[] => studies.flatMap((study) => (stud
 const classDates = (cls: ClassEvidence): string[] => datesOf([...new Map(cls.treatments.flatMap((entry) => entry.studies).map((study) => [study.key, study])).values()])
 
 /**
- * The small button beside a heading: what it is about is its title, and its notes are shown under the heading on a
- * press or while it, or the button that closes them, has the keyboard. That button and Escape put them away, with the
- * keyboard back on the small button; so does the keyboard leaving both.
+ * One of the three stacked sections, in a card of its own: a row with its name and how many distinct papers it has in a
+ * small pill, and nothing else; and 16 px under that row, what it shows.
  */
-function About({ label, notes }: { label: string; notes: string[] }) {
-  const id = useId()
-  const [open, setOpen] = useState(false)
-  const holder = useRef<HTMLSpanElement>(null)
-  const button = useRef<HTMLButtonElement>(null)
-  // The keyboard is put back on the button without that opening the notes again.
-  const quiet = useRef(false)
-  const close = () => {
-    setOpen(false)
-    quiet.current = true
-    button.current?.focus()
-    quiet.current = false
-  }
-  return (
-    <span ref={holder} data-about-holder="true" className="inline-flex"
-      onBlur={(event) => { if (!holder.current?.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={(event) => { if (open && event.key === "Escape") close() }}>
-      <button ref={button} type="button" data-about="true" aria-label={label} title={notes[0]} aria-expanded={open} aria-describedby={open ? id : undefined}
-        onClick={() => setOpen(true)} onFocus={() => { if (!quiet.current) setOpen(true) }}
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border-warm text-[13px] font-semibold leading-none text-muted-text transition-colors hover:text-espresso focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">{E.about.mark}</button>
-      {open && (
-        <div id={id} role="note" data-about-text="true" className="absolute left-0 top-full z-20 mt-2 w-96 max-w-[80vw] rounded-card border border-border-warm bg-light-surface p-4 pr-10 text-[14px] leading-snug text-secondary-dark shadow-md">
-          <button type="button" data-about-close="true" aria-label={E.about.close} title={E.about.close} onClick={close}
-            className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-[16px] leading-none text-muted-text hover:text-espresso focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink">
-            <span aria-hidden="true">{E.about.closeMark}</span>
-          </button>
-          <div className="space-y-2">{notes.map((note) => <p key={note}>{note}</p>)}</div>
-        </div>
-      )}
-    </span>
-  )
-}
-
-/**
- * One of the three stacked sections, in a card of its own: a row with its name, how many distinct papers it has in a
- * small pill, a button about it when it has one and, at the right, what its owner puts there; and 16 px under that
- * row, its bubbles.
- */
-function Section({ name, count, about, aside, children }: { name: SectionName; count: number; about?: ReactNode; aside?: ReactNode; children: ReactNode }) {
+function Section({ name, count, children }: { name: SectionName; count: number; children: ReactNode }) {
   const id = useId()
   return (
     <section data-section={name} data-section-card={name} aria-labelledby={id} className={CARD}>
-      <div data-section-head="true" className="relative flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div data-section-head="true" className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h3 id={id} className="flex items-center gap-2 font-heading text-[20px] font-semibold leading-7 tracking-heading text-espresso">
           <span>{E.sections[name]}</span>
           <span data-section-count="true" className="rounded-pill bg-card-surface px-2 py-0.5 text-[12px] font-normal leading-4 tracking-normal text-muted-text">{count}</span>
         </h3>
-        {about}
-        {aside}
       </div>
       <div data-section-body="true" className="mt-4">{children}</div>
     </section>
@@ -106,8 +64,8 @@ function Section({ name, count, about, aside, children }: { name: SectionName; c
 /**
  * Treatments, Safety and Other research, one under the other. Nothing is chosen at first, so no study is listed until
  * the reader presses a bubble. Treatments is one map: of the classes, and once a class is pressed of its treatments, with
- * a crumb back to the classes; the three colours of its bubbles are named in pills at the right of its heading. What
- * is chosen in one section does not change another. The cards are 20 px apart.
+ * a crumb back to the classes; the map fills the card, with the three colours of its bubbles named right beside it.
+ * Safety is bubbles on an aligned grid, and Other research a row of pills. What is chosen in one section does not change another. The cards are 20 px apart.
  */
 function Sections({ evidence }: { evidence: Evidence }) {
   const [picked, setPicked] = useState<Chosen>(NOTHING)
@@ -139,7 +97,7 @@ function Sections({ evidence }: { evidence: Evidence }) {
   const mapped = evidence.classes.length > 0
   return (
     <div data-sections="true" className="mt-5 space-y-5">
-      <Section name="treatments" count={evidence.sections.treatments} about={mapped ? <About label={E.about.label} notes={ABOUT_NOTES} /> : undefined} aside={mapped ? <MapLegend /> : undefined}>
+      <Section name="treatments" count={evidence.sections.treatments}>
         {!mapped ? <p data-empty="true" className={EMPTY}>{E.treatmentsEmpty}</p> : (
           <div ref={treatments}>
             <div data-treatments-lines="true" className="max-w-[720px] text-secondary-dark">
@@ -194,7 +152,7 @@ function basisOf(evidence: Evidence, phrase: string | null): string {
 
 /**
  * The evidence the reader's feed has seen on one condition (spec D53): the classes of treatment as bubbles on a map,
- * the treatments of a chosen class on the same map, and for a chosen treatment the table of its papers; the safety papers and the other research, as bubbles with their tables; and, folded away,
+ * the treatments of a chosen class on the same map, and for a chosen treatment the table of its papers; the safety papers as bubbles and the other research as pills, each with its table; and, folded away,
  * when the papers came out. Counted on the server from the stored findings.
  * Papers are counted, never pooled. Which papers (`scope`) and of what time (`period`) is the caller's to
  * say: the Evidence view keeps both in its address; a page's fenced block asks for everything.

@@ -19,11 +19,6 @@ export const KIND_TEXT_COLOUR: Record<Kind, string> = { ...KIND_COLOUR, mixed: "
 /** The disc of a bubble that has no direction: the accent, as light as a badge's ground. */
 export const LIGHT_FILL = "color-mix(in srgb, var(--accent) 18%, transparent)"
 export const LIGHT_EDGE = "color-mix(in srgb, var(--accent) 45%, transparent)"
-/** The ground of the pill a direction is named in: its colour, thinned to 12%. The violet of safety is read as a ground. */
-const tint = (colour: string) => `color-mix(in srgb, ${colour} 12%, transparent)`
-export const KIND_TINT: Record<Kind, string> = {
-  benefit: tint("var(--clinical-benefit)"), "no-benefit": tint("var(--clinical-no-benefit)"), mixed: tint("var(--text-muted)"), safety: tint(SAFETY_COLOUR), other: tint("var(--text-muted)"),
-}
 /** The subtle ground of the map's band of items that state no participants and of its column of those with no date. */
 export const COLUMN_FILL = "color-mix(in srgb, var(--text-muted) 7%, transparent)"
 /** The very light lines of the map: its frame and a line per tick. */

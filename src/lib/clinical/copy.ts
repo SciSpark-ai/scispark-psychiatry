@@ -369,13 +369,6 @@ export const CLINICAL_COPY = {
       one: "Each bubble is a treatment; its size is the number of papers.",
       colours: "Colour shows whether the treatment was beneficial or not, based on an AI reading of the abstract.",
     },
-    /** The small button beside the Treatments heading, and what it shows: what a count and a place on the map do not say. */
-    about: {
-      mark: "?", label: "How to read this map", close: "Close", closeMark: "×",
-      /** The second note, of the map only: the grid of a narrow screen moves nothing. */
-      moved: "On the map, bubbles that would overlap are moved apart; a line shows where one belongs.",
-      text: "A paper counts once, whatever its design or size, and its direction is an AI reading of its abstract. A paper that compares two treatments counts for the one it tested; the other shows it as a comparison. Across is the date of its most recent paper. Up is the participants its papers report, added up: a paper that states none adds none, and the same people can be in more than one paper. Choose a treatment to see each paper.",
-    },
     /**
      * What a bubble says to a reader who does not see it. `efficacy` is null for a bubble that has no colours of direction.
      * What is new, the safety papers and the papers it was the comparison in are added when there are any.
