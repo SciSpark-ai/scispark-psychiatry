@@ -51,6 +51,8 @@ vi.mock("@/lib/projects/client", () => ({
     }
   },
 }))
+const readNoteRemoteMock = vi.fn()
+vi.mock("@/lib/clinical/notes/client", () => ({ readNoteRemote: (...args: unknown[]) => readNoteRemoteMock(...args) }))
 vi.mock("next/navigation", () => ({
   useRouter: () => routerMock,
   useParams: () => paramsValue,
@@ -58,6 +60,7 @@ vi.mock("next/navigation", () => ({
 }))
 
 import ChatEntryPage from "../page"
+import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import ChatSessionPage from "../[id]/page"
 
 function session(overrides: Partial<ChatSession> = {}): ChatSession {
@@ -106,6 +109,7 @@ function findByText(container: HTMLElement, selector: string, text: string): HTM
 beforeEach(() => {
   vi.clearAllMocks()
   observeSkillJobMock.mockReset().mockResolvedValue(undefined)
+  readNoteRemoteMock.mockReset().mockResolvedValue(null)
   paramsValue = {}
   searchParamsValue = new URLSearchParams("new=1")
   sessionStorage.clear()
@@ -428,6 +432,65 @@ describe("a conversation about a note", () => {
     expect(askChatRemoteMock).toHaveBeenCalledTimes(1)
     expect(askChatRemoteMock.mock.calls[0][0]).toMatchObject({ sessionId: "chat_42", question: "And the dose?" })
     expect(askChatRemoteMock.mock.calls[0][0]).not.toHaveProperty("noteId")
+    cleanup()
+  })
+
+  it("says which note it is about on the start screen, before the first message, with one read of the note", async () => {
+    searchParamsValue = new URLSearchParams("new=1&note=esketamine-in-trd")
+    readNoteRemoteMock.mockResolvedValue({ summary: { title: "Esketamine in TRD" } })
+    const { container, cleanup } = await renderPage(<ChatEntryPage />)
+    expect(container.querySelector("[data-chat-start]")).toBeTruthy()
+    expect(container.querySelector("[data-chat-note]")?.textContent).toBe("About your note: Esketamine in TRD")
+    expect(readNoteRemoteMock).toHaveBeenCalledTimes(1)
+    expect(readNoteRemoteMock).toHaveBeenCalledWith("esketamine-in-trd")
+    expect(askChatRemoteMock).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain(CLINICAL_COPY.notes.chatQuestionsOnly)
+    cleanup()
+  })
+
+  it("says so on the start screen when the note is not in the Library", async () => {
+    searchParamsValue = new URLSearchParams("new=1&note=gone")
+    readNoteRemoteMock.mockResolvedValue(null)
+    const { container, cleanup } = await renderPage(<ChatEntryPage />)
+    expect(container.querySelector("[data-chat-note]")?.textContent).toBe("That note is not in your Library.")
+    cleanup()
+  })
+
+  it("reads no note and shows no line on a plain start screen", async () => {
+    const { container, cleanup } = await renderPage(<ChatEntryPage />)
+    expect(readNoteRemoteMock).not.toHaveBeenCalled()
+    expect(container.querySelector("[data-chat-note]")).toBeNull()
+    await act(async () => { findByText(container, "button", "Find papers")!.click() })
+    expect(container.textContent).not.toContain(CLINICAL_COPY.notes.chatQuestionsOnly)
+    cleanup()
+  })
+
+  it("says the note is only used for questions when the reader chooses to search or to review, and sends no note then", async () => {
+    searchParamsValue = new URLSearchParams("new=1&note=esketamine-in-trd")
+    readNoteRemoteMock.mockResolvedValue({ summary: { title: "Esketamine in TRD" } })
+    askChatRemoteMock.mockResolvedValue({ sessionId: "chat_42", message: { role: "assistant", content: "…", citedPageIds: [] } })
+    const { container, cleanup } = await renderPage(<ChatEntryPage />)
+    await act(async () => { findByText(container, "button", "Deep literature review")!.click() })
+    expect(container.querySelector("[data-chat-note-mode]")?.textContent).toBe("Your note is only used for questions. A paper search or a deep review does not read it.")
+    await act(async () => { findByText(container, "button", "Find papers")!.click() })
+    expect(container.querySelector("[data-chat-note-mode]")).not.toBeNull()
+    await send(container, "esketamine trials")
+    expect(askChatRemoteMock).toHaveBeenCalledTimes(1)
+    expect(askChatRemoteMock.mock.calls[0][0]).toMatchObject({ mode: "search", question: "esketamine trials" })
+    expect(askChatRemoteMock.mock.calls[0][0]).not.toHaveProperty("noteId")
+    cleanup()
+  })
+
+  it("shows no such line for the mode once the reader is back on a plain question, and sends the note", async () => {
+    searchParamsValue = new URLSearchParams("new=1&note=esketamine-in-trd")
+    readNoteRemoteMock.mockResolvedValue({ summary: { title: "Esketamine in TRD" } })
+    askChatRemoteMock.mockResolvedValue({ sessionId: "chat_42", message: { role: "assistant", content: "…", citedPageIds: [] } })
+    const { container, cleanup } = await renderPage(<ChatEntryPage />)
+    await act(async () => { findByText(container, "button", "Find papers")!.click() })
+    await act(async () => { findByText(container, "button", "Discuss research")!.click() })
+    expect(container.querySelector("[data-chat-note-mode]")).toBeNull()
+    await send(container, "What does my note conclude?")
+    expect(askChatRemoteMock.mock.calls[0][0]).toMatchObject({ mode: "chat", noteId: "esketamine-in-trd" })
     cleanup()
   })
 

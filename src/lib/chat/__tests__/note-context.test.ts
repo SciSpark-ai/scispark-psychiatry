@@ -7,7 +7,8 @@ import { loadPsychiatryPack } from "../../clinical/pack/load"
 import type { Taxonomy } from "../../clinical/pack/schema"
 import { CLINICAL_COPY } from "../../clinical/copy"
 import { paper } from "../../clinical/__tests__/helpers"
-import { askChat, ChatScopeError, parseAskChatInput } from "../orchestrator"
+import { askChat, ChatScopeError, MAX_CONTEXT_CHARS_TOTAL, parseAskChatInput } from "../orchestrator"
+import { NOTE_CHAT_TOTAL_MAX } from "../../clinical/notes/chat-context"
 import { loadSession, saveSession, type ChatSession } from "../session"
 import { captureNoteContext, renderNoteContext } from "../note-context"
 
@@ -116,6 +117,45 @@ describe("captureNoteContext", () => {
     await storage.write("wiki/notes/many.md", note("Many", `${cited.join(" ")}\n`))
     const context = await captureNoteContext(storage, taxonomy, "many", NOW)
     expect(context.papers.map((entry) => entry.slug)).toEqual(Array.from({ length: 12 }, (_, i) => `paper-${20 + i}`))
+  })
+  it("stops adding papers where the whole context would pass the total the other conversations keep to, and says how many were left out", async () => {
+    expect(NOTE_CHAT_TOTAL_MAX).toBe(MAX_CONTEXT_CHARS_TOTAL)
+    const cited: string[] = []
+    const findings: Record<string, unknown> = {}
+    for (let n = 40; n < 55; n++) {
+      await storage.write(`wiki/papers/paper-${n}.md`, paperPage(n, { abstract: `A${n} ${"b ".repeat(1400)}` }))
+      findings[`pmid:${n}`] = finding(n, { headline: `H${n} ${"h ".repeat(450)}`, takeaway: `T${n} ${"t ".repeat(450)}` })
+      cited.push(`[[paper-${n}]]`)
+    }
+    await storage.write(FINDINGS_PATH, JSON.stringify({ version: 2, findings }))
+    await storage.write("wiki/notes/full.md", note("Full", `${"word ".repeat(3100)}\n${cited.join(" ")} [[nowhere-paper]]\n`))
+    const context = await captureNoteContext(storage, taxonomy, "full", NOW)
+    const rendered = renderNoteContext(context, false)
+    expect(rendered.length).toBeLessThanOrEqual(64_000)
+    expect(context.papers.length).toBeGreaterThan(5)
+    expect(context.papers.length).toBeLessThan(12)
+    expect(context.papers.map((entry) => entry.slug)).toEqual(Array.from({ length: context.papers.length }, (_, i) => `paper-${40 + i}`))
+    // Fifteen cited papers have a page; the one that has none was never going to be supplied and is not counted.
+    expect(context.omitted).toBe(15 - context.papers.length)
+    expect(rendered).toContain(`${context.omitted} more papers the note cites are saved in the Library but are not supplied here`)
+    // One more paper would not have fitted.
+    const next = { slug: "paper-x", label: "X", title: "X", summary: "s".repeat(1800), abstract: "a".repeat(2500) }
+    expect(renderNoteContext({ ...context, papers: [...context.papers, next] }, false).length).toBeGreaterThan(64_000)
+  })
+  it("counts the papers beyond the twelfth as left out too, and says nothing when none was", async () => {
+    const cited: string[] = []
+    for (let n = 20; n < 35; n++) {
+      await storage.write(`wiki/papers/paper-${n}.md`, paperPage(n, { abstract: `Abstract ${n}.` }))
+      cited.push(`[[paper-${n}]]`)
+    }
+    await storage.write("wiki/notes/many.md", note("Many", `${cited.join(" ")}\n`))
+    const many = await captureNoteContext(storage, taxonomy, "many", NOW)
+    expect(many.omitted).toBe(3)
+    expect(renderNoteContext(many, true)).toContain("3 more papers the note cites")
+    const few = await captureNoteContext(storage, taxonomy, NOTE_ID, NOW)
+    expect(few.omitted ?? 0).toBe(0)
+    expect(renderNoteContext(few, false)).not.toContain("more paper")
+    expect(renderNoteContext({ ...few, omitted: 1 }, false)).toContain("1 more paper the note cites is saved")
   })
   it("cuts a very long note and says so", async () => {
     await storage.write("wiki/notes/long.md", note("Long", `BEGIN ${"word ".repeat(5000)}NOTE-END\n`))

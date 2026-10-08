@@ -12,7 +12,7 @@ import { CLINICAL_COPY } from "../clinical/copy"
 import { cut } from "../clinical/notes/links"
 import { isNoteId, readNote } from "../clinical/notes/store"
 import {
-  NOTE_CHAT_ABSTRACT_MAX, NOTE_CHAT_BODY_MAX, NOTE_CHAT_MAX_PAPERS, NOTE_CHAT_SUMMARY_MAX, NOTE_CHAT_TITLE_MAX,
+  NOTE_CHAT_ABSTRACT_MAX, NOTE_CHAT_BODY_MAX, NOTE_CHAT_MAX_PAPERS, NOTE_CHAT_SUMMARY_MAX, NOTE_CHAT_TITLE_MAX, NOTE_CHAT_TOTAL_MAX,
   NoteChatContextSchema, type NoteChatContext, type NoteChatPaper,
 } from "../clinical/notes/chat-context"
 
@@ -27,15 +27,20 @@ const text = (value: unknown) => (typeof value === "string" && value.trim() !== 
  * The note as stored now and, for each paper it cites that has a page in the Library (the first 12), the paper's
  * title, its AI summary (the findings store's headline and takeaway, else the page's own) and its abstract (the
  * page's, else the one the finding's or a source's record still holds), cut at 2,500 characters. A piece that is not there is left
- * out; a paper with no page is skipped. Reads only: nothing is fetched, generated or written.
+ * out; a paper with no page is skipped. Papers stop being added where the whole context, as the model is given it,
+ * would pass the total every other conversation keeps to (64,000 characters); how many papers with a page were left
+ * out, by that or by the twelve, is kept in `omitted`. Reads only: nothing is fetched, generated or written.
  */
 export async function captureNoteContext(storage: VaultStorage, taxonomy: Taxonomy, id: string, now: Date): Promise<NoteChatContext> {
   const note = isNoteId(id) ? await readNote(storage, taxonomy, id, now) : null
   if (!note) throw new Error(CLINICAL_COPY.notes.notFound)
   const papers: NoteChatPaper[] = []
+  const head = { id, title: cut(note.summary.title, NOTE_CHAT_TITLE_MAX), body: noteBody(note.body) }
+  let omitted = 0
   if (note.summary.papers.length > 0) {
     const [bundle, findings] = await Promise.all([loadBundle(storage), readFindings(storage)])
-    for (const { slug, label } of note.summary.papers) {
+    const paged = note.summary.papers.filter(({ slug }) => findPaperPage(bundle, slug))
+    for (const { slug, label } of paged) {
       if (papers.length === NOTE_CHAT_MAX_PAPERS) break
       const page = findPaperPage(bundle, slug)
       if (!page) continue
@@ -43,14 +48,19 @@ export async function captureNoteContext(storage: VaultStorage, taxonomy: Taxono
       const summary = text(finding ? `${finding.headline} ${finding.takeaway}` : page.frontmatter.tldr)
       // A saved page resolves to itself first, so the finding's own record is asked before the general resolver.
       const abstract = text(extractAbstractFromBody(page.body)) ?? text(finding?.paper.abstract) ?? text((await resolvePaperBySlug(storage, slug))?.abstract)
-      papers.push({
+      const next: NoteChatPaper = {
         slug, label: cut(label, NOTE_CHAT_TITLE_MAX), title: cut(page.frontmatter.title, NOTE_CHAT_TITLE_MAX),
         ...(summary ? { summary: cut(summary, NOTE_CHAT_SUMMARY_MAX) } : {}),
         ...(abstract ? { abstract: cut(abstract, NOTE_CHAT_ABSTRACT_MAX) } : {}),
-      })
+      }
+      // Measured as the model is given it, with the line that says what was left out.
+      const withNext = renderNoteContext({ ...head, papers: [...papers, next], omitted: paged.length - papers.length - 1 }, false)
+      if (withNext.length > NOTE_CHAT_TOTAL_MAX) break
+      papers.push(next)
     }
+    omitted = paged.length - papers.length
   }
-  return NoteChatContextSchema.parse({ id, title: cut(note.summary.title, NOTE_CHAT_TITLE_MAX), body: noteBody(note.body), papers })
+  return NoteChatContextSchema.parse({ ...head, papers, ...(omitted > 0 ? { omitted } : {}) })
 }
 
 /** `captureNoteContext` with the pack this edition ships. */
@@ -70,11 +80,15 @@ export function renderNoteContext(context: NoteChatContext, readSourcesOnly: boo
     ...(!readSourcesOnly && paper.summary ? [`AI-generated summary (secondary; check claims against the abstract): ${paper.summary}`] : []),
     `Abstract (source text; the full text is not supplied):\n${paper.abstract ?? "No abstract is stored for this paper."}`,
   ].join("\n"))
+  const omitted = context.omitted ?? 0
+  const more = omitted === 0 ? []
+    : [`${omitted} more ${omitted === 1 ? "paper the note cites is" : "papers the note cites are"} saved in the Library but ${omitted === 1 ? "is" : "are"} not supplied here, for want of room. Say so when the question needs ${omitted === 1 ? "it" : "them"}.`]
   return [
     `This conversation is about one note the user wrote, and the papers that note cites. By default "this", "my note" and "the note" mean this note. The note is the user's own writing, not source evidence; the papers' abstracts are the evidence.`,
     `### note\nTitle: ${context.title}\n\n${context.body.trim() || "(the note has no text)"}`,
     papers.length > 0
       ? `Papers the note cites (${papers.length}):\n\n${papers.join("\n\n---\n\n")}`
       : "The note cites no paper that is saved in the Library, so there is no paper text to answer from.",
+    ...more,
   ].join("\n\n---\n\n")
 }

@@ -25,6 +25,7 @@ import { prepareReview } from "@/lib/review/client"
 import { ReviewReport } from "./ReviewReport"
 // Clinical edition: a conversation can start from a note (`noteId`, sent once) and says which note it is about.
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
+import { readNoteRemote } from "@/lib/clinical/notes/client"
 
 const SOURCE_LABELS: Record<SourceId, string> = { arxiv: "arXiv", openalex: "OpenAlex", s2: "Semantic Scholar", pubmed: "PubMed" }
 // Per-tab navigation only; ProfileGate clears this with drafts on profile changes.
@@ -55,6 +56,14 @@ export function ChatWorkspace({ sessionId, fresh = false, resume = false, initia
   const [showSources, setShowSources] = useState(false)
   const [savingIndex, setSavingIndex] = useState<number | null>(null)
   const [savedPage, setSavedPage] = useState<string | null>(null)
+  // Clinical edition: the title of the note a new conversation is about (null: not in the Library), read once for the start screen.
+  const [noteTitle, setNoteTitle] = useState<string | null | undefined>(undefined)
+  useEffect(() => {
+    if (!noteId || sessionId) return
+    let alive = true
+    readNoteRemote(noteId).then((note) => { if (alive) setNoteTitle(note ? note.summary.title : null) }).catch(() => undefined)
+    return () => { alive = false }
+  }, [noteId, sessionId])
   const sending = useRef(false)
   const mounted = useRef(true)
   const scroll = useRef<HTMLDivElement>(null)
@@ -208,7 +217,7 @@ export function ChatWorkspace({ sessionId, fresh = false, resume = false, initia
       const result = await askChatRemote({ sessionId: id, question: q, readSourcesOnly, mode,
         ...(mode === "search" ? { sources } : {}), operationId: crypto.randomUUID(),
         ...(session?.projectId ? { projectId: session.projectId } : {}),
-        ...(noteId && !sessionId ? { noteId } : {}),
+        ...(noteId && !sessionId && mode === "chat" ? { noteId } : {}),
       }, (s) => { if (mounted.current) setStage(s) }, undefined, (text) => { if (mounted.current) setDraft(text) })
       try { sessionStorage.removeItem(draftKey) } catch {}
       if (!mounted.current) return
@@ -242,6 +251,8 @@ export function ChatWorkspace({ sessionId, fresh = false, resume = false, initia
       </header>
       <section aria-label="Start a conversation" className="mx-auto my-auto w-full max-w-[760px] py-12 sm:py-16">
         <h1 className="mb-7 text-center font-heading text-[24px] leading-tight text-espresso sm:text-[38px]">What would you like to explore?</h1>
+        {noteId && noteTitle !== undefined && <p data-chat-note className="mb-3 text-center text-sm text-muted-text">{noteTitle === null ? CLINICAL_COPY.notes.notFound : CLINICAL_COPY.notes.chatAbout(noteTitle)}</p>}
+        {noteId && mode !== "chat" && <p data-chat-note-mode className="mb-3 text-center text-sm text-muted-text">{CLINICAL_COPY.notes.chatQuestionsOnly}</p>}
         {error && <div className="mb-3"><LlmErrorMessage message={error} /></div>}
         <Composer welcome value={question} onChange={changeQuestion} onSubmit={submit}
           busy={busy || (mode !== "chat" && (!sources.length || Boolean(sourcesError)))}
