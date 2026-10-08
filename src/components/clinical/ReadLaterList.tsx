@@ -16,10 +16,15 @@ import { ClinicalFeedCard } from "./ClinicalFeedCard"
 import { topicLookup } from "./topic"
 
 const R = CLINICAL_COPY.readLater
+const FRAME = "p-7"
 type Loaded = { items: StoredFeedItem[]; entries: WatchEntry[]; saved: Set<string>; votes: Map<string, FeedbackKind> }
 
-/** The papers put aside with the clock on a feed card, as the same cards. */
-export function ReadLaterList() {
+/**
+ * The papers put aside with the clock on a feed card, as the same cards. `embedded` is the list as a tab of the
+ * Library: without its own heading and margins, which the Library has.
+ */
+export function ReadLaterList({ embedded = false }: { embedded?: boolean }) {
+  const frame = embedded ? undefined : FRAME
   const [storage, setStorage] = useState<VaultStorage | null>(null)
   const [data, setData] = useState<Loaded | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +47,7 @@ export function ReadLaterList() {
   }, [])
 
   if (!data || !storage) {
-    return <div className="p-7">{error ? <p role="alert" className="text-[13px] text-red-600">{CLINICAL_COPY.errorPrefix} {error}</p> : <p className="text-[14px] text-muted-text">{CLINICAL_COPY.loading}</p>}</div>
+    return <div className={frame}>{error ? <p role="alert" className="text-[13px] text-red-600">{CLINICAL_COPY.errorPrefix} {error}</p> : <p className="text-[14px] text-muted-text">{CLINICAL_COPY.loading}</p>}</div>
   }
 
   const { topicOf, toneOf } = topicLookup(data.entries)
@@ -50,9 +55,9 @@ export function ReadLaterList() {
   const onReadLater = (key: string, on: boolean) => { if (!on) setData((current) => (current ? { ...current, items: current.items.filter((item) => item.key !== key) } : current)) }
 
   return (
-    <div className="p-7">
+    <div className={frame}>
       <div className="mb-5">
-        <h1 className="font-heading text-[26px] font-semibold tracking-heading text-espresso">{R.heading}</h1>
+        {!embedded && <h1 className="font-heading text-[26px] font-semibold tracking-heading text-espresso">{R.heading}</h1>}
         <p className="mt-1 text-[14px] text-secondary-dark">{R.intro}</p>
       </div>
       {data.items.length === 0 ? <p className="text-[14px] text-muted-text">{R.empty}</p> : (

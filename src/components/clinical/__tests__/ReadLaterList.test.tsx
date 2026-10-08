@@ -24,10 +24,10 @@ const item = (n: number): StoredFeedItem => ({
 })
 
 let container: HTMLDivElement
-async function mount() {
+async function mount(embedded = false) {
   container = document.createElement("div")
   document.body.appendChild(container)
-  await act(async () => { createRoot(container).render(<ReadLaterList />) })
+  await act(async () => { createRoot(container).render(<ReadLaterList embedded={embedded} />) })
   await act(async () => {})
 }
 
@@ -57,6 +57,15 @@ describe("ReadLaterList", () => {
     expect(cards.map((card) => card.querySelector("h3")!.textContent)).toEqual(["Headline 2", "Headline 1"])
     expect(cards[0].querySelector("[data-topic]")!.textContent).toBe("Depression")
     expect(container.querySelector("h1")!.textContent).toBe("Read later")
+  })
+
+  it("is the same list without its own heading and margins as a tab of the Library", async () => {
+    await toggleReadLater(vault.current as MemoryVaultStorage, item(1))
+    await mount(true)
+    expect(container.querySelector("h1")).toBeNull()
+    expect(container.firstElementChild!.className).not.toContain("p-7")
+    expect(container.textContent).toContain("Papers you put aside from your feed.")
+    expect(container.querySelectorAll("[data-testid=clinical-feed-card]")).toHaveLength(1)
   })
 
   it("drops a card from the page when the paper is taken off the list", async () => {

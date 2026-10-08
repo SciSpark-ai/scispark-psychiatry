@@ -6,11 +6,11 @@ import { Fragment, Suspense, useEffect, useRef, useState } from "react";
 import {
   Home,
   BookOpen,
-  Bookmark,
-  History,
+  FileOutput,
   Library,
   ListChecks,
   MessageSquarePlus,
+  NotebookPen,
   PanelLeftClose,
   X,
   type LucideIcon,
@@ -57,15 +57,15 @@ const N = CLINICAL_COPY.nav;
 const HOME: NavItem = { key: "home", label: N.whatsNew, href: "/", icon: Home };
 const EVIDENCE: NavItem = { key: "evidence", label: N.evidence, href: "/wiki", icon: BookOpen };
 const CHAT: NavItem = { key: "chat", label: N.chat, href: "/chat", icon: MessageSquarePlus };
+const NOTES: NavItem = { key: "notes", label: N.notes, href: "/notes", icon: NotebookPen };
+const OUTPUTS: NavItem = { key: "outputs", label: N.outputs, href: "/outputs", icon: FileOutput };
 const LIBRARY: NavItem = { key: "library", label: N.library, href: "/wiki?view=all", icon: Library };
-const READ_LATER: NavItem = { key: "readLater", label: N.readLater, href: "/read-later", icon: Bookmark };
-const HISTORY: NavItem = { key: "history", label: N.history, href: "/feed-history", icon: History };
 const WATCH: NavItem = { key: "watch", label: CLINICAL_COPY.watch.heading, href: "/watch", icon: ListChecks };
 
-/** Two groups, no headings, a rule between them: where to look, then what is yours. Graph is not in the rail. */
+/** Two groups, no headings, a rule between them: what the reader does, then what was kept and what is followed. Graph is not in the rail. */
 const NAV_GROUPS: NavItem[][] = [
-  [HOME, EVIDENCE, CHAT, LIBRARY],
-  [READ_LATER, HISTORY, WATCH],
+  [HOME, EVIDENCE, CHAT, NOTES, OUTPUTS],
+  [LIBRARY, WATCH],
 ];
 
 interface SidebarProps {
@@ -74,13 +74,26 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-/** Evidence and Library share the /wiki route and differ by `?view=all`; every other wiki page (notes, the inbox) belongs to the Library. */
+const under = (pathname: string, base: string) => pathname === base || pathname.startsWith(`${base}/`);
+
+/**
+ * The one item a route belongs to. Wiki and Library share the /wiki route and differ by `?view=all`; a note's page
+ * (/wiki/notes/...) belongs to Notes, a condition's to Wiki, every other wiki page (papers, saved chats, the inbox)
+ * to the Library, as do Read later and History, which are tabs of it; a project belongs to Outputs.
+ */
+function activeKey(pathname: string, libraryView: boolean): string | null {
+  if (pathname === "/") return "home";
+  if (pathname === "/wiki") return libraryView ? "library" : "evidence";
+  if (under(pathname, "/wiki/conditions")) return "evidence";
+  if (under(pathname, "/notes") || under(pathname, "/wiki/notes")) return "notes";
+  if (under(pathname, "/outputs") || under(pathname, "/projects")) return "outputs";
+  if (under(pathname, "/wiki") || under(pathname, "/read-later") || under(pathname, "/feed-history")) return "library";
+  if (under(pathname, "/chat") || under(pathname, "/papers")) return "chat";
+  if (under(pathname, "/watch")) return "watch";
+  return null;
+}
 function isItemActive(pathname: string, item: NavItem, libraryView: boolean): boolean {
-  const inWiki = pathname === "/wiki" || pathname.startsWith("/wiki/");
-  if (item.key === "evidence") return pathname === "/wiki" ? !libraryView : pathname.startsWith("/wiki/conditions");
-  if (item.key === "library") return pathname === "/wiki" ? libraryView : inWiki && !pathname.startsWith("/wiki/conditions");
-  if (item.key === "chat" && pathname.startsWith("/papers")) return true;
-  return item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+  return activeKey(pathname, libraryView) === item.key;
 }
 
 interface NavLinksProps {
@@ -130,7 +143,7 @@ function NavLinksView({ pathname, collapsed, inboxCount, fadeLabel, onNavigate, 
   );
 }
 
-/** Reads `?view=all` to tell Evidence from Library. */
+/** Reads `?view=all` to tell Wiki from Library. */
 function NavLinks(props: NavLinksProps) {
   const searchParams = useSearchParams();
   return <NavLinksView {...props} libraryView={searchParams.get("view") === "all"} />;

@@ -26,10 +26,10 @@ const feedAt = (generatedAt: string, count: number, lookBack: string): StoredFee
 })
 
 let container: HTMLDivElement
-async function mount() {
+async function mount(embedded = false) {
   container = document.createElement("div")
   document.body.appendChild(container)
-  await act(async () => { createRoot(container).render(<FeedHistory />) })
+  await act(async () => { createRoot(container).render(<FeedHistory embedded={embedded} />) })
   await act(async () => {})
 }
 const rows = () => [...container.querySelectorAll("[data-testid=history-row]")]
@@ -53,6 +53,14 @@ describe("FeedHistory", () => {
     expect(rows()[0].textContent).toContain("Depression × Esketamine")
     expect(rows()[1].textContent).toContain("30 days")
     expect(container.querySelector("h1")!.textContent).toBe("History")
+  })
+
+  it("is the same list without its own heading and margins as a tab of the Library", async () => {
+    await mount(true)
+    expect(container.querySelector("h1")).toBeNull()
+    expect(container.firstElementChild!.className).not.toContain("p-7")
+    expect(container.textContent).toContain("Every search you have run.")
+    expect(rows()).toHaveLength(2)
   })
 
   it("reopens a search as the list on Home", async () => {

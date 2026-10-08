@@ -24,7 +24,7 @@ import { useUIStore } from "@/stores/ui-store"
 const html = () => renderToStaticMarkup(<Sidebar collapsed={false} />).replace(/&#x27;/g, "'")
 
 describe("Sidebar nav map (SP1)", () => {
-  it("shows two groups with a rule between them: What's new, Evidence, Chat, Library; then Read later, History, My topics", () => {
+  it("shows two groups with a rule between them: What's new, Wiki, Ask, Notes, Outputs; then Library, My topics", () => {
     const out = html()
     const host = document.createElement("div")
     host.innerHTML = out
@@ -33,12 +33,13 @@ describe("Sidebar nav map (SP1)", () => {
     const links = [...nav.querySelectorAll(":scope > a")]
     const before = links.filter((link) => rule.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_PRECEDING)
     const after = links.filter((link) => rule.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(before.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["What's new", "/"], ["Evidence", "/wiki"], ["Chat", "/chat"], ["Library", "/wiki?view=all"]])
-    expect(after.map((link) => [link.textContent?.replace(/\d+$/, ""), link.getAttribute("href")])).toEqual([["Read later", "/read-later"], ["History", "/feed-history"], ["My topics", "/watch"]])
+    expect(before.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["What's new", "/"], ["Wiki", "/wiki"], ["Ask", "/chat"], ["Notes", "/notes"], ["Outputs", "/outputs"]])
+    expect(after.map((link) => [link.textContent?.replace(/\d+$/, ""), link.getAttribute("href")])).toEqual([["Library", "/wiki?view=all"], ["My topics", "/watch"]])
     expect(rule.className).toBe(host.querySelectorAll("aside hr")[1].className)
     expect(out).toContain("Psychiatry")
-    for (const label of ["Graph", "Sparky", "Home", "Wiki", "Discover", "Knowledge"]) expect(out, label).not.toContain(label)
-    for (const href of ["/viz"]) expect(out, href).not.toContain(`href="${href}"`)
+    // Owner decision 2026-10-08: the page of conditions is "Wiki", the conversations are "Ask"; Read later and History are tabs of the Library.
+    for (const label of ["Graph", "Sparky", "Home", "Evidence", "Chat", "Read later", "History", "Discover", "Knowledge"]) expect(links.map((link) => link.textContent), label).not.toContain(label)
+    for (const href of ["/viz", "/read-later", "/feed-history"]) expect(out, href).not.toContain(`href="${href}"`)
     // Clinical edition (D32): Trending, Idea Spark and the fork-mock pages are hidden.
     for (const label of ["Trending", "Idea Spark", "Projects"]) expect(out, label).not.toContain(label)
     for (const href of ["/spark", "/projects", "/trending", "/history"]) expect(out, href).not.toContain(`href="${href}"`)
@@ -51,7 +52,7 @@ describe("Sidebar nav map (SP1)", () => {
     expect(out).not.toContain('href="/settings"')
     expect(out).not.toContain("Dashboard")
   })
-  it("marks exactly one item: Evidence on /wiki and a condition page, Library on /wiki?view=all, and the others on their own routes", () => {
+  it("marks exactly one item on every route", () => {
     const current = (pathname: string, search = "") => {
       route.pathname = pathname
       route.search = search
@@ -61,14 +62,26 @@ describe("Sidebar nav map (SP1)", () => {
       route.search = ""
       return [...host.querySelectorAll("nav a")].filter((link) => link.className.includes("font-medium")).map((link) => link.textContent)
     }
-    expect(current("/wiki")).toEqual(["Evidence"])
-    expect(current("/wiki/conditions/depression")).toEqual(["Evidence"])
-    expect(current("/wiki", "view=all")).toEqual(["Library"])
     expect(current("/")).toEqual(["What's new"])
-    expect(current("/read-later")).toEqual(["Read later"])
-    expect(current("/feed-history")).toEqual(["History"])
+    expect(current("/wiki")).toEqual(["Wiki"])
+    expect(current("/wiki", "condition=depression")).toEqual(["Wiki"])
+    expect(current("/wiki/conditions/x")).toEqual(["Wiki"])
+    expect(current("/wiki", "view=all")).toEqual(["Library"])
+    expect(current("/wiki", "view=all&tab=read-later")).toEqual(["Library"])
+    expect(current("/wiki/papers/x")).toEqual(["Library"])
+    expect(current("/wiki/queries/x")).toEqual(["Library"])
+    expect(current("/wiki/inbox")).toEqual(["Library"])
+    expect(current("/read-later")).toEqual(["Library"])
+    expect(current("/feed-history")).toEqual(["Library"])
+    expect(current("/wiki/notes/x")).toEqual(["Notes"])
+    expect(current("/notes")).toEqual(["Notes"])
+    expect(current("/notes", "condition=depression")).toEqual(["Notes"])
+    expect(current("/outputs")).toEqual(["Outputs"])
+    expect(current("/projects")).toEqual(["Outputs"])
+    expect(current("/projects/x")).toEqual(["Outputs"])
     expect(current("/watch")).toEqual(["My topics"])
-    expect(current("/chat")).toEqual(["Chat"])
+    expect(current("/chat")).toEqual(["Ask"])
+    expect(current("/chat/x")).toEqual(["Ask"])
   })
 })
 
@@ -99,7 +112,7 @@ describe("Sidebar recent chats (SP5 Task 10)", () => {
     expect(idx2).toBeGreaterThan(-1)
     expect(idx1).toBeGreaterThan(-1)
     expect(idx2).toBeLessThan(idx1)
-    // Saved conversations are shortcuts that follow the rail's Chat item.
+    // Saved conversations are shortcuts that follow the rail's Ask item.
     expect(html.indexOf('href="/chat"')).toBeLessThan(idx2)
     expect(html).toContain("Second question about diffusion models")
     expect(html).toContain("First question about transformers")
@@ -174,7 +187,7 @@ it("closes the mobile drawer on destination selection and omits desktop header c
 })
 
 describe("Sidebar review-inbox badge (SP1)", () => {
-  it("renders the review count badge on the Evidence nav item once loaded", async () => {
+  it("renders the review count badge on the Wiki nav item once loaded", async () => {
     ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
     const container = document.createElement("div")
@@ -187,6 +200,7 @@ describe("Sidebar review-inbox badge (SP1)", () => {
     await act(async () => {})
 
     expect(container.innerHTML).toContain(">2<")
+    expect(container.querySelector('nav a[href="/wiki"]')!.textContent).toBe("Wiki2")
 
     act(() => {
       root.unmount()

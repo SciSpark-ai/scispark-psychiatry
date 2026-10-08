@@ -295,7 +295,7 @@ describe("the Evidence view", () => {
       await render("condition=depression")
       expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: "depression" })
       const link = line().querySelector("a")!
-      expect([link.textContent, link.getAttribute("href")]).toEqual(["Your notes on Major depressive disorder (2)", "/wiki?view=all&tab=notes&condition=depression"])
+      expect([link.textContent, link.getAttribute("href")]).toEqual(["Your notes on Major depressive disorder (2)", "/notes?condition=depression"])
       const row = container.querySelector("[data-control-row]")!
       expect(row.compareDocumentPosition(line()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(row.contains(line())).toBe(false)
@@ -341,7 +341,7 @@ describe("the Evidence view", () => {
       const strip = heading.parentElement!.querySelector("[data-notes-strip=line]")!
       expect(heading.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       const link = strip.querySelector("a")!
-      expect([link.textContent, link.getAttribute("href")]).toEqual(["3 notes", "/wiki?view=all&tab=notes&condition=depression&treatment=lithium"])
+      expect([link.textContent, link.getAttribute("href")]).toEqual(["3 notes", "/notes?condition=depression&treatment=lithium"])
       await click(strip.querySelector("button")!)
       expect(notes.createNoteRemote).toHaveBeenCalledWith({ about: { treatment: { condition: "depression", key: "lithium" } } })
       expect(nav.push).toHaveBeenCalledWith("/wiki/notes/new-note")

@@ -11,7 +11,7 @@ const CHIP_NEW = "rounded-pill bg-orange/10 px-2.5 py-0.5 text-[12px] font-mediu
 const CHIP_PROJECT = "rounded-pill bg-card-surface px-2.5 py-0.5 text-[12px] leading-4 text-muted-text"
 
 /**
- * One note of the Notes tab: its title and the day it was edited, the start of its text, and as chips what it is
+ * One note of the Notes list: its title and the day it was edited, the start of its text, and as chips what it is
  * about (its conditions, its treatments, how many papers it cites), how many papers were listed since it was edited,
  * and whether it belongs to a project. The whole row opens the note.
  */

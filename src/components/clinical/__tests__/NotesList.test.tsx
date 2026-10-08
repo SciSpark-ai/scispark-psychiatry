@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: nav.replace, pu
 const notes = vi.hoisted(() => ({ listNotesRemote: vi.fn(), createNoteRemote: vi.fn() }))
 vi.mock("@/lib/clinical/notes/client", () => notes)
 
-import { NotesTab, SEARCH_DELAY_MS } from "../NotesTab"
+import { NotesList, SEARCH_DELAY_MS } from "../NotesList"
 
 const MDD = { code: "depression", name: "Major depressive disorder" }
 const ADHD = { code: "adhd", name: "ADHD" }
@@ -41,18 +41,18 @@ const answer = (filters: { q?: string; condition?: string; treatment?: string } 
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot> | null = null
-async function render(query = "view=all&tab=notes") {
+async function render(query = "") {
   nav.params = new URLSearchParams(query)
   container = document.createElement("div")
   document.body.appendChild(container)
   root = createRoot(container)
-  await act(async () => { root!.render(<NotesTab />) })
+  await act(async () => { root!.render(<NotesList />) })
   await act(async () => {})
 }
 /** The view at another address, as after `router.replace`. */
 async function at(query: string) {
   nav.params = new URLSearchParams(query)
-  await act(async () => { root!.render(<NotesTab />) })
+  await act(async () => { root!.render(<NotesList />) })
   await act(async () => {})
 }
 const click = async (element: Element) => { await act(async () => { (element as HTMLElement).click() }) }
@@ -82,7 +82,7 @@ beforeEach(() => {
 })
 afterEach(() => { vi.useRealTimers() })
 
-describe("the Notes tab of the Library", () => {
+describe("the list of the Notes page", () => {
   it("lists the notes in the order the route gives them, each opening its page", async () => {
     await render()
     expect(notes.listNotesRemote).toHaveBeenCalledTimes(1)
@@ -117,14 +117,14 @@ describe("the Notes tab of the Library", () => {
   it("puts a chosen kind in the address and shows only the notes of that kind", async () => {
     await render()
     await click(pills()[1])
-    expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes&kind=paper")
-    await at("view=all&tab=notes&kind=paper")
+    expect(nav.replace).toHaveBeenCalledWith("/notes?kind=paper")
+    await at("kind=paper")
     expect(ids()).toEqual(["on-a-paper", "one-paper"])
     expect(pills().map((pill) => pill.getAttribute("aria-pressed"))).toEqual(["false", "true", "false", "false"])
     // The kind is applied here: the list is not asked for again.
     expect(notes.listNotesRemote).toHaveBeenCalledTimes(1)
     await click(pills()[0])
-    expect(nav.replace).toHaveBeenLastCalledWith("/wiki?view=all&tab=notes")
+    expect(nav.replace).toHaveBeenLastCalledWith("/notes")
   })
 
   it("offers the conditions that any note has, by name, after All conditions", async () => {
@@ -132,8 +132,8 @@ describe("the Notes tab of the Library", () => {
     expect(select().getAttribute("aria-label")).toBe("Condition")
     expect([...select().options].map((option) => [option.value, option.textContent])).toEqual([["", "All conditions"], ["adhd", "ADHD"], ["depression", "Major depressive disorder"]])
     await choose(select(), "depression")
-    expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes&condition=depression")
-    await at("view=all&tab=notes&condition=depression")
+    expect(nav.replace).toHaveBeenCalledWith("/notes?condition=depression")
+    await at("condition=depression")
     expect(ids()).toEqual(["on-a-paper", "on-a-topic"])
     // The condition is the route's to apply, so its subtypes count: the list is asked for once more, with it.
     expect(notes.listNotesRemote).toHaveBeenCalledTimes(2)
@@ -143,7 +143,7 @@ describe("the Notes tab of the Library", () => {
   })
 
   it("shows the notes on the subtypes of a condition the address names, and keeps that condition in the select", async () => {
-    await render("view=all&tab=notes&condition=mood-disorders")
+    await render("condition=mood-disorders")
     expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: "mood-disorders" })
     expect(ids()).toEqual(["on-a-paper", "on-a-topic"])
     expect(select().value).toBe("mood-disorders")
@@ -152,7 +152,7 @@ describe("the Notes tab of the Library", () => {
   })
 
   it("applies the search, the condition and the kind together: the search and the condition by the route, the kind to what comes back", async () => {
-    await render("view=all&tab=notes&q=keta&condition=depression&kind=topic")
+    await render("q=keta&condition=depression&kind=topic")
     expect(notes.listNotesRemote).toHaveBeenCalledTimes(2)
     expect(notes.listNotesRemote).toHaveBeenCalledWith({ q: "keta" })
     expect(notes.listNotesRemote).toHaveBeenCalledWith({ q: "keta", condition: "depression" })
@@ -166,7 +166,7 @@ describe("the Notes tab of the Library", () => {
   })
 
   it("keeps a chosen condition in the select, by its name, when no note of the kind has it", async () => {
-    await render("view=all&tab=notes&condition=adhd&kind=none")
+    await render("condition=adhd&kind=none")
     expect([...select().options].map((option) => option.value)).toEqual(["", "adhd"])
     expect(select().value).toBe("adhd")
     expect(select().selectedOptions[0].textContent).toBe("ADHD")
@@ -174,42 +174,42 @@ describe("the Notes tab of the Library", () => {
   })
 
   it("passes a treatment of the address to the route together with its condition", async () => {
-    await render("view=all&tab=notes&condition=depression&treatment=esketamine")
+    await render("condition=depression&treatment=esketamine")
     expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: "depression", treatment: "esketamine" })
     expect(ids()).toEqual(["on-a-topic"])
     await click(pills()[2])
-    expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes&condition=depression&treatment=esketamine&kind=topic")
+    expect(nav.replace).toHaveBeenCalledWith("/notes?condition=depression&treatment=esketamine&kind=topic")
   })
 
   it("shows the treatment of the address as a chip, by its name, and has no chip without one", async () => {
-    await render("view=all&tab=notes&condition=depression&treatment=esketamine")
+    await render("condition=depression&treatment=esketamine")
     expect(chip()!.textContent).toContain("Treatment: Esketamine")
-    await at("view=all&tab=notes&condition=depression")
+    await at("condition=depression")
     expect(chip()).toBeNull()
   })
 
   it("names the treatment by its key when no note names it", async () => {
-    await render("view=all&tab=notes&condition=adhd&treatment=clozapine")
+    await render("condition=adhd&treatment=clozapine")
     expect(chip()!.textContent).toContain("Treatment: clozapine")
     expect(container.textContent).toContain("No note matches these filters")
   })
 
   it("takes the treatment out of the address when its chip is removed, and keeps the rest", async () => {
-    await render("view=all&tab=notes&q=keta&condition=depression&treatment=esketamine&kind=topic")
+    await render("q=keta&condition=depression&treatment=esketamine&kind=topic")
     const remove = chip()!.querySelector("button")!
     expect(remove.getAttribute("aria-label")).toBe("Remove the treatment filter")
     await click(remove)
-    expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes&q=keta&condition=depression&kind=topic")
+    expect(nav.replace).toHaveBeenCalledWith("/notes?q=keta&condition=depression&kind=topic")
   })
 
   it("clears the treatment with the other filters", async () => {
-    await render("view=all&tab=notes&condition=adhd&treatment=clozapine")
+    await render("condition=adhd&treatment=clozapine")
     await click(button("Clear filters"))
-    expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes")
+    expect(nav.replace).toHaveBeenCalledWith("/notes")
   })
 
   it("puts the search in the address a moment after the last key, not at each key", async () => {
-    await render("view=all&tab=notes&kind=paper")
+    await render("kind=paper")
     vi.useFakeTimers()
     await type(search(), "ke")
     await act(async () => { vi.advanceTimersByTime(SEARCH_DELAY_MS - 1) })
@@ -218,9 +218,9 @@ describe("the Notes tab of the Library", () => {
     expect(nav.replace).not.toHaveBeenCalled()
     await act(async () => { vi.advanceTimersByTime(1) })
     expect(nav.replace).toHaveBeenCalledTimes(1)
-    expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes&q=keta&kind=paper")
+    expect(nav.replace).toHaveBeenCalledWith("/notes?q=keta&kind=paper")
     vi.useRealTimers()
-    await at("view=all&tab=notes&q=keta&kind=paper")
+    await at("q=keta&kind=paper")
     expect(notes.listNotesRemote).toHaveBeenLastCalledWith({ q: "keta" })
     expect(search().value).toBe("keta")
   })
@@ -235,17 +235,17 @@ describe("the Notes tab of the Library", () => {
   })
 
   it("says so when no note matches, and clears every filter from there", async () => {
-    await render("view=all&tab=notes&q=nothing&kind=paper")
+    await render("q=nothing&kind=paper")
     expect(container.textContent).toContain("No note matches these filters")
     expect(container.textContent).not.toContain("You have no notes yet")
     await click(button("Clear filters"))
-    expect(nav.replace).toHaveBeenCalledWith("/wiki?view=all&tab=notes")
+    expect(nav.replace).toHaveBeenCalledWith("/notes")
     expect(search().value).toBe("")
   })
 
   it("says no note matches when the kind alone leaves none", async () => {
     notes.listNotesRemote.mockResolvedValue([ALL[0]])
-    await render("view=all&tab=notes&kind=none")
+    await render("kind=none")
     expect(container.textContent).toContain("No note matches these filters")
     expect(button("Clear filters")).toBeDefined()
   })

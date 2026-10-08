@@ -17,7 +17,7 @@ import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { evidenceHref } from "@/lib/clinical/evidence/href"
 import { conditionCodeOf } from "@/lib/clinical/records/notes"
 import { NotePage } from "@/components/clinical/NotePage"
-import { libraryHref, noteIdOf } from "@/lib/clinical/notes/href"
+import { noteIdOf, notesHref } from "@/lib/clinical/notes/href"
 import { isUntitledStored } from "@/lib/clinical/notes/links"
 import { Backlinks } from "@/components/wiki/Backlinks"
 import DeleteConfirmCard from "@/components/wiki/DeleteConfirmCard"
@@ -109,7 +109,7 @@ export default function WikiPageDetail() {
     setDeleteError(null)
     try {
       await deletePage(storage, page)
-      router.push(noteId ? libraryHref("notes") : "/wiki")
+      router.push(noteId ? notesHref() : "/wiki")
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : String(e))
     } finally {

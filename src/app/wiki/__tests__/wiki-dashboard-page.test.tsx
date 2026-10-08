@@ -10,7 +10,7 @@ const reviewCountMock = vi.fn()
 let searchParamsValue = new URLSearchParams()
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: (...args: unknown[]) => replaceMock(...args) }),
   useSearchParams: () => searchParamsValue,
 }))
 vi.mock("@/lib/vault/get-vault", () => ({ getOpenVault: async () => ({}) }))
@@ -24,8 +24,10 @@ vi.mock("@/lib/clinical/records/client", () => ({ listConditionsRemote: async ()
 
 vi.mock("@/components/clinical/EvidencePage", () => ({ EvidencePage: () => <div data-testid="evidence-page" /> }))
 vi.mock("@/lib/clinical/evidence/client", () => ({ listFollowedConditionsRemote: async () => [] }))
-const listNotesMock = vi.fn()
-vi.mock("@/lib/clinical/notes/client", () => ({ listNotesRemote: (...args: unknown[]) => listNotesMock(...args), createNoteRemote: async () => "new-note" }))
+const replaceMock = vi.fn()
+vi.mock("@/lib/clinical/readlater/store", () => ({ loadReadLater: async () => [{}, {}] }))
+vi.mock("@/components/clinical/ReadLaterList", () => ({ ReadLaterList: () => <div data-testid="read-later" /> }))
+vi.mock("@/components/clinical/FeedHistory", () => ({ FeedHistory: () => <div data-testid="feed-history" /> }))
 
 import WikiIndexPage from "../page"
 
@@ -86,18 +88,18 @@ beforeEach(() => {
   vi.clearAllMocks()
   searchParamsValue = new URLSearchParams()
   reviewCountMock.mockResolvedValue(3)
-  listNotesMock.mockResolvedValue([])
+  replaceMock.mockReset()
 })
 
 const title = (container: HTMLElement) => container.querySelector("h1")?.textContent
 const hasLink = (container: HTMLElement, href: string) => container.querySelector(`a[href="${href}"]`) !== null
 
 describe("WikiIndexPage — Evidence view (default)", () => {
-  it("shows the Evidence view on wiki home, with none of the wiki's old buttons in the header", async () => {
+  it("shows the Evidence view on wiki home under the heading Wiki, with none of the wiki's old buttons in the header", async () => {
     loadBundleMock.mockResolvedValue(smallBundle())
     const { container, cleanup } = await renderPage()
 
-    expect(title(container)).toBe("Evidence")
+    expect(title(container)).toBe("Wiki")
     // Owner decision 2026-10-09: the review inbox, New note and the making of a condition page are not of this view.
     expect(container.textContent).not.toContain("New note")
     expect(container.textContent).not.toContain("Review inbox")
@@ -127,14 +129,15 @@ describe("WikiIndexPage — Library view (?view=all)", () => {
     expect(title(container)).toBe("Library")
     expect(container.textContent).toContain("Review inbox (3)")
     expect(hasLink(container, "/wiki/inbox")).toBe(true)
-    // Read later and History are in the sidebar; a note is made from the Notes tab.
+    // Read later and History are tabs here, not links to their own pages; a note is made on the Notes page.
     expect(hasLink(container, "/read-later")).toBe(false)
     expect(hasLink(container, "/feed-history")).toBe(false)
     expect(container.textContent).not.toContain("New note")
     expect(container.textContent).not.toContain("All pages")
     expect(container.querySelector("[data-testid=evidence-page]")).toBeNull()
 
-    expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.getAttribute("data-tab"))).toEqual(["papers", "notes", "projects", "chats"])
+    expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.getAttribute("data-tab"))).toEqual(["papers", "read-later", "history", "chats"])
+    expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual(["Papers 3", "Read later 2", "History", "Saved chats 0"])
     // Papers is the tab an address without one opens on: papers link to /paper/<slug>; no other type is listed.
     expect(container.innerHTML).toMatch(/href="\/paper\/saved-one"/)
     expect(container.textContent).not.toContain("Attention Mechanism")
@@ -145,14 +148,28 @@ describe("WikiIndexPage — Library view (?view=all)", () => {
     cleanup()
   })
 
-  it("opens the Notes tab from the address, where a note is made", async () => {
-    searchParamsValue = new URLSearchParams("view=all&tab=notes")
+  it("draws Read later and History as tabs, each what its own page draws", async () => {
+    loadBundleMock.mockResolvedValue(smallBundle())
+    searchParamsValue = new URLSearchParams("view=all&tab=read-later")
+    const later = await renderPage()
+    expect(later.container.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("data-tab")).toBe("read-later")
+    expect(later.container.querySelector("[data-testid=read-later]")).not.toBeNull()
+    expect(later.container.innerHTML).not.toMatch(/href="\/paper\/saved-one"/)
+    later.cleanup()
+
+    searchParamsValue = new URLSearchParams("view=all&tab=history")
+    const history = await renderPage()
+    expect(history.container.querySelector("[data-testid=feed-history]")).not.toBeNull()
+    history.cleanup()
+  })
+
+  it("sends an old address of the Notes tab to the Notes page", async () => {
+    searchParamsValue = new URLSearchParams("view=all&tab=notes&condition=depression")
     loadBundleMock.mockResolvedValue(smallBundle())
     const { container, cleanup } = await renderPage()
 
-    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("data-tab")).toBe("notes")
-    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "New note")).toBe(true)
-    expect(container.innerHTML).not.toMatch(/href="\/paper\/saved-one"/)
+    expect(replaceMock).toHaveBeenCalledWith("/notes?condition=depression")
+    expect(container.querySelector('[role="tab"]')).toBeNull()
 
     cleanup()
   })

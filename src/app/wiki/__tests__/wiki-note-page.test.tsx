@@ -72,7 +72,7 @@ describe("the wiki page of a note", () => {
     }
   })
 
-  it("asks once before deleting, deletes through the wiki's changeset delete, and returns to the Notes tab", async () => {
+  it("asks once before deleting, deletes through the wiki's changeset delete, and returns to the Notes page", async () => {
     removal.deletePage.mockResolvedValue("changeset-1")
     await open("wiki/notes/esketamine-in-trd", "note", "Esketamine in TRD")
     expect(container.querySelector('[role="dialog"]')).toBeNull()
@@ -84,7 +84,7 @@ describe("the wiki page of a note", () => {
     await act(async () => {})
     expect(removal.deletePage).toHaveBeenCalledTimes(1)
     expect(removal.deletePage.mock.calls[0][1]).toBe(opened)
-    expect(nav.router.push).toHaveBeenCalledWith("/wiki?view=all&tab=notes")
+    expect(nav.router.push).toHaveBeenCalledWith("/notes")
   })
 
   it("deletes nothing when the reader cancels, and still sends another page's delete to the wiki", async () => {

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { createNoteRemote, listNotesRemote, type NoteListFilters } from "@/lib/clinical/notes/client"
-import { libraryHref, noteHref } from "@/lib/clinical/notes/href"
+import { noteHref, notesHref } from "@/lib/clinical/notes/href"
 import type { NoteAbout, NoteSummary } from "@/lib/clinical/notes/links"
 import { NoteRow } from "./NoteRow"
 
@@ -34,7 +34,7 @@ const messageOf = (failure: unknown) => (failure instanceof Error ? failure.mess
 /**
  * The reader's notes on what they are reading, and a button that starts one. As a `section` (a paper's page): a
  * heading and the notes, each opening its note; with no note, the button alone. As a `line` (a condition of the
- * Evidence view, an opened treatment): how many there are, as a link to the Library's Notes tab filtered to them, and
+ * Evidence view, an opened treatment): how many there are, as a link to the Notes page filtered to them, and
  * the button; with no note, the button alone. `name` is the condition's name, for its line. A note started here is
  * made on the server with its link to the paper, condition or treatment already in it, and is then opened.
  */
@@ -90,7 +90,7 @@ export function NotesStrip({ about, variant, name }: { about: StripAbout; varian
   return (
     <div data-notes-strip="line" className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {notes.length > 0 && (
-        <Link href={libraryHref("notes", { condition, treatment })} className={COUNT}>
+        <Link href={notesHref({ condition, treatment })} className={COUNT}>
           {treatment || name === undefined ? S.count(notes.length) : S.onCondition(name, notes.length)}
         </Link>
       )}

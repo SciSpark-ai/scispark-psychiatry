@@ -120,7 +120,7 @@ describe("the reader's notes on a condition", () => {
   it("says how many there are, linking to the Notes tab of that condition", async () => {
     await render(strip)
     expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: "schizophrenia" })
-    expect(links()).toEqual([["Your notes on Schizophrenia (2)", "/wiki?view=all&tab=notes&condition=schizophrenia"]])
+    expect(links()).toEqual([["Your notes on Schizophrenia (2)", "/notes?condition=schizophrenia"]])
     expect(container.querySelectorAll("[data-note]")).toHaveLength(0)
     expect(button()).toBeDefined()
   })
@@ -154,7 +154,7 @@ describe("the reader's notes on a treatment", () => {
   it("says how many there are, linking to the Notes tab of that condition and treatment", async () => {
     await render(strip)
     expect(notes.listNotesRemote).toHaveBeenCalledWith({ condition: "schizophrenia", treatment: "clozapine" })
-    expect(links()).toEqual([["2 notes", "/wiki?view=all&tab=notes&condition=schizophrenia&treatment=clozapine"]])
+    expect(links()).toEqual([["2 notes", "/notes?condition=schizophrenia&treatment=clozapine"]])
   })
 
   it("counts one note as one", async () => {

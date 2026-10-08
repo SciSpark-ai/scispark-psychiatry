@@ -96,7 +96,7 @@ describe("the page of a note", () => {
     expect(notes.readNoteRemote).toHaveBeenCalledWith("esk")
     expect(titleField().value).toBe("Esketamine in TRD")
     expect(area().value).toBe(BODY)
-    expect(anchor("← Notes").getAttribute("href")).toBe("/wiki?view=all&tab=notes")
+    expect(anchor("← Notes").getAttribute("href")).toBe("/notes")
     const chips = [...container.querySelectorAll("[data-chip]")].map((chip) => [chip.getAttribute("data-chip"), chip.textContent, chip.getAttribute("href")])
     expect(chips).toEqual([
       ["condition", "Major depressive disorder", "/wiki?condition=depression"],

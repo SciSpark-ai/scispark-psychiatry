@@ -9,9 +9,11 @@ import type { Frontmatter, WikiPage } from "@/lib/vault/types"
 
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), params: new URLSearchParams() }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: nav.replace, push: nav.push }), useSearchParams: () => nav.params }))
-const notes = vi.hoisted(() => ({ listNotesRemote: vi.fn(), createNoteRemote: vi.fn() }))
-vi.mock("@/lib/clinical/notes/client", () => notes)
-vi.mock("../NotesTab", () => ({ NotesTab: () => <div data-testid="notes-tab" /> }))
+const later = vi.hoisted(() => ({ loadReadLater: vi.fn(), vault: {} }))
+vi.mock("@/lib/vault/get-vault", () => ({ getOpenVault: async () => later.vault }))
+vi.mock("@/lib/clinical/readlater/store", () => ({ loadReadLater: later.loadReadLater }))
+vi.mock("../ReadLaterList", () => ({ ReadLaterList: (props: { embedded?: boolean }) => <div data-testid="read-later" data-embedded={String(props.embedded === true)} /> }))
+vi.mock("../FeedHistory", () => ({ FeedHistory: (props: { embedded?: boolean }) => <div data-testid="feed-history" data-embedded={String(props.embedded === true)} /> }))
 
 import { LibraryTabs } from "../LibraryTabs"
 
@@ -52,22 +54,24 @@ beforeEach(() => {
   root = null
   document.body.innerHTML = ""
   nav.replace.mockReset()
-  notes.listNotesRemote.mockReset().mockResolvedValue(new Array(5).fill({}))
+  later.loadReadLater.mockReset().mockResolvedValue(new Array(5).fill({}))
 })
 
 describe("the tabs of the Library", () => {
-  it("has the four tabs, each with its count; the notes are counted by the notes list with no filter", async () => {
+  it("has the four tabs in order: papers and saved chats counted from the bundle, Read later from its list, History with no count", async () => {
     await render("view=all")
     expect(container.querySelector('[role="tablist"]')!.getAttribute("aria-label")).toBe("Parts of your Library")
-    expect(tabs().map((tab) => tab.textContent)).toEqual(["Papers 2", "Notes 5", "Projects 1", "Saved chats 3"])
-    expect(notes.listNotesRemote).toHaveBeenCalledTimes(1)
-    expect(notes.listNotesRemote).toHaveBeenCalledWith()
+    expect(tabs().map((tab) => tab.textContent)).toEqual(["Papers 2", "Read later 5", "History", "Saved chats 3"])
+    expect(tabs().map((tab) => tab.getAttribute("data-tab"))).toEqual(["papers", "read-later", "history", "chats"])
+    expect(later.loadReadLater).toHaveBeenCalledTimes(1)
+    expect(later.loadReadLater).toHaveBeenCalledWith(later.vault)
+    expect(nav.replace).not.toHaveBeenCalled()
   })
 
-  it("shows the Notes tab without a count until the notes are counted, and when they cannot be", async () => {
-    notes.listNotesRemote.mockRejectedValue(new Error("no"))
+  it("shows Read later without a count when its list cannot be read", async () => {
+    later.loadReadLater.mockRejectedValue(new Error("no"))
     await render("view=all")
-    expect(tabs().map((tab) => tab.textContent)).toEqual(["Papers 2", "Notes", "Projects 1", "Saved chats 3"])
+    expect(tabs().map((tab) => tab.textContent)).toEqual(["Papers 2", "Read later", "History", "Saved chats 3"])
   })
 
   it("opens on Papers, as does an address that names no tab of it", async () => {
@@ -78,50 +82,62 @@ describe("the tabs of the Library", () => {
     expect(panel().textContent).toContain("Second Paper")
     expect(panel().textContent).not.toContain("A Review")
     expect(panel().textContent).not.toContain("A Question")
-    await render("view=all&tab=zzz")
-    expect(chosen()).toEqual(["papers"])
-  })
-
-  it("never shows the Conditions group, on any tab", async () => {
-    for (const query of ["view=all", "view=all&tab=notes", "view=all&tab=projects", "view=all&tab=chats"]) {
+    for (const query of ["view=all&tab=zzz", "view=all&tab=projects"]) {
       await render(query)
-      expect(container.textContent).not.toContain("Conditions")
-      expect(container.textContent).not.toContain("Major depressive disorder")
+      expect(chosen()).toEqual(["papers"])
     }
   })
 
-  it("reads the tab from the address", async () => {
-    await render("view=all&tab=projects")
-    expect(chosen()).toEqual(["projects"])
-    expect(panel().innerHTML).toMatch(/href="\/wiki\/projects\/a-review"/)
+  it("lists no condition, note or project on any tab", async () => {
+    for (const query of ["view=all", "view=all&tab=read-later", "view=all&tab=history", "view=all&tab=chats"]) {
+      await render(query)
+      for (const text of ["Conditions", "Major depressive disorder", "A Note", "A Review", "Notes", "Projects"]) expect(container.textContent, `${query}: ${text}`).not.toContain(text)
+    }
+  })
+
+  it("reads the tab from the address and draws what its own page draws", async () => {
+    await render("view=all&tab=read-later")
+    expect(chosen()).toEqual(["read-later"])
+    expect(panel().querySelector("[data-testid=read-later]")!.getAttribute("data-embedded")).toBe("true")
     expect(panel().textContent).not.toContain("First Paper")
+
+    await render("view=all&tab=history")
+    expect(chosen()).toEqual(["history"])
+    expect(panel().querySelector("[data-testid=feed-history]")!.getAttribute("data-embedded")).toBe("true")
+    expect(panel().querySelector("[data-testid=read-later]")).toBeNull()
 
     await render("view=all&tab=chats")
     expect(chosen()).toEqual(["chats"])
     expect(panel().innerHTML).toMatch(/href="\/wiki\/queries\/a-question"/)
     expect(panel().textContent).not.toContain("Saved answers")
-
-    await render("view=all&tab=notes")
-    expect(chosen()).toEqual(["notes"])
-    expect(panel().querySelector("[data-testid=notes-tab]")).not.toBeNull()
-    expect(panel().textContent).not.toContain("A Note")
   })
 
   it("writes a chosen tab to the address, Papers by leaving it out", async () => {
     await render("view=all")
     await act(async () => { tabs()[1].click() })
-    expect(nav.replace).toHaveBeenLastCalledWith("/wiki?view=all&tab=notes")
+    expect(nav.replace).toHaveBeenLastCalledWith("/wiki?view=all&tab=read-later")
+    await act(async () => { tabs()[2].click() })
+    expect(nav.replace).toHaveBeenLastCalledWith("/wiki?view=all&tab=history")
     await act(async () => { tabs()[3].click() })
     expect(nav.replace).toHaveBeenLastCalledWith("/wiki?view=all&tab=chats")
     await act(async () => { tabs()[0].click() })
     expect(nav.replace).toHaveBeenLastCalledWith("/wiki?view=all")
   })
 
+  it("leads an old address of the Notes tab to the Notes page with the same filters, and draws no tab meanwhile", async () => {
+    await render("view=all&tab=notes&q=keta&condition=depression&treatment=esketamine&kind=topic")
+    expect(nav.replace).toHaveBeenCalledWith("/notes?q=keta&condition=depression&treatment=esketamine&kind=topic")
+    expect(new Set(nav.replace.mock.calls.map((call) => call[0])).size).toBe(1)
+    expect(tabs()).toEqual([])
+    await render("view=all&tab=notes")
+    expect(nav.replace).toHaveBeenLastCalledWith("/notes")
+  })
+
   it("points to the paper search when the Library has no paper", async () => {
     await render("view=all", bundleOf([["wiki/projects/a-review", "project", "A Review"]]))
     expect(panel().textContent).toContain("Your Library has no papers yet")
     expect(panel().querySelector('a[href="/papers"]')!.textContent).toBe("Search for papers →")
-    await render("view=all&tab=projects", bundleOf([]))
+    await render("view=all&tab=chats", bundleOf([]))
     expect(panel().querySelector('a[href="/papers"]')).toBeNull()
   })
 })

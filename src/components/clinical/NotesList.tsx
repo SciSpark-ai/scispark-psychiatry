@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { createNoteRemote, listNotesRemote, type NoteListFilters } from "@/lib/clinical/notes/client"
-import { libraryHref, noteHref, noteKindOf, type NotesAddress } from "@/lib/clinical/notes/href"
+import { noteHref, noteKindOf, notesHref, type NotesAddress } from "@/lib/clinical/notes/href"
 import { NOTE_KINDS, type NoteKind, type NoteSummary } from "@/lib/clinical/notes/links"
 import { NoteRow } from "./NoteRow"
 
@@ -45,14 +45,14 @@ function useNotes(key: string | null): Answer | null {
 }
 
 /**
- * The Notes tab of the Library: a search, a condition, what a note is about, and the notes last edited first. The
+ * The list of the Notes page (`/notes`): a search, a condition, what a note is about, and the notes last edited first. The
  * search, the condition, the kind and a treatment (which the Evidence view's links name; shown as a chip that can be
  * removed) are kept in the address. The search, the condition and the treatment are the route's to apply: a condition
  * counts with its subtypes, and a treatment with a condition means that treatment under it or under its subtypes.
  * The kind is applied here to what came back, so each pill can say how many notes it would show. With a condition
  * chosen the route is asked a second time without it, so the select keeps offering the other conditions.
  */
-export function NotesTab() {
+export function NotesList() {
   const router = useRouter()
   const params = useSearchParams()
   const q = (params.get("q") ?? "").trim()
@@ -75,10 +75,10 @@ export function NotesTab() {
   const wait = () => { if (timer.current !== null) clearTimeout(timer.current); timer.current = null }
   useEffect(() => wait, [])
 
-  /** Another address of this tab. What is typed goes with it, so a filter chosen while the search waits does not lose it. */
+  /** Another address of this list. What is typed goes with it, so a filter chosen while the search waits does not lose it. */
   const go = (next: NotesAddress, text = typed.text) => {
     wait()
-    router.replace(libraryHref("notes", { q: text, condition: condition || undefined, treatment: treatment || undefined, kind, ...next }))
+    router.replace(notesHref({ q: text, condition: condition || undefined, treatment: treatment || undefined, kind, ...next }))
   }
   const search = (text: string) => {
     setTyped({ text, from: q })
@@ -88,7 +88,7 @@ export function NotesTab() {
   const clear = () => {
     wait()
     setTyped({ text: "", from: q })
-    router.replace(libraryHref("notes"))
+    router.replace(notesHref())
   }
   const create = async () => {
     setMaking(true)

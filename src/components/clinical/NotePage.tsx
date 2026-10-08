@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button"
 import { CLINICAL_COPY } from "@/lib/clinical/copy"
 import { evidenceHref } from "@/lib/clinical/evidence/href"
 import { readNoteRemote, saveNoteRemote, type NoteAnswer } from "@/lib/clinical/notes/client"
-import { libraryHref, noteChatHref, paperHref } from "@/lib/clinical/notes/href"
+import { noteChatHref, notesHref, paperHref } from "@/lib/clinical/notes/href"
 import { copyText, endOfText, insertLink } from "@/lib/clinical/notes/insert"
 import { conditionLink, noteLinks, paperLink, titleOf, treatmentLink, type NoteConflict, type NoteReference } from "@/lib/clinical/notes/links"
 import { CitePaper } from "./CitePaper"
@@ -284,7 +284,7 @@ export function NotePage({ id, untitled, onDelete, confirm }: NotePageProps) {
 
   if (loadError !== null) return <div className="p-7"><p role="alert" className="text-[14px] text-accent-ink">{loadError}</p></div>
   if (view === undefined) return <div className="p-7 text-[14px] text-muted-text">{P.loading}</div>
-  const back = <Link href={libraryHref("notes")} className={`text-[13px] text-muted-text hover:text-espresso ${FOCUS}`}>{CLINICAL_COPY.nav.backTo(N.library.tabs.notes)}</Link>
+  const back = <Link href={notesHref()} className={`text-[13px] text-muted-text hover:text-espresso ${FOCUS}`}>{CLINICAL_COPY.nav.backTo(CLINICAL_COPY.nav.notes)}</Link>
   if (view === null) return <div className="p-7">{back}<p className="mt-3 text-[14px] text-espresso">{N.notFound}</p></div>
 
   const { summary } = view

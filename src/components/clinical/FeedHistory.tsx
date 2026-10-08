@@ -10,9 +10,14 @@ import { deleteHistory, listHistory, restoreHistory, type HistoryEntry } from "@
 import { lookBackName } from "@/lib/clinical/modes"
 
 const H = CLINICAL_COPY.history
+const FRAME = "p-7"
 
-/** Every search that was run. One can be reopened as the list on Home, or deleted. */
-export function FeedHistory() {
+/**
+ * Every search that was run. One can be reopened as the list on Home, or deleted. `embedded` is the list as a tab of
+ * the Library: without its own heading and margins, which the Library has.
+ */
+export function FeedHistory({ embedded = false }: { embedded?: boolean }) {
+  const frame = embedded ? undefined : FRAME
   const router = useRouter()
   const [storage, setStorage] = useState<VaultStorage | null>(null)
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
@@ -55,13 +60,13 @@ export function FeedHistory() {
   }
 
   if (!entries) {
-    return <div className="p-7">{error ? <p role="alert" className="text-[13px] text-red-600">{CLINICAL_COPY.errorPrefix} {error}</p> : <p className="text-[14px] text-muted-text">{CLINICAL_COPY.loading}</p>}</div>
+    return <div className={frame}>{error ? <p role="alert" className="text-[13px] text-red-600">{CLINICAL_COPY.errorPrefix} {error}</p> : <p className="text-[14px] text-muted-text">{CLINICAL_COPY.loading}</p>}</div>
   }
 
   return (
-    <div className="p-7">
+    <div className={frame}>
       <div className="mb-5">
-        <h1 className="font-heading text-[26px] font-semibold tracking-heading text-espresso">{H.heading}</h1>
+        {!embedded && <h1 className="font-heading text-[26px] font-semibold tracking-heading text-espresso">{H.heading}</h1>}
         <p className="mt-1 text-[14px] text-secondary-dark">{H.intro}</p>
       </div>
       {error && <p role="alert" className="mb-4 text-[13px] text-red-600">{error}</p>}

@@ -51,7 +51,7 @@ function WikiIndexPageContent() {
         actions={
           // The Evidence view has no header buttons: its controls are in its own row of tabs.
           view === "all" ? (
-            // Read later and History are in the sidebar; a note is made from the Notes tab.
+            // Read later and History are tabs of the Library; a note is made on the Notes page.
             <Link
               href="/wiki/inbox"
               className="text-[13px] text-muted-text hover:text-espresso tracking-body px-3 py-1.5 rounded-pill border border-border-warm"

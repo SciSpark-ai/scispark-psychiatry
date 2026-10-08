@@ -34,8 +34,8 @@ async function backLink(id: string, type: string) {
 beforeEach(() => { document.body.innerHTML = ""; bundle.loadBundle.mockReset() })
 
 describe("the way back from a wiki page", () => {
-  it("leads to Evidence from a condition page", async () => {
-    expect(await backLink("wiki/conditions/schizophrenia", "condition")).toEqual(["← Evidence", "/wiki"])
+  it("leads to Wiki from a condition page", async () => {
+    expect(await backLink("wiki/conditions/schizophrenia", "condition")).toEqual(["← Wiki", "/wiki"])
   })
   it("leads to the Library from any other page", async () => {
     expect(await backLink("wiki/papers/a-paper", "paper")).toEqual(["← Library", "/wiki?view=all"])

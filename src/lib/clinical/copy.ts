@@ -9,7 +9,8 @@ export const CLINICAL_COPY = {
   edition: "Psychiatry",
   /** The rail, and the two views of the wiki page (amendments A1, A2, A4). */
   nav: {
-    whatsNew: "What's new", evidence: "Evidence", library: "Library", topics: "My topics", chat: "Chat", readLater: "Read later", history: "History",
+    /** `evidence` is the page of the conditions the reader follows (`/wiki`), `chat` the page of conversations (`/chat`). */
+    whatsNew: "What's new", evidence: "Wiki", chat: "Ask", notes: "Notes", outputs: "Outputs", library: "Library", topics: "My topics",
     /** The link at the top of a wiki page that leads back to the view it belongs to. */
     backTo: (view: string) => `← ${view}`,
   },
@@ -136,6 +137,11 @@ export const CLINICAL_COPY = {
       nav: { label: "On this page", summary: "AI summary", digest: "Digest", abstract: "Abstract", notes: "Your notes" },
     },
   },
+  /** The Outputs page (`/outputs`): the reader's projects. */
+  outputs: {
+    heading: "Outputs",
+    intro: "Bring papers and notes together for a talk, a summary or a review.",
+  },
   readLater: {
     heading: "Read later",
     intro: "Papers you put aside from your feed.",
@@ -166,7 +172,7 @@ export const CLINICAL_COPY = {
     gradingFailed: "AI grading did not complete. Check your AI connection in Settings, then try again.",
     gradingBatchesFailed: (count: number) => `${count} grading batch(es) failed; the papers in them are not in this list. Refresh to try them again.`,
     overCap: (count: number, cap: number) => `${count} more papers were found than the ${cap} that one search grades; they were not looked at. A shorter time range leaves fewer out.`,
-    findingsNotKept: "This search's papers could not be added to your Evidence pages. The list itself is complete.",
+    findingsNotKept: "This search's papers could not be added to your Wiki pages. The list itself is complete.",
     summariesFailed: "Some AI summaries could not be written; those cards show the authors' conclusions instead.",
     nothingMatched: "No papers matched your watch entries well enough. Your previous feed is still shown.",
   },
@@ -334,12 +340,12 @@ export const CLINICAL_COPY = {
     /** The Library view (`/wiki?view=all`): its row of tabs, and the Papers tab when the Library has no paper. */
     library: {
       tabsLabel: "Parts of your Library",
-      tabs: { papers: "Papers", notes: "Notes", projects: "Projects", chats: "Saved chats" },
+      tabs: { papers: "Papers", "read-later": "Read later", history: "History", chats: "Saved chats" },
       noPapers: "Your Library has no papers yet",
       noPapersHint: "Search for papers to start building it.",
       searchPapers: "Search for papers →",
     },
-    /** The Notes tab of the Library. */
+    /** The list of the Notes page (`/notes`). */
     list: {
       searchLabel: "Search your notes",
       searchPlaceholder: "Search notes",
