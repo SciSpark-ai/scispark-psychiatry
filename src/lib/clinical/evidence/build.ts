@@ -46,6 +46,13 @@ const isEfficacy = (kind: FindingKind | null): kind is EfficacyKind => kind === 
 /** The research group of the papers on a treatment that report no efficacy result. */
 const NO_EFFICACY = "no-efficacy"
 
+/**
+ * How many people a set of papers studied: the sum of the sample sizes its papers show (each the number a Study shows,
+ * so only one the paper prints as a count of people), null when none shows one; and how many of the papers show one.
+ * A count beside the count of papers, for the size of a mark: nothing is pooled, and the same people may be in two papers.
+ */
+export interface Participants { participants: number | null; sized: number }
+
 export interface Study {
   key: string; slug: string; headline: string; takeaway: string
   /** "Smith 2026" from the first author's family name and the year; the year alone, or null, when they are missing. */
@@ -69,6 +76,8 @@ export interface TreatmentEvidence {
   key: string; name: string
   /** Papers with an efficacy result on this treatment. */
   papers: number; efficacy: Efficacy; newPapers: number
+  /** The participants of its efficacy papers, and how many of those papers state them. */
+  participants: number | null; sized: number
   /** How many safety papers and how many papers without an efficacy result name this treatment (shown as marks, listed elsewhere). */
   safetyPapers: number; unreportedPapers: number
   /**
@@ -81,8 +90,11 @@ export interface TreatmentEvidence {
   /** The efficacy studies, newest first. */
   studies: Study[]
 }
-/** A class is here only when one of its treatments has an efficacy paper; its numbers count distinct efficacy papers. */
-export interface ClassEvidence { key: string; label: string | null; papers: number; efficacy: Efficacy; newPapers: number; treatments: TreatmentEvidence[] }
+/**
+ * A class is here only when one of its treatments has an efficacy paper; its numbers count distinct efficacy papers, so
+ * a paper under two of its treatments adds its participants once.
+ */
+export interface ClassEvidence extends Participants { key: string; label: string | null; papers: number; efficacy: Efficacy; newPapers: number; treatments: TreatmentEvidence[] }
 /** The safety papers of one treatment, newest first. `classKey` is the class the treatment has (or would have) under Treatments. */
 export interface SafetyGroup { key: string; name: string; classKey: string; papers: number; newPapers: number; studies: Study[] }
 /** `no-efficacy`: the papers that name a treatment and report no efficacy result, all treatments together. */
@@ -170,6 +182,12 @@ const shownSampleSize = (finding: Finding): number | null => {
   const size = finding.sampleSize
   if (size === null) return null
   return sampleSizeStated(size, [finding.paper.title, finding.paper.abstract ?? "", finding.headline, finding.takeaway].join(" . ")) ? size : null
+}
+
+/** The participants of `findings`, which must be distinct papers. */
+const participantsOf = (findings: Finding[]): Participants => {
+  const sizes = findings.map(shownSampleSize).filter((size): size is number => size !== null)
+  return { participants: sizes.length > 0 ? sizes.reduce((sum, size) => sum + size, 0) : null, sized: sizes.length }
 }
 
 const studyOf = (finding: Finding, now: Date, saved: ReadonlySet<string> | undefined, several: boolean): Study => ({
@@ -352,7 +370,7 @@ function organise(findings: Finding[], all: Finding[], taxonomy: Taxonomy, now: 
     held.set(slot.cls.key, entry)
     for (const finding of ordered) entry.papers.set(finding.key, finding)
     entry.treatments.push({
-      key: slot.key, name: slot.name, papers: ordered.length, efficacy: efficacyOf(ordered), newPapers: fresh(ordered), safetyPapers: harms.length, unreportedPapers: slot.unreported,
+      key: slot.key, name: slot.name, papers: ordered.length, efficacy: efficacyOf(ordered), newPapers: fresh(ordered), ...participantsOf(ordered), safetyPapers: harms.length, unreportedPapers: slot.unreported,
       comparatorPapers: compared.length, comparedIn: studies(compared),
       lines: { benefit: linesOf(ordered, "benefit"), "no-benefit": linesOf(ordered, "no-benefit"), mixed: linesOf(ordered, "mixed"), safety: linesOf(harms, "safety") },
       studies: studies(ordered),
@@ -360,7 +378,7 @@ function organise(findings: Finding[], all: Finding[], taxonomy: Taxonomy, now: 
   }
   const classes = [...held].map(([key, entry]): ClassEvidence => {
     const papers = [...entry.papers.values()]
-    return { key, label: labels.get(key) ?? null, papers: papers.length, efficacy: efficacyOf(papers), newPapers: fresh(papers), treatments: entry.treatments.sort((a, b) => b.papers - a.papers || a.name.localeCompare(b.name)) }
+    return { key, label: labels.get(key) ?? null, papers: papers.length, efficacy: efficacyOf(papers), newPapers: fresh(papers), ...participantsOf(papers), treatments: entry.treatments.sort((a, b) => b.papers - a.papers || a.name.localeCompare(b.name)) }
   }).sort(classOrder)
   safetyGroups.sort((a, b) => b.papers - a.papers || a.name.localeCompare(b.name))
   const research = [...researchFindings].map(([type, list]): ResearchGroup => {

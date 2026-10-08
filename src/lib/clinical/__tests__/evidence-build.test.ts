@@ -697,3 +697,52 @@ describe("a paper that compares two pack treatments", () => {
     expect(treatmentsOf(evidence).find((treatment) => treatment.key === "olanzapine")!.comparedIn.map((study) => study.key)).toEqual(["pmid:3"])
   })
 })
+
+// Owner request 2026-10-09: an evidence map needs how many people the papers of a bubble studied. Counted, never pooled.
+describe("the participants of a class and of a treatment", () => {
+  /** A finding whose own text prints its sample size as a count of people, so the size is shown. */
+  const sized = (n: number, size: number, over: Partial<Finding> & { date?: string } = {}) => finding(n, { sampleSize: size, takeaway: `The trial enrolled ${size} adults.`, ...over })
+  const three = { treatment: "clozapine, paliperidone, and olanzapine", treatmentCode: null }
+  it("are the sum over the efficacy papers that state a number, with how many of them do", () => {
+    const evidence = build([sized(1, 120), finding(2), sized(3, 80, { kind: "no-benefit" })])
+    expect(evidence.classes[0]).toMatchObject({ key: "medicine", papers: 3, participants: 200, sized: 2 })
+    expect(evidence.classes[0].treatments[0]).toMatchObject({ key: "ketamine", papers: 3, participants: 200, sized: 2 })
+    const one = build([sized(1, 120), finding(2)])
+    expect([one.classes[0].participants, one.classes[0].sized, one.classes[0].treatments[0].participants, one.classes[0].treatments[0].sized]).toEqual([120, 1, 120, 1])
+  })
+  it("are null, with none sized, when no paper states a number", () => {
+    const evidence = build([finding(1), finding(2)])
+    expect([evidence.classes[0].participants, evidence.classes[0].sized]).toEqual([null, 0])
+    expect([evidence.classes[0].treatments[0].participants, evidence.classes[0].treatments[0].sized]).toEqual([null, 0])
+  })
+  it("take only the number a study shows: one the paper does not print as a count of people is not summed", () => {
+    const evidence = build([sized(1, 120), finding(2, { sampleSize: 2019 }), finding(3, { sampleSize: 52, takeaway: "We pooled 52 studies." })])
+    expect(evidence.classes[0].treatments[0].studies.map((study) => study.sampleSize).sort()).toEqual([120, null, null])
+    expect(evidence.classes[0]).toMatchObject({ participants: 120, sized: 1 })
+    expect(evidence.classes[0].treatments[0]).toMatchObject({ participants: 120, sized: 1 })
+  })
+  it("count a paper of three treatments of one class once in the class and once in each treatment", () => {
+    const evidence = build([sized(1, 300, three), sized(2, 50, { treatment: "Clozapine", treatmentCode: "clozapine" }), finding(3, { treatment: "olanzapine", treatmentCode: "olanzapine" })])
+    expect(evidence.classes[0]).toMatchObject({ key: "antipsychotic", papers: 3, participants: 350, sized: 2 })
+    expect(evidence.classes[0].treatments.map((treatment) => [treatment.key, treatment.papers, treatment.participants, treatment.sized])).toEqual([
+      ["clozapine", 2, 350, 2], ["olanzapine", 2, 300, 1], ["paliperidone", 1, 300, 1],
+    ])
+  })
+  it("count a paper under two classes in each", () => {
+    const evidence = build([sized(1, 90, { treatment: "methylphenidate and risperidone", treatmentCode: null })])
+    expect(evidence.classes.map((entry) => [entry.key, entry.participants, entry.sized])).toEqual([["antipsychotic", 90, 1], ["medicine", 90, 1]])
+  })
+  it("leave out safety papers, papers with no efficacy result and papers the treatment was only the comparison in", () => {
+    const evidence = build([
+      sized(1, 100, { treatment: "Olanzapine", treatmentCode: "olanzapine" }), sized(2, 40, { treatment: "Olanzapine", treatmentCode: "olanzapine", kind: "safety" }),
+      sized(3, 30, { treatment: "Olanzapine", treatmentCode: "olanzapine", kind: "other" }), sized(4, 500, { treatment: "clozapine", treatmentCode: "clozapine", comparator: "olanzapine" }),
+    ])
+    const olanzapine = evidence.classes[0].treatments.find((treatment) => treatment.key === "olanzapine")!
+    expect([olanzapine.papers, olanzapine.participants, olanzapine.sized, olanzapine.comparatorPapers]).toEqual([1, 100, 1, 1])
+    expect(evidence.classes[0]).toMatchObject({ papers: 2, participants: 600, sized: 2 })
+  })
+  it("follow the scope and the period shown", () => {
+    const evidence = build([sized(1, 100), sized(2, 70, { date: "2025-01-10" })], { now: NOW, period: "3m" })
+    expect(evidence.classes[0]).toMatchObject({ participants: 100, sized: 1 })
+  })
+})
