@@ -16,7 +16,21 @@ Forked at upstream commit `435afcd`. Every change made to an upstream file is re
 
 ## Screenshots
 
-<!-- TODO (owner): add screenshots of this edition. The upstream screenshots in docs/assets/ show the upstream app, not this one. -->
+**[Interactive preview](docs/preview/)**: a static, read-only copy of three pages (What's new, Wiki, Notes) filled
+with sample papers, with a short guided tour. No backend and no model. Open `docs/preview/index.html` in a browser, or
+serve the `docs/` folder with GitHub Pages.
+
+<!-- TODO (owner): add the GitHub Pages address of the preview here once Pages is turned on for the docs/ folder. -->
+
+The pictures below are of that preview, not of a running app. Sample data. For literature awareness only — not
+medical advice. AI summaries can be wrong.
+
+| What's new | Wiki | Notes |
+|---|---|---|
+| ![What's new: a feed of paper cards with topic, study design, journal, AI headline and summary](docs/preview/screens/whats-new.png) | ![Wiki: the treatments of a class on the map, and the study table of one treatment](docs/preview/screens/wiki.png) | ![Notes: a note in Preview with its cited papers and linked treatments](docs/preview/screens/notes.png) |
+
+The sample is rebuilt with `node scripts/build-preview-data.mjs <vault folder>`; it holds bibliographic facts and the
+app's own AI text, and no abstracts.
 
 ## What it does
 
