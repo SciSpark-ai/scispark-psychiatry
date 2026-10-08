@@ -23,13 +23,15 @@ import { LoadingState } from "@/components/ui/LoadingState"
 import { LlmErrorMessage } from "@/components/papers/LlmErrorMessage"
 import { prepareReview } from "@/lib/review/client"
 import { ReviewReport } from "./ReviewReport"
+// Clinical edition: a conversation can start from a note (`noteId`, sent once) and says which note it is about.
+import { CLINICAL_COPY } from "@/lib/clinical/copy"
 
 const SOURCE_LABELS: Record<SourceId, string> = { arxiv: "arXiv", openalex: "OpenAlex", s2: "Semantic Scholar", pubmed: "PubMed" }
 // Per-tab navigation only; ProfileGate clears this with drafts on profile changes.
 const ACTIVE_CHAT_KEY = "scispark:active-chat"
 
-export function ChatWorkspace({ sessionId, fresh = false, resume = false, initialMode = "chat" }: {
-  sessionId?: string; fresh?: boolean; resume?: boolean; initialMode?: "chat" | "search"
+export function ChatWorkspace({ sessionId, fresh = false, resume = false, initialMode = "chat", noteId }: {
+  sessionId?: string; fresh?: boolean; resume?: boolean; initialMode?: "chat" | "search"; noteId?: string
 }) {
   const router = useRouter()
   const openSettings = useUIStore((s) => s.openSettingsModal)
@@ -206,6 +208,7 @@ export function ChatWorkspace({ sessionId, fresh = false, resume = false, initia
       const result = await askChatRemote({ sessionId: id, question: q, readSourcesOnly, mode,
         ...(mode === "search" ? { sources } : {}), operationId: crypto.randomUUID(),
         ...(session?.projectId ? { projectId: session.projectId } : {}),
+        ...(noteId && !sessionId ? { noteId } : {}),
       }, (s) => { if (mounted.current) setStage(s) }, undefined, (text) => { if (mounted.current) setDraft(text) })
       try { sessionStorage.removeItem(draftKey) } catch {}
       if (!mounted.current) return
@@ -282,7 +285,8 @@ export function ChatWorkspace({ sessionId, fresh = false, resume = false, initia
               {session.paperContext.source && <> · {session.paperContext.source.access === "full-text" ? session.paperContext.source.truncated ? "Full-text excerpt" : "Full text" : "Abstract only"}</>}
             </>}
           </p>
-        )}</div>
+        )}
+        {!reportId && session?.noteContext && <p className="mt-1 text-sm text-muted-text">{CLINICAL_COPY.notes.chatAbout(session.noteContext.title)}</p>}</div>
       <nav className="flex shrink-0 flex-wrap gap-3 text-sm text-accent-ink"><Link href="/history?tab=conversations" className="inline-flex items-center gap-2"><Clock size={16} aria-hidden="true" />History</Link><Link href="/chat?new=1">New chat</Link></nav>
     </header>
     <div ref={scroll} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1" aria-label="Conversation">

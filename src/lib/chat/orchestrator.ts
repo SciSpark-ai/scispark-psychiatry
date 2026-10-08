@@ -35,6 +35,10 @@ import { loadSettings } from "../llm/settings"
 import { neutralizeFenceMarkers } from "../skills/ingest-analysis"
 import { ChatPaperSlugSchema, ChatSelectionSchema, type ChatSelection, SearchResultSchema } from "./blocks"
 import { capturePaperContext, renderPaperContext } from "./paper-context"
+// Clinical edition: a conversation can be about one of the reader's notes (every `noteId` / `noteContext` line below).
+import { captureNoteContextForChat, isNoteId, renderNoteContext } from "./note-context"
+import { CLINICAL_COPY } from "../clinical/copy"
+import { findPaperPage } from "../papers/page-state"
 import { loadPaperText, type PaperTextDeps } from "../papers/full-text"
 import type { PaperTextInfo } from "../papers/text-contract"
 import { buildUserContext } from "../usermodel/context"
@@ -59,6 +63,8 @@ export interface AskChatInput {
   projectId?: string
   /** Current paper page. The server resolves and retains its evidence. */
   paperSlug?: string
+  /** Clinical edition: the note a new conversation is about. First message only; the server captures the note. */
+  noteId?: string
   mode?: "chat" | "search"
   sources?: SourceId[]
   operationId?: string
@@ -92,7 +98,7 @@ export function parseAskChatInput(value: unknown): AskChatInput {
     throw new Error("chat input must be an object")
   }
   const record = value as Record<string, unknown>
-  const allowed = new Set(["sessionId", "question", "readSourcesOnly", "projectId", "paperSlug", "mode", "sources", "operationId", "selection"])
+  const allowed = new Set(["sessionId", "question", "readSourcesOnly", "projectId", "paperSlug", "noteId", "mode", "sources", "operationId", "selection"])
   if (Object.keys(record).some((key) => !allowed.has(key))) {
     throw new Error("chat input contains unsupported fields")
   }
@@ -116,6 +122,8 @@ export function parseAskChatInput(value: unknown): AskChatInput {
   }
   if (record.paperSlug !== undefined && !ChatPaperSlugSchema.safeParse(record.paperSlug).success) throw new Error("Invalid paper slug")
   if (record.paperSlug !== undefined && record.projectId !== undefined) throw new Error("Choose a paper or project scope, not both")
+  if (record.noteId !== undefined && (typeof record.noteId !== "string" || !isNoteId(record.noteId))) throw new Error(CLINICAL_COPY.notes.badRequest)
+  if (record.noteId !== undefined && (record.paperSlug !== undefined || record.projectId !== undefined)) throw new Error(CLINICAL_COPY.notes.chatOneSubject)
   if (
     record.projectId !== undefined &&
     (typeof record.projectId !== "string" || record.projectId.length === 0)
@@ -131,6 +139,7 @@ export function parseAskChatInput(value: unknown): AskChatInput {
     readSourcesOnly: record.readSourcesOnly,
     ...(typeof record.projectId === "string" ? { projectId: record.projectId } : {}),
     ...(typeof record.paperSlug === "string" ? { paperSlug: record.paperSlug } : {}),
+    ...(typeof record.noteId === "string" ? { noteId: record.noteId } : {}),
     ...(record.mode ? { mode: record.mode } : {}),
     ...(record.sources ? { sources: record.sources as SourceId[] } : {}),
     ...(record.operationId ? { operationId: record.operationId as string } : {}),
@@ -366,6 +375,7 @@ async function loadOrCreateSession(
     // than failing the turn we start a session AT THAT id — the caller is
     // holding a link to it, and the alternative is losing the question.
     if (existing != null) {
+      if (input.noteId !== undefined) throw new ChatScopeError(CLINICAL_COPY.notes.chatNoteFirst)
       if (input.paperSlug !== undefined && input.paperSlug !== existing.paperContext?.slug) {
         throw new ChatScopeError("this conversation's paper scope cannot be changed")
       }
@@ -380,6 +390,7 @@ async function loadOrCreateSession(
       ? undefined
       : await requireProject(storage, input.projectId)
     const paperContext = input.paperSlug ? await capturePaperContext(storage, input.paperSlug, now()) : undefined
+    const noteContext = input.noteId ? await captureNoteContextForChat(storage, input.noteId, now()) : undefined
     const timestamp = now().toISOString()
     return {
       session: {
@@ -390,6 +401,7 @@ async function loadOrCreateSession(
         messages: [],
         ...(project ? { projectId: project.id, projectTitle: project.title } : {}),
         ...(paperContext ? { paperContext } : {}),
+        ...(noteContext ? { noteContext } : {}),
       },
       project,
     }
@@ -399,6 +411,7 @@ async function loadOrCreateSession(
     ? undefined
     : await requireProject(storage, input.projectId)
   const paperContext = input.paperSlug ? await capturePaperContext(storage, input.paperSlug, now()) : undefined
+  const noteContext = input.noteId ? await captureNoteContextForChat(storage, input.noteId, now()) : undefined
   const timestamp = now().toISOString()
   return {
     session: {
@@ -409,6 +422,7 @@ async function loadOrCreateSession(
       messages: [],
       ...(project ? { projectId: project.id, projectTitle: project.title } : {}),
       ...(paperContext ? { paperContext } : {}),
+      ...(noteContext ? { noteContext } : {}),
     },
     project,
   }
@@ -480,6 +494,30 @@ async function answerQuestion(
     if (run.status !== "ok" || !run.output) return { role: "assistant", content: "I couldn't answer from this paper just now. Your question is saved; try again.", error: run.error ?? "Paper answer unavailable" }
     return { role: "assistant", content: run.output.answer, readSourcesOnly: input.readSourcesOnly,
       blocks: [{ type: "paper-citations", papers: run.output.citedPageIds.includes("current-paper") ? [session.paperContext.paper] : [] }] }
+  }
+
+  // Clinical edition: a conversation about a note answers from the note and the papers it cites, as captured when
+  // the conversation started, not from a selection of the knowledge base. Same skill and tier as below.
+  if (session?.noteContext) {
+    const noteContext = session.noteContext
+    opts.onProgress?.("answering")
+    const run = await runSkill({
+      skill: chatAnswerSkill, storage, settings: opts.settings,
+      providerOverride: opts.providerOverride, now: opts.now, onText: opts.onText,
+      input: { question: input.question, context: renderNoteContext(noteContext, input.readSourcesOnly), history,
+        readSourcesOnly: input.readSourcesOnly, companionName: await resolveCompanionName(storage) },
+    })
+    if (run.status !== "ok" || !run.output) return { role: "assistant", content: CLINICAL_COPY.notes.chatAnswerFailed, citedPageIds: [], readSourcesOnly: input.readSourcesOnly, error: run.error ?? `chat-answer run finished with status "${run.status}"` }
+    // Only a paper that was in the supplied context, and only while it still has a page to link to.
+    const cited = [...new Set(run.output.citedPageIds.map((id) => id.trim()))].filter((id) => noteContext.papers.some((paper) => paper.slug === id))
+    let citedPageIds: string[] = []
+    if (cited.length > 0) {
+      try {
+        const bundle = await loadBundle(storage)
+        citedPageIds = cited.flatMap((slug) => findPaperPage(bundle, slug)?.id ?? [])
+      } catch { /* The answer stands without its links. */ }
+    }
+    return { role: "assistant", content: run.output.answer, citedPageIds, readSourcesOnly: input.readSourcesOnly }
   }
 
   // A vault-wide read failure is degraded like any other layer rather than

@@ -380,3 +380,62 @@ describe("ChatSessionPage (/chat/[id])", () => {
     cleanup()
   })
 })
+
+// Clinical edition: a conversation that starts from a note (`/chat?new=1&note=<id>`).
+describe("a conversation about a note", () => {
+  async function send(container: HTMLElement, text: string) {
+    const textarea = container.querySelector("textarea")! as HTMLTextAreaElement
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!
+      setter.call(textarea, text)
+      textarea.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await act(async () => {
+      findByText(container, "button", "Send")!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))
+      await new Promise((r) => setTimeout(r, 0))
+    })
+  }
+  const noteContext = { id: "esketamine-in-trd", title: "Esketamine in TRD", body: "Works fast.\n", papers: [] }
+
+  it("sends the note with the first message of the new conversation", async () => {
+    searchParamsValue = new URLSearchParams("new=1&note=esketamine-in-trd")
+    askChatRemoteMock.mockResolvedValue({ sessionId: "chat_42", message: { role: "assistant", content: "It says…", citedPageIds: [] } })
+    const { container, cleanup } = await renderPage(<ChatEntryPage />)
+    await send(container, "What does my note conclude?")
+    expect(askChatRemoteMock).toHaveBeenCalledTimes(1)
+    expect(askChatRemoteMock.mock.calls[0][0]).toMatchObject({ sessionId: expect.stringMatching(/^chat_/), question: "What does my note conclude?", noteId: "esketamine-in-trd" })
+    expect(routerPushMock).toHaveBeenCalledWith("/chat/chat_42")
+    cleanup()
+  })
+
+  it("sends no note from a plain new chat", async () => {
+    askChatRemoteMock.mockResolvedValue({ sessionId: "chat_42", message: { role: "assistant", content: "…", citedPageIds: [] } })
+    const { container, cleanup } = await renderPage(<ChatEntryPage />)
+    await send(container, "What is a TRF?")
+    expect(askChatRemoteMock.mock.calls[0][0]).not.toHaveProperty("noteId")
+    cleanup()
+  })
+
+  it("says which note the conversation is about, and sends the note no second time", async () => {
+    paramsValue = { id: "chat_42" }
+    // Even with the parameter still in the address, a conversation that exists does not send it again.
+    searchParamsValue = new URLSearchParams("new=1&note=esketamine-in-trd")
+    loadSessionMock.mockResolvedValue(session({ id: "chat_42", noteContext }))
+    askChatRemoteMock.mockResolvedValue({ sessionId: "chat_42", message: { role: "assistant", content: "…", citedPageIds: [] } })
+    const { container, cleanup } = await renderPage(<ChatSessionPage />)
+    expect(container.textContent).toContain("About your note: Esketamine in TRD")
+    await send(container, "And the dose?")
+    expect(askChatRemoteMock).toHaveBeenCalledTimes(1)
+    expect(askChatRemoteMock.mock.calls[0][0]).toMatchObject({ sessionId: "chat_42", question: "And the dose?" })
+    expect(askChatRemoteMock.mock.calls[0][0]).not.toHaveProperty("noteId")
+    cleanup()
+  })
+
+  it("shows no such line for a conversation that is not about a note", async () => {
+    paramsValue = { id: "chat_1" }
+    loadSessionMock.mockResolvedValue(session())
+    const { container, cleanup } = await renderPage(<ChatSessionPage />)
+    expect(container.textContent).not.toContain("About your note")
+    cleanup()
+  })
+})

@@ -1,5 +1,7 @@
 import type { VaultStorage } from "../vault/storage"
 import { ChatBlockSchema, ChatPaperContextSchema, ChatSelectionSchema, type ChatSelection, type ChatBlock, type ChatPaperContext } from "./blocks"
+// Clinical edition: a conversation can be about one of the reader's notes.
+import { NoteChatContextSchema, type NoteChatContext } from "../clinical/notes/chat-context"
 
 export const CHATS_DIR = ".scispark/chats"
 
@@ -45,6 +47,8 @@ export interface ChatSession {
   projectTitle?: string
   /** Paper evidence at conversation creation; never supplied by the client. */
   paperContext?: ChatPaperContext
+  /** Clinical edition: the note and its cited papers at conversation creation; never supplied by the client. */
+  noteContext?: NoteChatContext
 }
 
 const TITLE_MAX_LENGTH = 60
@@ -161,7 +165,9 @@ function isChatSessionShape(value: unknown, expectedId: string): value is ChatSe
     Array.isArray(v.messages) &&
     v.messages.every(isChatMessageShape) &&
     projectFieldsValid &&
-    (v.paperContext === undefined || (v.projectId === undefined && ChatPaperContextSchema.safeParse(v.paperContext).success))
+    (v.paperContext === undefined || (v.projectId === undefined && ChatPaperContextSchema.safeParse(v.paperContext).success)) &&
+    // Clinical edition: optional, so a session written before it existed still loads.
+    (v.noteContext === undefined || (v.projectId === undefined && v.paperContext === undefined && NoteChatContextSchema.safeParse(v.noteContext).success))
   )
 }
 

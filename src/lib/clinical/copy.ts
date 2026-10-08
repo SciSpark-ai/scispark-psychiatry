@@ -319,6 +319,11 @@ export const CLINICAL_COPY = {
     untitled: "Untitled note",
     badRequest: "The request was not understood.",
     notFound: "That note is not in your Library.",
+    /** The line under the title of a conversation that started from a note. */
+    chatAbout: (title: string) => `About your note: ${title}`,
+    chatOneSubject: "A conversation about a note cannot also be about a paper or a project.",
+    chatNoteFirst: "A note can only be attached when a conversation starts.",
+    chatAnswerFailed: "I couldn't answer from this note just now. Your question is saved; try again.",
     conflict: "This note was changed somewhere else since you opened it.",
     unknownPaper: "That paper could not be found, so it cannot be cited.",
     paperNotSaved: "That paper could not be saved to your Library, so the note was not made.",
