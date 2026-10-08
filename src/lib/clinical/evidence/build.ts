@@ -193,18 +193,12 @@ function classifier(taxonomy: Taxonomy): { classify: (finding: Finding) => Treat
       : null
     return { key: node.id, class: cls }
   }
-  // The same texts come again for every period and every condition of one build.
-  const named = new Map<string, TaxonomyNode[]>()
-  const namedIn = (text: string) => {
-    let nodes = named.get(text)
-    if (!nodes) named.set(text, (nodes = findTreatments(taxonomy, text)))
-    return nodes
-  }
   const classify = (finding: Finding): TreatmentRef[] => {
     // A paper filed under a type of research, with no class and no code of a treatment, is research: the treatment an earlier answer named is not what it is about.
     if (finding.researchType !== null && finding.treatmentClass === null && !finding.treatmentCode) return []
     const name = finding.treatment?.trim() || null
-    const found = name ? namedIn(name) : []
+    // The same texts come again for every period and every condition: findTreatments remembers them with the taxonomy.
+    const found = name ? findTreatments(taxonomy, name) : []
     if (found.length > 0) return found.map(ofNode)
     const node = treatmentNode(finding.treatmentCode)
     if (node) return [ofNode(node)]

@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { loadPackFromDir, loadPsychiatryPack } from "../pack/load"
 import { TaxonomySchema } from "../pack/schema"
-import { findNode, findTreatments, withDescendants } from "../pack/taxonomy"
+import { findNode, findTreatments, treatmentMatcherStats, withDescendants } from "../pack/taxonomy"
 
 describe("psychiatry pack", () => {
   it("loads and validates the shipped files", async () => {
@@ -89,6 +89,35 @@ describe("the treatments a text names", () => {
     for (const label of ["rTMS", "ECT", "tDCS", "VNS", "DBS", "CBT", "IPT", "ACT", "DBT", "EMDR", "esketamine", "Spravato", "ect", "physical activity"]) {
       expect(findTreatments(taxonomy, label).map((node) => node.id), label).toContain(findNode(taxonomy, label, "treatment")?.id)
     }
+  })
+  it("allows the plural s on the last word of a term of several words", async () => {
+    expect(await ids("cognitive remediations")).toEqual(["cognitive-remediation"])
+    expect(await ids("cognitives remediation")).toEqual([])
+  })
+  it("reads a term with characters a pattern would read as its own as plain text", async () => {
+    expect(await ids("3,4-methylenedioxymethamphetamine with therapy")).toEqual(["mdma-assisted-therapy"])
+    const odd = TaxonomySchema.parse({ version: "t", nodes: [
+      { id: "plus", type: "treatment", name: "Drug A+B (1.5 mg)", modality: "drug" }, { id: "dot", type: "treatment", name: "a.c", synonyms: ["x|y", "what?", "[z]*"], modality: "drug" },
+    ] })
+    const found = (text: string) => findTreatments(odd, text).map((node) => node.id)
+    expect(found("gave Drug A+B (1.5 mg) daily")).toEqual(["plus"])
+    expect(found("gave Drug AAB (1x5 mg) daily")).toEqual([])
+    expect(found("abc, x, y, wha and z")).toEqual([])
+    expect(found("x|y or [z]*")).toEqual(["dot"])
+  })
+  it("compiles the matchers of a taxonomy once, and finds the same again for the same text", async () => {
+    const { taxonomy } = await loadPsychiatryPack()
+    const first = findTreatments(taxonomy, "lithium and quetiapine")
+    const compiled = treatmentMatcherStats.compiled
+    const searched = treatmentMatcherStats.searched
+    expect(findTreatments(taxonomy, "lithium and quetiapine")).toEqual(first)
+    expect(treatmentMatcherStats.searched).toBe(searched)
+    expect(findTreatments(taxonomy, "a text not seen before, with clozapine").map((node) => node.id)).toEqual(["clozapine"])
+    expect(treatmentMatcherStats.searched).toBe(searched + 1)
+    expect(treatmentMatcherStats.compiled).toBe(compiled)
+    // What a caller does to the list it was given does not reach the next caller.
+    findTreatments(taxonomy, "lithium and quetiapine").pop()
+    expect(findTreatments(taxonomy, "lithium and quetiapine").map((node) => node.id)).toEqual(["lithium", "quetiapine"])
   })
   it("finds no condition or population", async () => {
     expect(await ids("depression in adults")).toEqual([])
