@@ -66,3 +66,10 @@ next-env.d.ts
 
 # understand-anything code map (generated, 2 MB; keep local)
 .understand-anything/
+
+# SciSpark Psychiatry: working files of the build, and anything that could be a reader's vault
+/.superpowers/
+/vault/
+/SciSpark/
+.scispark/
+.scispark-profiles/
