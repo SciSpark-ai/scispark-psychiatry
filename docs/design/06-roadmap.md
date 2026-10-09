@@ -1,7 +1,6 @@
 # SciSpark execution roadmap
 
-This file is the short current roadmap. Detailed decisions live in the linked
-specifications and implementation plans under `docs/superpowers/`.
+This file is the short current roadmap. Detailed decisions live in the other documents in this folder.
 
 ## Foundation milestones
 

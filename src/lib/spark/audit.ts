@@ -4,7 +4,7 @@ import { neutralizeFenceMarkers } from "../skills/ingest-analysis"
 
 // ---------------------------------------------------------------------------
 // Deep Spark phase 4: the 5-check corpus-anchored audit (adapted from
-// ResearchStudio's gauntlet per docs/superpowers/plans/2026-07-13-m9-spark.md
+// ResearchStudio's gauntlet, M9
 // Task 6). Pure LLM-calling unit (blessed pattern, docs/design/04-agent-harness.md)
 // — the orchestrator (`runDeepSpark`, Task 7) owns the accept/revise/abandon
 // routing and the single internal retry on abandon. Carries the

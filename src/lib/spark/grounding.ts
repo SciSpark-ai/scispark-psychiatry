@@ -11,8 +11,7 @@ import { neutralizeFenceMarkers } from "../skills/ingest-analysis"
 // Deep Spark grounding assembly: warm-start from the vault (design delta vs.
 // ResearchStudio's cold Phase 0) + fresh literature retrieval via the M3
 // proxy. Pure orchestration given an injected `searchFn` — no LLM call, so
-// it's fully unit-testable with a fake searchFn + MemoryVaultStorage. See
-// docs/superpowers/plans/2026-07-13-m9-spark.md Task 3.
+// it's fully unit-testable with a fake searchFn + MemoryVaultStorage. M9 Task 3.
 // ---------------------------------------------------------------------------
 
 export interface GroundingPaper {

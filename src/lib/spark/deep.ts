@@ -21,7 +21,7 @@ import { loadPatternCards, patternIndex } from "./pattern-cards"
 // pipeline — assembleGrounding -> bottleneckSkill -> ideationSkill ->
 // runScoopCheck -> auditSkill -> (assemble + write). Pure orchestration, no
 // LLM calls of its own (blessed pattern, docs/design/04-agent-harness.md);
-// see docs/superpowers/plans/2026-07-13-m9-spark.md Task 7.
+// M9 Task 7.
 // ---------------------------------------------------------------------------
 
 export type DeepSparkOutcome =

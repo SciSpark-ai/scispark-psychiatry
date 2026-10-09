@@ -16,7 +16,7 @@ import { runDeterministicChecks, findDuplicateAuthors } from "./checks"
 import type { LintFinding, LintFixOutcome } from "./types"
 
 // ---------------------------------------------------------------------------
-// Lint orchestrator (M12 Task 8, per docs/superpowers/sdd/m12-task-8-brief.md):
+// Lint orchestrator (M12 Task 8):
 // turns LintFinding[] (Task 6 deterministic checks, Task 7 LLM skills) into
 // review items in the shared inbox (.scispark/review/), and applies a
 // finding's mechanical `fix` as a normal, undoable changeset.

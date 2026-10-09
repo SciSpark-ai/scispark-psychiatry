@@ -133,10 +133,7 @@ rules and is announced at most once per run.
 scientific review software. Automated passage/claim checks do not prove truth,
 complete coverage or publication readiness. Full live pipeline and multi-question
 quality acceptance remain separate from passing fixture tests and a production
-build. See the [implementation plan](../docs/superpowers/plans/2026-09-07-personalized-literature-review.md),
-[original evaluation](../docs/testing/2026-09-07-literature-review-foundation.md), and
-[integration verification](../docs/testing/2026-09-07-deep-review-integration.md).
-
+build.
 ## Sparky's proactive messages
 
 Sparky stays quiet unless a concrete event has a useful next action: a newly
@@ -680,7 +677,6 @@ src/lib/recommendation/ Reusable feed ranking, diversity and feedback learning
 src/lib/spark/    Quick and Deep research-idea workflows
 src/lib/trending/ Deterministic trend metrics and qualitative surveys
 docs/design/      Product and architecture decisions
-docs/superpowers/ Milestone specifications and implementation plans
 ```
 
 ## Engineering rules

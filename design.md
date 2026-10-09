@@ -223,8 +223,7 @@ The transparent wordmark is integrated through the shared BrandLogo component in
 the real sidebar and mobile header. Existing layouts, font families and sizes,
 warm surfaces, action orange and shape tokens are preserved. Readable foreground
 roles now distinguish orange fills, orange text and text on orange; light muted
-text is strengthened. See [the real-product audit](docs/testing/2026-09-09-brand-integration.md)
-for evidence, source provenance, verification and remaining accessibility scope.
+text is strengthened.
 
 The browser favicon is implemented in `src/app/icon.svg`: a small-size optical
 vector rendition of the supplied four-point symbol: black on a white
@@ -309,4 +308,4 @@ main emphasized surface. A 224px section-navigation/context rail appears only
 when the workspace has enough room; smaller screens use a compact contents
 disclosure and put saved-paper context after the article. The original abstract
 is independently expandable, and opens by default before a digest or synthesis
-exists. See `docs/testing/2026-10-04-paper-digest-layout.md` for verification.
+exists.

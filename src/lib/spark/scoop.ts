@@ -11,8 +11,8 @@ import { neutralizeFenceMarkers } from "../skills/ingest-analysis"
 import type { SearchFn } from "./grounding"
 
 // ---------------------------------------------------------------------------
-// Deep Spark phase 3: the two-channel scoop-check (adapted from ResearchStudio
-// per docs/superpowers/plans/2026-07-13-m9-spark.md Task 5). Two pure
+// Deep Spark phase 3: the two-channel scoop-check (adapted from ResearchStudio,
+// M9 Task 5). Two pure
 // LLM-calling skills (blessed pattern, docs/design/04-agent-harness.md) —
 // `scoopTermsSkill` extracts signature-vs-alias search terms, `scoopVerdictSkill`
 // judges the collision hits. `runScoopCheck` is the orchestrator: it owns

@@ -7,7 +7,7 @@ import type { AuditResult } from "./audit"
 // ---------------------------------------------------------------------------
 // assembleIdeaBody: composes the idea-page markdown body from every Deep
 // Spark phase's output. PURE — no LLM call, no storage (per
-// docs/superpowers/plans/2026-07-13-m9-spark.md Task 6 and the Global
+// the M9 design, Task 6, and the Global
 // Constraints "blessed storage pattern" — `runDeepSpark`, Task 7, is the
 // orchestrator that calls this and then writes the result via
 // `buildIdeaPage`/`applyChangeset`).

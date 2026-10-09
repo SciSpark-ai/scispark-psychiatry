@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Task 12 gate (see .superpowers/sdd/task-12-brief.md Step 2): the feed card
+// Task 12 gate: the feed card
 // becomes a scannable Apple-News-style card — headline + AI TL;DR + small tag
 // chips, no bare numeric score, no why-this/you/now prose (that now lives on
 // /paper/[key], see PaperSavedState.test.tsx) — and the WHOLE card links

@@ -10,8 +10,7 @@ export function processIsAlive(pid: number): boolean {
 }
 
 /**
- * VaultStorage over a real directory on disk (M11 local-runtime pivot,
- * docs/superpowers/specs/2026-07-14-m11-local-runtime-design.md). The vault is
+ * VaultStorage over a real directory on disk (M11 local-runtime pivot). The vault is
  * plain files the user owns; this class is the server-side storage the whole
  * runtime uses. Every path is resolved and must stay under the root.
  */

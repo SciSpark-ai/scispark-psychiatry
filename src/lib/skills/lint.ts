@@ -3,7 +3,7 @@ import { defineSkill, type SkillDefinition } from "./types"
 import { neutralizeFenceMarkers } from "./ingest-analysis"
 
 // ---------------------------------------------------------------------------
-// Lint LLM skills (M12 Task 7, per docs/superpowers/sdd/m12-task-7-brief.md):
+// Lint LLM skills (M12 Task 7):
 // two pure, persona-free skills that back the "contradiction"/"stale-claim"
 // LintKinds (src/lib/lint/types.ts). Deterministic checks (Task 6,
 // src/lib/lint/checks.ts) can't detect semantic conflicts between pages —

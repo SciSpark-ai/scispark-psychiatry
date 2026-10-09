@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Task 10 gate (see .superpowers/sdd/task-10-brief.md Step 2): given a
+// Task 10 gate: given a
 // `status: enriched` paper page carrying tldr/tags/related frontmatter,
 // PaperMeta + RelatedInWiki together render the TL;DR, the tag chips, and
 // links (via wikiHref) to the related pages, resolved to their real titles.

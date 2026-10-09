@@ -10,8 +10,7 @@ import { neutralizeFenceMarkers } from "../skills/ingest-analysis"
 // out-of-scope, ill-posed, or has no genuine bottleneck, the skill MUST
 // return routing:"do_not_generate" with an honest refusalReason rather than
 // inventing a bottleneck to be helpful — see
-// docs/superpowers/plans/2026-07-13-m9-spark.md Task 4 and Global Constraints
-// item (4).
+// the M9 design, Task 4 and Global Constraints item (4).
 // ---------------------------------------------------------------------------
 
 export const BottleneckSchema = z.object({

@@ -1,6 +1,6 @@
 /** Paid, opt-in integration probe. Never part of routine CI. One shared $2 ledger
  * across ALL executions, questions, controls and candidates. No active-vault writes.
- * See docs/testing/2026-09-07-literature-review-foundation.md. */
+ */
 import { expect, it } from "vitest"
 import { open, readFile, realpath, unlink } from "node:fs/promises"
 import { createHash } from "node:crypto"

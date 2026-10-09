@@ -1,6 +1,6 @@
 # Agentic AI Harness Design (Layer 4)
 
-*Status: approved 2026-07-11; runtime model **superseded 2026-07-14 (M11, "local-runtime pivot")** — skills now execute server-side, in `/api/skills/*` route handlers via `getServerVault()`/`NodeFsVaultStorage`, not in the browser. M12 (2026-07-14) adds the **Lint** skill (deterministic checks + a two-stage `fast`-screen/`strong`-judge LLM pass) and makes the usage-metering ledger visible through a spend surface. See `docs/superpowers/specs/2026-07-14-m11-local-runtime-design.md` and `docs/superpowers/specs/2026-07-14-m12-lint-spend-hardening-design.md` for the full pivots, and [02-system](02-system.md)/[03-backend](03-backend.md) for the server surface this doc assumes. Organizing principle: **one harness, N skills** — every agent behavior in the product is a versioned skill document executed by the same runtime (now server-side). (Pattern lineage: research-os `workflows/*.md` playbooks, llm_wiki skills, Claude Code skills.)*
+*Status: approved 2026-07-11; runtime model **superseded 2026-07-14 (M11, "local-runtime pivot")** — skills now execute server-side, in `/api/skills/*` route handlers via `getServerVault()`/`NodeFsVaultStorage`, not in the browser. M12 (2026-07-14) adds the **Lint** skill (deterministic checks + a two-stage `fast`-screen/`strong`-judge LLM pass) and makes the usage-metering ledger visible through a spend surface. See [02-system](02-system.md)/[03-backend](03-backend.md) for the server surface this doc assumes. Organizing principle: **one harness, N skills** — every agent behavior in the product is a versioned skill document executed by the same runtime (now server-side). (Pattern lineage: research-os `workflows/*.md` playbooks, llm_wiki skills, Claude Code skills.)*
 
 ## September 7, 2026: durable quick-search conversations
 
@@ -52,9 +52,6 @@ pdf.js extraction in a child process without provider credentials.
 `/api/reviews/*` exposes approval, snapshots, cancel/resume, versioned edits,
 revision, exports and PDF input. Conversations retain report links automatically;
 KB insertion is a separate undoable mutation. No implicit user-memory writes occur.
-See the [plan](../superpowers/plans/2026-09-07-personalized-literature-review.md),
-[historical feasibility record](../testing/2026-09-07-literature-review-foundation.md)
-and [current verification](../testing/2026-09-07-deep-review-integration.md).
 
 ## Skills
 
@@ -112,7 +109,7 @@ The browser never holds a provider key, never runs an orchestrator, and never re
 
 Additions for the two new skills: **Spark** gets `vault.read/search/list`, `papers.search/citations`, `vault.propose_changeset` (idea pages), `user.flag`. **Companion** gets `vault.read/search/list`, `events.query`, `trending.get`, `user.flag` — read-only + flagging; it deep-links to other skills rather than invoking them itself.
 
-**`trending.get` / Feed integration deferred (reframed 2026-07-14):** the `trending.get` tool and feeding trending output into the Feed Skill's stage-1 candidates are **not built in v1**. M10 shipped a personalized, self-contained `/trending` dashboard (own retrieval, own cache at `.scispark/trending/dashboard.json`); wiring its output back into Feed candidates is a noted, deferred follow-up (see `docs/superpowers/specs/2026-07-14-m10-trending-dashboard-design.md`, "Out of scope (v1)").
+**`trending.get` / Feed integration deferred (reframed 2026-07-14):** the `trending.get` tool and feeding trending output into the Feed Skill's stage-1 candidates are **not built in v1**. M10 shipped a personalized, self-contained `/trending` dashboard (own retrieval, own cache at `.scispark/trending/dashboard.json`); wiring its output back into Feed candidates is a noted, deferred follow-up.
 
 ## Safety contract (harness-enforced, never prompt-trusted)
 
@@ -147,7 +144,7 @@ Skills declare `fast` or `strong` per step — never model names. Settings map t
 
 ## Loop runtime (2026-07-19)
 
-The harness so far described *what* each skill does; this section covers the loop-engineering layer added on top — making runs observable, giving the M11 server a real heartbeat, and closing a couple of honesty gaps (silent re-spend, unattributed spend) the earlier design left open. Branch `loop/loop-engineering-hardening`; see `docs/superpowers/plans/2026-07-19-loop-engineering-hardening.md` for the task-by-task build log.
+The harness so far described *what* each skill does; this section covers the loop-engineering layer added on top — making runs observable, giving the M11 server a real heartbeat, and closing a couple of honesty gaps (silent re-spend, unattributed spend) the earlier design left open. Branch `loop/loop-engineering-hardening`.
 
 **Orchestrator run ledger.** Every orchestrator invocation — feed refresh, trending refresh, consolidation, ingest, both lint modes, Deep Spark, enrich — now leaves a durable outcome record in `.scispark/runs/ledger.jsonl` (`src/lib/runs/ledger.ts`): `{ts, orchestrator, trigger, status, reason?, costUsd?, meta?}`, where `status` is one of `ok | degraded | failed | skipped` and `trigger` is `user` (an `/api/skills/*` route call) or `schedule` (the heartbeat below). Every call site is wrapped in the shared `withLedger(storage, {orchestrator, trigger}, fn)` helper: it runs `fn`, records whatever status/reason/cost `fn` returns, and — on a thrown error — records `failed` with the error's message before rethrowing unchanged, so a crash is never lost from the trail. `recordOrchestratorRun` itself never throws (storage failures are caught and `console.warn`'d) and serializes writes per-`VaultStorage` instance with the same write-queue mutex pattern as `src/lib/events/log.ts`. `readLedger` returns the most recent records newest-first, tolerating corrupt lines. This is the substrate the acceptance metric, the spend panel's "Recent runs" list, and the heartbeat's own gating all read from.
 

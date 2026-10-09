@@ -361,7 +361,7 @@ describe("handleFetchRelay", () => {
 
 // Pinned regression tests for SSRF vectors that the M3 Task 9 security
 // review probe-verified as SAFE but were not part of the committed suite
-// (see "## Review" in .superpowers/sdd/m3-task-9-report.md). These lock the
+// (found in review). These lock the
 // behavior in so a future change (e.g. swapping WHATWG `new URL` for a
 // hand-rolled parser, or adding header passthrough) can't silently reopen
 // the hole with a green suite.

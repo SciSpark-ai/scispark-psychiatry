@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Task 11 gate (see .superpowers/sdd/task-11-brief.md Step 2): given a
+// Task 11 gate: given a
 // `status: ingested` paper page — the wiki page an ingest run wrote, body
 // carrying the LLM-authored synthesis — PaperSynthesis renders that body
 // (reusing markdown-preview's renderMarkdown/preprocessWikilinks, so

@@ -1,6 +1,6 @@
 # System Design (Layer 2)
 
-*Status: approved 2026-07-11; runtime model **superseded 2026-07-14 (M11, "local-runtime pivot")** — implementation-complete on branch `m11-local-runtime`, not yet merged. Tong: "the browser is only for showing UI; runtime is on user." v1 is a **local app**: a Next.js server running on the user's own machine owns the runtime (vault on disk, agent harness, BYOK keys); the browser is UI-only. The Vercel-hosted deployment described in [03-backend](03-backend.md) is now a documented future tier, not the v1 runtime. See `docs/superpowers/specs/2026-07-14-m11-local-runtime-design.md` for the full design, [03-backend](03-backend.md) for the server surface, [04-agent-harness](04-agent-harness.md) for agent internals.*
+*Status: approved 2026-07-11; runtime model **superseded 2026-07-14 (M11, "local-runtime pivot")** — implementation-complete on branch `m11-local-runtime`, not yet merged. Tong: "the browser is only for showing UI; runtime is on user." v1 is a **local app**: a Next.js server running on the user's own machine owns the runtime (vault on disk, agent harness, BYOK keys); the browser is UI-only. The Vercel-hosted deployment described in [03-backend](03-backend.md) is now a documented future tier, not the v1 runtime. See [03-backend](03-backend.md) for the server surface, [04-agent-harness](04-agent-harness.md) for agent internals.*
 
 ## Architecture overview
 

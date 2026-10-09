@@ -18,8 +18,7 @@ import { buildIdeaPage } from "./idea-page"
 // Skill: one `strong`-tier structured call producing 2-3 vault-grounded idea
 // seeds. Pure LLM-calling unit (blessed pattern, docs/design/04-agent-harness.md)
 // — `runQuickSpark` below owns storage/vault assembly. Vault-only: no
-// retrieval, no scoop-check (design delta vs. Deep Spark — see
-// docs/superpowers/plans/2026-07-13-m9-spark.md Task 2).
+// retrieval, no scoop-check (design delta vs. Deep Spark — M9 Task 2).
 // ---------------------------------------------------------------------------
 
 export const SeedSchema = z.object({

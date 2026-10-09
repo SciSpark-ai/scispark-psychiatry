@@ -27,7 +27,7 @@ import type { SearchFn } from "../grounding"
  *
  * Makes real network calls (arXiv + OpenAlex + the LLM endpoint) and spends
  * real money — Deep Spark alone runs 5-9 strong-tier calls — never runs in
- * CI. Per M9 design (docs/superpowers/plans/2026-07-13-m9-spark.md Task 9),
+ * CI. Per the M9 design (Task 9),
  * these schemas use only enums/arrays/strings (no numeric-constraint zod
  * keywords), so the M5 live gate's GMI structured-output constraint-keyword
  * stripping suffices here too; if the intermittent whole-`output_config`

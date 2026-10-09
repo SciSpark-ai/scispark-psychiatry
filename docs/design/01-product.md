@@ -32,7 +32,7 @@ Researchers and research-adjacent professionals who need to stay current in one 
 
 ## Entry flow
 
-**v1 (reframed 2026-07-14):** there is no public/anonymous trending page or marketing-capture step in v1 — trending was reframed from a public funnel to a per-user personalized dashboard, which needs an onboarded local profile to have any fields to show. The steps below describe the original public-landing/marketing-capture design, kept as the documented **v2 path** (see `docs/design/03-backend.md` and `docs/superpowers/specs/2026-07-14-m10-trending-dashboard-design.md`) for once a real backend + accounts exist:
+**v1 (reframed 2026-07-14):** there is no public/anonymous trending page or marketing-capture step in v1 — trending was reframed from a public funnel to a per-user personalized dashboard, which needs an onboarded local profile to have any fields to show. The steps below describe the original public-landing/marketing-capture design, kept as the documented **v2 path** (see `docs/design/03-backend.md`) for once a real backend + accounts exist:
 
 1. **[v2, deferred]** **Anonymous visitor** → lands on the **Trending page**: daily agent-written trend surveys per major field. Real content, zero setup — this is the live demo and the top of the funnel.
 2. Click **"Personalized home"** → conversational, agent-style onboarding (a few questions: fields, topics, role, reading habits) → creates a **local profile** as vault files on the user's own machine, owned by the local-runtime server (M11, 2026-07-14) — this is "registration"; there is no SciSpark server account, and the vault is real files on disk, not browser-internal storage.
@@ -57,8 +57,6 @@ The composer stays visible while conversation content scrolls. Source Settings
 opens in place. Deep literature review is now integrated as a distinct,
 explicitly approved preview mode with selective personal context, durable local
 jobs, bounded evidence search/checks and a versioned report beside the chat.
-See the [implementation plan](../superpowers/plans/2026-09-07-personalized-literature-review.md)
-and [verification record](../testing/2026-09-07-deep-review-integration.md).
 Live scientific-quality acceptance is still separate from feature integration.
 Retention in History and selective use as personal memory are separate permissions.
 

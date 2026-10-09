@@ -6,8 +6,7 @@ import { pubmedOrderedText } from "./pubmed-text"
 
 // Drift-verified 2026-07-12 against the live E-utilities "in-depth" manual
 // (https://www.ncbi.nlm.nih.gov/books/NBK25499/) plus live esearch/efetch
-// calls against eutils.ncbi.nlm.nih.gov (both HTTP 200). See
-// .superpowers/sdd/m3-task-6-report.md for the full drift-guard writeup.
+// calls against eutils.ncbi.nlm.nih.gov (both HTTP 200).
 const ESEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 const EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 const MAX_FIELDS = 5
