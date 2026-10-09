@@ -1,7 +1,6 @@
 # Reusable, feedback-aware paper recommendations
 
-Approved direction: 2026-09-04. Implementation and verification status is tracked
-in `project_memory.md`; this document is the contract, not a release claim.
+Approved direction: 2026-09-04. This document is the contract, not a release claim.
 
 ## Decision
 
