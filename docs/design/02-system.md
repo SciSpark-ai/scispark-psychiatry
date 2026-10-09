@@ -8,7 +8,7 @@
 ┌──────────────────────────────────┐          ┌──────────────────────────────────────────────────────────────┐
 │  Browser — UI ONLY                │          │  Local Next.js server (the runtime — runs on the user's own   │
 │  (Next.js app, forked from        │  fetch/  │  machine; `npm run dev` / `next start`, localhost)             │
-│  scispark-app-frontend)           │  SSE     │                                                                 │
+│  a frontend prototype)            │  SSE     │                                                                 │
 │   feed · digest · reader · wiki · │ ───────▶ │  Vault API        Skills API         Settings API               │
 │   chat · viz dashboard · review   │ ◀─────── │  /api/vault/*     /api/skills/*      /api/settings              │
 │   queue · settings                │          │  (file/list/       (feed, ingest,     (BYOK keys; GET           │
