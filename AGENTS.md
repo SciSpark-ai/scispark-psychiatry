@@ -31,7 +31,7 @@ and derives wiki, trend, and graph views from that vault.
 - `npx tsc --noEmit` — type-check without emitting files.
 
 Real-money live LLM tests are environment-gated and must not be run as ordinary
-CI/unit tests. See `CLAUDE.md` and the relevant milestone plan for the exact gate.
+CI/unit tests. See `CLAUDE.md` for the conventions of this fork.
 
 # Engineering Conventions
 
@@ -54,13 +54,13 @@ CI/unit tests. See `CLAUDE.md` and the relevant milestone plan for the exact gat
 ## Design System
 
 Read `design.md` before making visual or UI decisions. It is the canonical
-SciSpark brand contract derived from the user's local reference sheets and covers
+SciSpark brand contract and covers
 all product surfaces, fonts, colors, spacing, motion and logo usage. Preserve
 the current real UI; the editorial mockup is superseded. Use its
 semantic tokens and acceptance criteria; flag deviations during UI review.
-Changes to the approved direction require explicit user approval. Check its
+Changes to the approved direction require explicit maintainer approval. Check its
 implementation status: a documented target does not mean every existing screen
-has migrated. Original sheets and marketing exports are optional, gitignored
+has migrated. Original brand sheets and exports are optional, gitignored
 local material; preserve them when present. Preserve research interactions.
 
 <!-- BEGIN:nextjs-agent-rules -->
