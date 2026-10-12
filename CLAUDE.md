@@ -4,8 +4,8 @@
 
 SciSpark Psychiatry is a private, local-first literature feed and evidence workspace for psychiatry
 clinicians: it runs on the reader's own computer, in the browser, over a Markdown vault the reader owns.
-It is an independent, unofficial fork of the Apache-2.0 project SciSpark wiki
-(`SciSpark-ai/scispark_wiki`, forked at commit `435afcd`). For literature awareness only; it is not
+It is the psychiatry edition of SciSpark, built on the Apache-2.0 project SciSpark wiki
+(`SciSpark-ai/scispark_wiki`, taken at commit `435afcd`). It works on published literature only. For literature awareness only; it is not
 medical advice, and AI summaries can be wrong. See `README.md` for the full description and safety box.
 
 ## Run and test

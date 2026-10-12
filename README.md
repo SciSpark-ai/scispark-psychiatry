@@ -1,18 +1,59 @@
 # SciSpark Psychiatry
 
-A private, local-first literature feed and evidence workspace for psychiatry clinicians.
+The psychiatry edition of SciSpark: follow the research on the conditions and treatments you care about, and
+build your own evidence base from it.
 
-**An independent, unofficial fork of [SciSpark-ai/scispark_wiki](https://github.com/SciSpark-ai/scispark_wiki) (Apache-2.0). Not affiliated with or endorsed by the upstream project.**
-Forked at upstream commit `435afcd`. Every change made to an upstream file is recorded in
-[docs/psychiatry/CHANGES.md](docs/psychiatry/CHANGES.md); see also [NOTICE](NOTICE).
+SciSpark Psychiatry is built on [SciSpark wiki](https://github.com/SciSpark-ai/scispark_wiki), our general
+research workspace, and shares its design: both help you keep up with the literature and turn what you read
+into lasting knowledge. Use SciSpark wiki for knowledge management in any field. This edition is the
+clinical-facing one, adapted to psychiatry first and designed to extend to other specialties.
 
-> ### Read this first
->
-> - **For literature awareness only. This is not medical advice** and not a tool for deciding the care of a patient.
-> - **Study directions and summaries are an AI reading of abstracts and can be wrong.** Open the paper before relying on anything shown here.
-> - **Counts are the papers your own feed has listed, not all the evidence.** Papers are counted; nothing is pooled.
-> - **Do not enter patient information.** No guard against protected health information (PHI) is built: what you type is stored as you typed it, and what you ask is sent to your model provider.
-> - **Bring your own model key.** It is stored in plain text in the local vault (`.scispark/settings.json`). Anyone who can read that folder can read the key.
+## What is different in this edition
+
+**1. It follows clinical questions, not just topics.** You tell it the conditions, treatments and patient
+populations you care about. It tracks new studies on each and accumulates them into a per-condition picture
+of the evidence: which treatments have been studied, in how many papers, with what results.
+
+**2. It weighs clinical evidence.** For a clinician, the quality of a study matters as much as its result, so
+studies are not treated alike. Today each paper is graded by study design, its AI summary is checked against
+the abstract, and its result is sorted by direction (benefit, no benefit, mixed, safety). Our clinical
+evidence pipeline, [evidence_evaluator_cli](https://github.com/SciSpark-ai/evidence_evaluator_cli), goes
+further and is being integrated. For one study it:
+
+- identifies the study type and extracts the key variables (arms, outcomes, event counts, effect);
+- audits the statistics with deterministic code: Fragility Index, number needed to treat, post-hoc power;
+- assesses risk of bias in the domains of RoB 2.0, QUADAS-2 and GRADE;
+- compares the effect with the minimal clinically important difference for that outcome, where one is published;
+- writes a report that flags what needs a human check.
+
+**3. It is built for clinical-facing outputs.** Notes link to papers, conditions and treatments, tell you
+when new studies arrive on what you wrote about, and export with references. Templates for the outputs
+clinicians and residents actually produce (journal club outlines, evidence summaries on a clinical question,
+teaching material, comparisons against guidelines) are in progress.
+
+## Literature only
+
+SciSpark Psychiatry works entirely on published research. It never asks for, stores or processes patient or
+clinical data, and it is not a clinical decision tool. It helps you track the literature and build your own
+projects on it; clinical judgement stays with you.
+
+- **Not medical advice.** Study directions and summaries are an AI reading of abstracts and can be wrong.
+  Open the paper before relying on anything shown here.
+- **Do not enter patient information**, in notes or in questions. Nothing in the app needs it, and what you
+  type is stored as typed and sent to your model provider when you ask.
+- **Counts are the papers your own feed has listed, not all the evidence.** Papers are counted; nothing is pooled.
+- **Bring your own model key.** When you run it locally the key is stored in plain text in your vault
+  (`.scispark/settings.json`).
+
+## Status
+
+Under active development.
+
+| | |
+|---|---|
+| **Available now** | Literature feed for the topics you follow · per-condition evidence map · linked notes with references · runs locally with your own AI key · an [interactive preview](docs/preview/) |
+| **In progress** | Benchmarking and optimisation of the pipeline · reading PDFs you supply · integration of the clinical evidence pipeline · project templates |
+| **Planned** | A hosted version · filters by population and outcome · effect sizes and forest plots |
 
 ## Screenshots
 
@@ -41,8 +82,8 @@ The app runs on your own computer, in your browser. The side rail has these page
 | **What's new** | A feed built from PubMed for the conditions and treatments you follow under **My topics**. Each run plans the queries, keeps psychiatric records, drops what does not match, grades the study design, and writes an AI headline and one-sentence summary per paper, each checked against the abstract. A paper whose summary fails its checks is shown with its own title and the authors' conclusion. |
 | **Wiki** | One tab per condition you follow. **Treatments** are drawn on a map: across, the date of the most recent paper; up, the participants the papers state (log scale, with a band for "not stated"). A class zooms to its treatments; a treatment opens its study table. **Safety** papers are grouped by treatment. **Other research** lists the papers that name no treatment. A paper comparing two treatments counts for the treatment it tested; the other arm lists it as a comparison. |
 | **Notes** | Notes that save themselves and can link papers, conditions and treatments. A note shows how many new papers on its links arrived since your last edit, can be copied with its references, and can be taken to Ask. |
-| **Ask** | The upstream chat, with three modes (discuss, find papers, deep literature review). |
-| **Outputs** | The upstream projects list. |
+| **Ask** | SciSpark wiki's chat, with three modes (discuss, find papers, deep literature review). |
+| **Outputs** | Projects that group papers and notes; output templates are in progress. |
 | **Library** | Saved papers, Read later, History (earlier feed runs) and Saved chats. |
 
 A paper's own page shows the AI headline and summary, the abstract by section, an optional longer digest,
@@ -73,17 +114,15 @@ The checks that keep the model honest:
 `audit/recall.ts` counts, for a list of papers you know should appear, the stage at which each was lost.
 All wording a reader sees in this edition is in `src/lib/clinical/copy.ts`.
 
-## Status and limits
-
-An early build used by its author. Known and left:
+## Known limits
 
 - **Direction is one label per paper** (benefit, no benefit, mixed), read from the abstract. It is not an outcome-by-outcome reading.
 - **No effect sizes and no forest plots** on the Wiki. Nothing is pooled.
 - **Only about one new paper in five has open full text** (through PubMed Central, in one check of 25 recent papers); the rest are read from the abstract alone.
 - **Only what your feed listed is counted.** A treatment with no bubble may have a large literature the feed never saw.
 - **LaTeX is not rendered in notes**; a formula with `*` or backticks reads as emphasis or code in Preview.
-- **The first-run flow is still the upstream one**: Connect AI → the onboarding chat → add topics under **My topics** → **Refresh**. The onboarding chat asks upstream's general research questions.
-- **Upstream wording remains in places**: Ask's page is titled "Sparky", Outputs says "New project", the Library header has "Review inbox". Upstream pages this edition hides from the rail (Trending, Idea Spark, Graph) still exist at their addresses.
+- **The first-run flow is still the general one**: Connect AI → the onboarding chat → add topics under **My topics** → **Refresh**. The onboarding chat asks SciSpark wiki's general research questions.
+- **General-workspace wording remains in places**: Ask's page is titled "Sparky", Outputs says "New project", the Library header has "Review inbox". Pages this edition hides from the rail (Trending, Idea Spark, Graph) still exist at their addresses.
 - **Costs depend on your model.** Every refresh makes model calls with your key; the provider's bill is the authority, and no figure is promised here.
 - **Local profiles are not access control.** There are no passwords and nothing is encrypted. Run it on your own machine, on the loopback address only.
 - English only. The term pack covers psychiatry only.
@@ -91,7 +130,7 @@ An early build used by its author. Known and left:
 ## Run it locally
 
 Requirements: **Node.js 20.9 or later**, npm, and a model provider key of your own (or a signed-in Codex or
-Claude Code CLI, as upstream supports).
+Claude Code CLI, as SciSpark wiki supports).
 
 ```bash
 git clone <your-fork-url>
@@ -124,9 +163,9 @@ profiles gone too). This removes everything, including the stored key. The next 
 | `SCISPARK_VAULT` | The vault folder. Default `~/SciSpark/vault`. |
 | `SCISPARK_PROFILES_DIR` | The profile registry folder. Default `.scispark-profiles` beside the vault. |
 | `NCBI_API_KEY` | Optional. Raises PubMed's rate limit for your own requests. |
-| `SCISPARK_SCHEDULER` | Optional upstream background timer. Leave unset: refresh by hand. |
+| `SCISPARK_SCHEDULER` | Optional background timer. Leave unset: refresh by hand. |
 
-`OPENALEX_MAILTO`, `OPENALEX_API_KEY`, `UNPAYWALL_EMAIL` and `S2_API_KEY` are optional upstream settings
+`OPENALEX_MAILTO`, `OPENALEX_API_KEY`, `UNPAYWALL_EMAIL` and `S2_API_KEY` are optional SciSpark wiki settings
 this edition does not need: the feed reads PubMed only. The model key is not an environment variable; it is
 entered in Settings.
 
@@ -149,23 +188,28 @@ Being measured; numbers will be added here with their method and limits.
 
 ## Credits and licence
 
-This is a fork. Most of the application is the work of the upstream project:
+SciSpark Psychiatry is part of SciSpark.
 
-- **[SciSpark](https://github.com/SciSpark-ai/scispark_wiki)** by Tong Shan and contributors, Apache-2.0. The
-  app shell, vault, wiki, chat, projects, paper sources and model layer are upstream's. Upstream's own
-  documentation is kept unchanged in [docs/](docs/) and describes the upstream app, not this edition.
+- **[SciSpark wiki](https://github.com/SciSpark-ai/scispark_wiki)** by Tong Shan and contributors is the
+  foundation: the app shell, vault, wiki, chat, projects, paper sources and model layer. Its documentation is
+  kept in [docs/](docs/) and describes the general workspace.
+- **Psychiatry edition** by Linjing Jiang: the clinical feed pipeline and its checks, the psychiatry term
+  pack, the evidence map, notes, and the clinical evidence pipeline
+  ([evidence_evaluator_cli](https://github.com/SciSpark-ai/evidence_evaluator_cli), MIT).
+- SciSpark wiki in turn builds on open work that we gratefully acknowledge, as it does in its own README:
+  [LLM Wiki](https://github.com/nashsu/llm_wiki) and
+  [Andrej Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
+  (the persistent, linked wiki); [PaperFlow](https://github.com/OpenRaiser/PaperFlow) and
+  [PAHF](https://github.com/facebookresearch/PAHF) (design references for recommendation and feedback).
 - **[Ai2 ScholarQA](https://github.com/allenai/ai2-scholarqa-lib)**, Allen Institute for AI, Apache-2.0.
-  Upstream's `src/lib/review/scholarqa.ts` is a TypeScript adaptation of its pipeline; see
+  `src/lib/review/scholarqa.ts` is a TypeScript adaptation of its pipeline; see
   [third_party/scholarqa/NOTICE](third_party/scholarqa/NOTICE) and its [LICENSE](third_party/scholarqa/LICENSE).
 - **[Microsoft ResearchStudio](https://github.com/microsoft/ResearchStudio)**, MIT. Its ideation-pattern cards
   are bundled unmodified; see [src/lib/spark/pattern-cards/NOTICE.md](src/lib/spark/pattern-cards/NOTICE.md)
   and its [LICENSE](src/lib/spark/pattern-cards/LICENSE).
-- PubMed and PubMed Central (U.S. National Library of Medicine) for the records the feed reads. This project
-  is not affiliated with or endorsed by them either.
+- Bibliographic records come from PubMed and PubMed Central (U.S. National Library of Medicine). SciSpark is
+  not affiliated with or endorsed by the NLM.
 
-What this fork added is in `src/lib/clinical/`, `src/components/clinical/`, `src/app/api/clinical/`,
-`packs/` and `docs/psychiatry/`; what it changed in upstream files is in
-[docs/psychiatry/CHANGES.md](docs/psychiatry/CHANGES.md).
-
-Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE). The software is provided
-"as is", without warranties or conditions of any kind.
+Copyright 2026 SciSpark contributors. Licensed under the [Apache License, Version 2.0](LICENSE), except where
+otherwise noted; third-party components keep their own licences and notices. See [NOTICE](NOTICE). The
+software is provided "as is", without warranties or conditions of any kind.
