@@ -85,7 +85,7 @@ Current limits are listed in [How it works](docs/psychiatry/how-it-works.md#know
 You need Node.js 20.9 or later and an AI provider key of your own.
 
 ```bash
-git clone <your-fork-url>
+git clone https://github.com/SciSpark-ai/scispark-wiki-psychiatry.git
 cd scispark-wiki-psychiatry
 npm ci
 npm run dev
