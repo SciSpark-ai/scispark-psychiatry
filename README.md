@@ -13,39 +13,48 @@ to psychiatry first and designed to extend to other clinical specialties.
 
 ## Who it is for
 
-Psychiatrists, residents and other clinicians who need to stay current on specific conditions and treatments,
-and who prepare evidence for their own work: journal clubs, case conferences, teaching, service decisions.
-It suits you if you follow a handful of clinical questions closely and have little time to read.
+For psychiatrists and residents who follow a few clinical questions closely and need to turn the literature
+into their own work.
 
 ## What you can use it for
 
-**1. Follow your clinical questions.** Tell SciSpark Psychiatry the conditions, treatments and patient
-populations you care about. It retrieves the most recent and relevant papers on each question, and
-accumulates them into a knowledge base for each condition: which treatments were studied, in how many
-papers, with what results.
+**1. Follow your clinical questions.** Pick the conditions, treatments and patient groups you care about.
+SciSpark Psychiatry finds the new papers on each and keeps them together by condition.
 
-**2. Weigh the evidence.** For a clinician, the quality of a study matters as much as its result, so studies
-are not treated alike. Each paper is marked by its study design (randomised trial, observational study,
-systematic review and so on) and its sample size, and every AI output is checked against the paper it came
-from. Our clinical evidence pipeline,
-[evidence_evaluator_cli](https://github.com/SciSpark-ai/evidence_evaluator_cli), goes further and is being
-integrated: an assessment of each study's type, sample size, risk of bias, statistical power and effect size,
-with a quality score and a detailed report, so you can judge the study yourself.
+**2. Weigh the evidence.** Not all studies count the same. Each paper shows its study design and sample size,
+and every AI summary is checked against the paper.
 
-**3. Get clinical work done.** A project space built for clinical outputs: preparing a journal club, an
-evidence summary or report on a clinical question, teaching material, a comparison against guidelines. Your
-notes link to papers, conditions, treatments and projects, cite the papers you have stored or searched, and
-export with references. Notes are available now; project templates are in progress.
+**3. Turn evidence into outputs.** Write notes that cite your papers, then use them for a journal club, an
+evidence summary, teaching, or a comparison with guidelines.
 
-## Highlights
+## Key features
 
-- **Checked AI.** A number in a summary must be printed in the abstract. A sample size must be tied to
-  people. "Was associated with" is not counted as a benefit outside trials and reviews.
-- **An evidence map per condition.** Treatments grouped by class, placed by recency and total participants,
-  coloured by what the studies found. Open one to see every study behind it.
-- **Notes that stay current.** A note tells you when new papers arrive on the condition or treatment it is about.
-- **Private by design.** It runs on your own computer with your own AI key. Your library and notes are plain
-  files you own.
+**What's new** — your research feed
+- New papers on the topics you follow, leading journals first
+- Study-design tag and a one-sentence summary of the main finding on every paper
+- An AI overview of what the new papers found, per topic
+- Open a paper for its structured abstract and a longer digest
+
+**Wiki** — your evidence base, by condition and treatment
+- A map of the treatments studied: how recent, how many participants, what was found
+- Every study behind a treatment, with design, sample size, comparison and result
+- Safety findings listed separately
+
+**Notes** — with citations and backlinks
+- Cite papers and link conditions or treatments as you write
+- See your notes on the papers and treatments they mention
+- Get told when new papers arrive on what you wrote about
+- Export with references
+
+**Outputs** — projects with templates *(in progress)*
+- Journal club, evidence summary, teaching material, guideline comparison
+
+**Clinical evidence pipeline** *(in progress)*
+- A quality score and report for each study: design, sample size, risk of bias, statistical power, effect size
+- Built on [evidence_evaluator_cli](https://github.com/SciSpark-ai/evidence_evaluator_cli)
+
+**Private by design**
+- Runs on your computer with your own AI key. Your papers and notes are plain files you own.
 
 | What's new | Wiki | Notes |
 |---|---|---|
@@ -53,15 +62,12 @@ export with references. Notes are available now; project templates are in progre
 
 Pictures of the preview, with sample data.
 
-## Literature only
+## What it does not do
 
-SciSpark Psychiatry works entirely on published research. It never asks for, stores or processes patient or
-clinical data, and it is not a clinical decision tool. Clinical judgement stays with you.
-
-- **Not medical advice.** Summaries and study directions are an AI reading of abstracts and can be wrong.
-  Open the paper before relying on anything shown here.
-- **Do not enter patient information**, in notes or in questions.
-- **Not all the evidence.** It counts the papers your own feed has listed. Nothing is pooled.
+- It does not use patient data. It works on published research only. Do not enter patient information.
+- It does not give medical advice or make clinical decisions.
+- It does not cover all the evidence, only the papers your feed has found. Nothing is pooled.
+- Its AI summaries can be wrong. Open the paper before you rely on one.
 
 ## Status
 
@@ -91,21 +97,12 @@ Open <http://127.0.0.1:3000>, connect your AI in Settings, add the conditions an
 (`~/SciSpark/vault` by default). Settings and details are in
 [How it works](docs/psychiatry/how-it-works.md#running-it-locally-data-and-settings).
 
-## Credits and licence
+## Built on
 
-SciSpark Psychiatry is part of SciSpark.
+- [SciSpark wiki](https://github.com/SciSpark-ai/scispark_wiki), our general research workspace
+- [LLM Wiki](https://github.com/nashsu/llm_wiki) and [Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
+- [Ai2 ScholarQA](https://github.com/allenai/ai2-scholarqa-lib) and [Microsoft ResearchStudio](https://github.com/microsoft/ResearchStudio), included under their own licences
+- [PaperFlow](https://github.com/OpenRaiser/PaperFlow) and [PAHF](https://github.com/facebookresearch/PAHF), as design references
+- PubMed, PubMed Central and MeSH for papers and vocabulary; OpenAlex for journal information
 
-- **[SciSpark wiki](https://github.com/SciSpark-ai/scispark_wiki)** by Tong Shan and contributors: the
-  foundation (app shell, vault, wiki, chat, projects, paper sources, model layer).
-- **Psychiatry edition** by Linjing Jiang: the clinical feed pipeline and its checks, the psychiatry term
-  pack, the evidence map, notes, and the clinical evidence pipeline.
-- Open work SciSpark builds on: [LLM Wiki](https://github.com/nashsu/llm_wiki) and
-  [Karpathy's LLM-wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f),
-  [Ai2 ScholarQA](https://github.com/allenai/ai2-scholarqa-lib) (Apache-2.0, adapted code),
-  [Microsoft ResearchStudio](https://github.com/microsoft/ResearchStudio) (MIT, bundled cards),
-  [PaperFlow](https://github.com/OpenRaiser/PaperFlow) and [PAHF](https://github.com/facebookresearch/PAHF).
-- Records come from PubMed and PubMed Central (U.S. National Library of Medicine), which does not endorse
-  this project.
-
-Copyright 2026 SciSpark contributors. [Apache License 2.0](LICENSE); third-party components keep their own
-licences, see [NOTICE](NOTICE). Provided "as is", without warranty.
+Copyright 2026 SciSpark contributors. [Apache License 2.0](LICENSE); see [NOTICE](NOTICE).
