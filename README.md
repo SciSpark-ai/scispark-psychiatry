@@ -51,7 +51,6 @@ evidence summary, teaching, or a comparison with guidelines.
 
 **Clinical evidence pipeline** *(in progress)*
 - A quality score and report for each study: design, sample size, risk of bias, statistical power, effect size
-- Built on [evidence_evaluator_cli](https://github.com/SciSpark-ai/evidence_evaluator_cli)
 
 **Private by design**
 - Runs on your computer with your own AI key. Your papers and notes are plain files you own.
