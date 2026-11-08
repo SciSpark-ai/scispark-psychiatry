@@ -10,7 +10,7 @@
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash: "–", mdash: "—",
   minus: "−", plusmn: "±", times: "×", deg: "°", micro: "µ", alpha: "α",
-  beta: "β", gamma: "γ", delta: "δ", ge: "≥", le: "≤",
+  beta: "β", gamma: "γ", delta: "δ", ge: "≥", le: "≤", ne: "≠",
 }
 
 export function unescapeHtml(text: string): string {
@@ -29,7 +29,9 @@ export function unescapeHtml(text: string): string {
  * taken out and a different statement left behind (review finding, 2026-10-07).
  */
 const TAG = /<\/?(?:jats:[a-z-]+|i|b|u|em|strong|sub|sup|p|br|span|div|a|ul|ol|li|h[1-6]|sec|title|italic|bold|underline|sc|small|font|abstract|label|mml:[a-z]+|math)(?:\s[^<>]*)?\/?>/gi
-const stripHtml = (text: string) => unescapeHtml(text.replace(TAG, "")).replace(TAG, "")
+const BLOCK_TAG = /<\/?(?:jats:(?:p|sec|title|abstract|list|list-item)|p|br|div|ul|ol|li|h[1-6]|sec|title|abstract)(?:\s[^<>]*)?\/?>/gi
+const removeTags = (text: string) => text.replace(BLOCK_TAG, " ").replace(TAG, "")
+const stripHtml = (text: string) => removeTags(unescapeHtml(removeTags(text)))
 const DASHES = /[‐-―−─]/g
 const EXOTIC_SPACE = /[     　]/g
 
@@ -83,7 +85,8 @@ export function cleanTitle(title: string | undefined): string | undefined {
 export function cleanAbstract(abstract: string | undefined): string | undefined {
   if (!abstract) return abstract
   let text = stripHtml(abstract).replace(EXOTIC_SPACE, " ").replace(DASHES, "-")
-  text = text.replace(/^Abstract(?:[:.]\s*|\s+(?=[A-Z]))/i, "")
+  // Fold only the heading word: /i would also accept lowercase prose after it.
+  text = text.replace(/^[Aa][Bb][Ss][Tt][Rr][Aa][Cc][Tt](?:[:.]\s*|\s+(?=[A-Z]))/, "")
   text = fixSectionLabels(text)
   text = normaliseWhitespace(text)
   return text.length > 0 ? text : undefined

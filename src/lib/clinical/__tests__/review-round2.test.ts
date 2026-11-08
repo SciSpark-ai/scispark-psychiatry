@@ -21,8 +21,8 @@ describe("cleaning an abstract does not change what it says", () => {
     expect(cleanAbstract(text)).toBe(text)
     expect(cleanAbstract("Scores fell (p &lt; 0.05) in adults with BMI &gt; 30.")).toBe("Scores fell (p < 0.05) in adults with BMI > 30.")
   })
-  it("still takes real markup out", () => {
-    expect(cleanAbstract("We tested <i>CBT</i> and <sub>2</sub> doses.<br/>Scores fell in <jats:italic>both</jats:italic> groups and more text to pass.")).toBe("We tested CBT and 2 doses.Scores fell in both groups and more text to pass.")
+  it("removes inline markup and preserves a space at a line break", () => {
+    expect(cleanAbstract("We tested <i>CBT</i> and <sub>2</sub> doses.<br/>Scores fell in <jats:italic>both</jats:italic> groups and more text to pass.")).toBe("We tested CBT and 2 doses. Scores fell in both groups and more text to pass.")
   })
   it("leaves ordinary sentences that begin with a section word alone", () => {
     const text = "Adults were treated for 8 weeks. Participants were randomized to two groups. Results showed no difference between them. Findings suggest a class effect."

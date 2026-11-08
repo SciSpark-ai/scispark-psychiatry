@@ -29,6 +29,12 @@ describe("gradeStageA", () => {
     expect(grades.get("k1")).toMatchObject({ entryId: "w1", grade: 4, topicGrade: 4, quoteVerified: true, ungraded: false })
   })
 
+  it("requests temperature 0 for relevance grading", async () => {
+    const fast = fastOk([{ index: 0, entryId: "w1", grade: 4, topicGrade: 4, quote: "esketamine nasal spray or placebo" }])
+    await gradeStageA([trial], entries, [], opts(fast))
+    expect(fast.calls[0].req.temperature).toBe(0)
+  })
+
   it("zeroes a grade whose quote is not in the text", async () => {
     const fast = fastOk([{ index: 0, entryId: "w1", grade: 4, topicGrade: 4, quote: "showed significant remission at week four" }])
     const { grades } = await gradeStageA([trial], entries, [], opts(fast))

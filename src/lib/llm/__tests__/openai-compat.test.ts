@@ -91,6 +91,34 @@ describe("OpenAICompatProvider", () => {
     expect(result.stopReason).toBe("stop")
   })
 
+  it("sends a temperature only when the request sets one", async () => {
+    const unset = fakeFetch(200, OK_RESPONSE)
+    await new OpenAICompatProvider("openai", "sk-test", "https://api.openai.com/v1", unset.fn).complete("gpt-4o", { messages: [{ role: "user", content: "hi" }] })
+    expect(JSON.parse(String(unset.captured.init?.body))).not.toHaveProperty("temperature")
+
+    const zero = fakeFetch(200, OK_RESPONSE)
+    await new OpenAICompatProvider("openai", "sk-test", "https://api.openai.com/v1", zero.fn).complete("gpt-4o", { messages: [{ role: "user", content: "hi" }], temperature: 0 })
+    expect(JSON.parse(String(zero.captured.init?.body)).temperature).toBe(0)
+  })
+
+  it("asks once more without the temperature when the model refuses it, and not for another 400", async () => {
+    const refusal = { status: 400, body: { error: { message: "Unsupported value: 'temperature' does not support 0 with this model." } } }
+    const refused = sequencedFetch([refusal, { status: 200, body: OK_RESPONSE }])
+    const result = await new OpenAICompatProvider("openai", "sk-test", "https://api.openai.com/v1", refused.fn).complete("o-model", { messages: [{ role: "user", content: "hi" }], temperature: 0 })
+    expect(result.text).toBe("hello")
+    expect(refused.calls).toHaveLength(2)
+    expect(refused.calls[0].body).toHaveProperty("temperature", 0)
+    expect(refused.calls[1].body).not.toHaveProperty("temperature")
+
+    const other = sequencedFetch([{ status: 400, body: { error: { message: "context length exceeded" } } }])
+    await expect(new OpenAICompatProvider("openai", "sk-test", "https://api.openai.com/v1", other.fn).complete("gpt-4o", { messages: [{ role: "user", content: "hi" }], temperature: 0 })).rejects.toBeInstanceOf(LLMBadRequestError)
+    expect(other.calls).toHaveLength(1)
+
+    const single = sequencedFetch([refusal])
+    await expect(new OpenAICompatProvider("openai", "sk-test", "https://api.openai.com/v1", single.fn).complete("o-model", { messages: [{ role: "user", content: "hi" }], temperature: 0, singleAttempt: true })).rejects.toBeInstanceOf(LLMBadRequestError)
+    expect(single.calls).toHaveLength(1)
+  })
+
   it("sends Qwen3.8's documented hard non-thinking controls when the request disables thinking", async () => {
     const { fn, captured } = fakeFetch(200, OK_RESPONSE)
     const p = new OpenAICompatProvider("openai", "sk-test", "https://api.gmi-serving.com/v1", fn)

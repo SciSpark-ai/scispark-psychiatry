@@ -13,6 +13,12 @@ export interface LLMRequest {
   messages: LLMMessage[]
   maxTokens?: number
   /**
+   * Sampling temperature; 0 reduces sampling variation but does not guarantee identical answers.
+   * Left out, the model's own default applies. Only the OpenAI-compatible provider sends it; where a
+   * model refuses it, that provider asks once more without it.
+   */
+  temperature?: number
+  /**
    * Request a provider-supported reasoning mode. Providers that do not expose
    * such a control may ignore it; callers must not rely on prompt text alone
    * when a provider does support an explicit switch.

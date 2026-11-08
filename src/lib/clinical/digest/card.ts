@@ -7,6 +7,7 @@ import type { LLMSettings } from "../../llm/settings"
 import type { PaperRecord } from "../../papers/types"
 import type { VaultStorage } from "../../vault/storage"
 import type { Design } from "../types"
+import { overstated } from "../text/certainty"
 
 /**
  * A short headline and a one-sentence takeaway for a listed paper, written by the `fast` model from
@@ -17,6 +18,8 @@ import type { Design } from "../types"
  *   verbatim quote lost a quarter of the summaries to small copying differences.)
  * - No number may appear that the paper's text does not contain.
  * - Both texts must be short.
+ * - Neither may state an effect outright where the abstract reports an association, a comparison
+ *   without random allocation or without a control group, or a conclusion its authors hold back.
  *
  * A paper whose answer fails a check is asked for once more, with the reason. If it fails again it
  * has no digest, and the card falls back to the paper's own title and the authors' conclusion.
@@ -47,7 +50,7 @@ interface DigestInput {
 
 const SYSTEM_PROMPT = `You write card text that lets a busy psychiatrist scan new papers. Each paper comes with its title and its abstract split into numbered sentences. For each paper return:
 
-- "headline": at most 12 words, plain language, saying what the study found or, if it reports no result, what it examined. Name the treatment and the condition. Say the finding itself ("X lowered relapse more than Y"), not that something "was evaluated" or "was analysed". No hype, no advice.
+- "headline": at most 12 words, plain language, saying what the study found or, if it reports no result, what it examined. Name the treatment and the condition. Say the finding itself, not that something "was evaluated" or "was analysed", and say it no more firmly than the abstract does: "X lowered relapse more than Y" only for a randomized comparison whose authors state it plainly; otherwise "X was linked to lower relapse" or "X may lower relapse". No hype, no advice.
 - "takeaway": ONE full sentence, at most 35 words, giving the main result with its key numbers exactly as the abstract prints them, and the comparison group if there is one. If the abstract gives no result, say what was studied and that no result is reported.
 - "source": the number of the ONE abstract sentence your takeaway rests on.
 - "tags": 2 to 4 keywords a psychiatrist would search by, each one to three words copied from the title or abstract: the condition, the treatment, the population or the main outcome. No general words like "study" or "psychiatry".
@@ -55,13 +58,13 @@ const SYSTEM_PROMPT = `You write card text that lets a busy psychiatrist scan ne
 Rules:
 - Use only the title and the numbered sentences. Add nothing from outside knowledge.
 - Copy numbers exactly. Never calculate a new number (no differences, ratios or rounding) and never state a number that is not printed in the abstract.
-- Never turn an association into a causal claim. Keep the abstract's own level of certainty.
+- Never turn an association into a causal claim. Keep the abstract's own level of certainty, in the headline as much as in the takeaway: if the abstract says "was associated with", "may", "preliminary" or "requires confirmation", or the study had no random allocation or no control group, do not write "improved", "reduced", "lowered", "increased" or "effective" on its own. Keep the population the abstract studied; do not widen it.
 - Do not tell the reader what to do with a patient.
 - Return one entry per paper, using the paper's index. If a paper has a "problem" field, your previous answer for it was rejected for that reason: fix exactly that.`
 
 export const cardDigestSkill = defineSkill<DigestInput, z.infer<typeof DigestsSchema>>({
   name: "clinical-card-digest",
-  version: "3",
+  version: "4",
   run: (ctx, input) =>
     ctx.llmStructured(
       "fast",
@@ -174,6 +177,9 @@ export function checkDigest(answer: Pick<DigestAnswer, "headline" | "takeaway" |
   if (invented) return { reason: `number-not-in-text:${invented}` }
   const misplaced = misplacedNumber(takeaway, `${paper.title} ${paper.abstract ?? ""}`)
   if (misplaced) return { reason: `number-context:${misplaced}` }
+  const sentences = abstractSentences(paper.abstract)
+  const surer = overstated(headline, sentences) ?? overstated(takeaway, sentences)
+  if (surer) return { reason: `certainty:${surer}` }
   return { digest: { headline, takeaway, quote, tags: checkedTags(answer.tags ?? [], paper) } }
 }
 
@@ -185,6 +191,10 @@ function problemText(reason: string): string | undefined {
   if (kind === "too-long") return "The headline must be at most 12 words and the takeaway at most 35 words."
   if (kind === "empty") return "The headline and the takeaway must both be filled in."
   if (kind === "number-context") return `The number ${detail} was given to the wrong group or outcome. Give each number to the group and outcome the abstract gives it to.`
+  if (kind === "certainty") {
+    const why = detail === "association" ? "the abstract reports an association" : detail === "weak-design" ? "the study had no random allocation or no control group" : "the authors hold their conclusion back (\"may\", \"preliminary\", \"requires confirmation\")"
+    return `The headline or takeaway stated an effect outright ("improved", "reduced", "effective"), but ${why}. Say it as the abstract does: "was associated with", "was linked to" or "may".`
+  }
   if (kind === "not-about-this-paper") return "The headline and takeaway were not about this paper: they used words its title and abstract do not have. Check the index of each answer and write about that paper only."
   return undefined
 }

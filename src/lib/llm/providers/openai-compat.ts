@@ -25,6 +25,18 @@ export class OpenAICompatProvider implements LLMProvider {
   ) {}
 
   async complete(model: string, req: LLMRequest): Promise<LLMResult> {
+    try {
+      return await this.completeWithSchemaFallback(model, req)
+    } catch (e) {
+      // Some models take only their default temperature and answer a request that sets one with a 400.
+      if (req.temperature === undefined || req.singleAttempt || !(e instanceof LLMBadRequestError) || !/temperature/i.test(e.message)) throw e
+      const { temperature: _refused, ...rest } = req
+      void _refused
+      return this.completeWithSchemaFallback(model, rest)
+    }
+  }
+
+  private async completeWithSchemaFallback(model: string, req: LLMRequest): Promise<LLMResult> {
     if (!req.jsonSchema) {
       return this.send(model, req, "none")
     }
@@ -80,6 +92,7 @@ export class OpenAICompatProvider implements LLMProvider {
       messages,
       ...(req.onText ? { stream: true, stream_options: { include_usage: true } } : {}),
       ...(req.maxTokens ? { max_completion_tokens: req.maxTokens } : {}),
+      ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       ...qwenGenerationControls(model, req),
       ...(schemaMode === "native" && req.jsonSchema
         ? {

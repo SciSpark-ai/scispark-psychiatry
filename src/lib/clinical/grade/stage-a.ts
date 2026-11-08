@@ -68,6 +68,8 @@ export const stageASkill = defineSkill<StageAInput, z.infer<typeof AssessmentsSc
       "fast",
       {
         maxTokens: 8192,
+        // Reduce sampling variation; temperature 0 does not guarantee identical grades across runs.
+        temperature: 0,
         messages: [
           { role: "system", content: SYSTEM_PROMPT() },
           { role: "user", content: JSON.stringify({
