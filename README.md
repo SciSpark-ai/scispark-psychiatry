@@ -7,9 +7,7 @@ and shares its design. Both help you keep up with the literature and turn what y
 knowledge. Use SciSpark wiki for knowledge management in any field. This edition is clinical-facing, adapted
 to psychiatry first and designed to extend to other clinical specialties.
 
-**[Try the interactive preview](docs/preview/)** · [Run it locally](#run-it-locally) · [How it works](docs/psychiatry/how-it-works.md)
-
-<!-- TODO (owner): replace the preview link with its GitHub Pages address once Pages is on for docs/. -->
+**[Try the interactive preview](https://scispark-ai.github.io/scispark-wiki-psychiatry/)** · [Run it locally](#run-it-locally) · [How it works](docs/psychiatry/how-it-works.md)
 
 ## Who it is for
 
