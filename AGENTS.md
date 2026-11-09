@@ -1,9 +1,10 @@
 # Project Overview
 
-SciSpark Paper Manager is a local-first, AI-assisted research radar and personal
-knowledge-base application. It discovers and digests literature, stores a
-user-owned Markdown vault, supports grounded chat and research-idea generation,
-and derives wiki, trend, and graph views from that vault.
+SciSpark Psychiatry is the psychiatry edition of SciSpark, built on SciSpark
+wiki. It is a local-first literature feed and evidence workspace for psychiatry
+clinicians: it finds and checks new papers for the reader's clinical questions,
+stores a user-owned Markdown vault, and derives the wiki evidence map and notes
+from that vault. See `README.md` for the full description.
 
 # Tech Stack
 
