@@ -14,20 +14,20 @@
 
   <header class="hero">
     <div class="wrap">
-      <p class="edition">Psychiatry edition</p>
+      <p class="edition">Psychiatry edition of SciSpark</p>
       <h1>SciSpark Psychiatry</h1>
-      <p class="lede">For psychiatrists and residents who follow a few clinical questions closely and need to turn the literature into their own work.</p>
-      <ul class="points">
-        <li><strong>Follow your clinical questions</strong><span>Pick the conditions, treatments and patient groups you care about. SciSpark Psychiatry finds the new papers on each and keeps them together by condition.</span></li>
-        <li><strong>Weigh the evidence</strong><span>Not all studies count the same. Each paper shows its study design and sample size, and every AI summary is checked against the paper.</span></li>
-        <li><strong>Turn evidence into outputs</strong><span>Write notes that cite your papers, then use them for a journal club, an evidence summary, teaching, or a comparison with guidelines.</span></li>
-      </ul>
+      <p class="lede">A private literature feed and evidence workspace for psychiatrists and residents.</p>
       <div class="cta">
-        <a class="btn primary" href="https://github.com/SciSpark-ai/scispark-psychiatry" data-repo-link>View on GitHub</a>
-        <a class="btn" href="#run">Run it locally</a>
-        <a class="btn" href="#preview">Try the preview</a>
+        <a class="btn primary" href="#preview">Try the preview</a>
+        <a class="btn" href="https://github.com/SciSpark-ai/scispark-psychiatry" data-repo-link>View on GitHub</a>
+        <a class="btn ghost" href="#run">Run it locally</a>
       </div>
-      <p class="fork">The psychiatry edition of SciSpark, built on <a href="https://github.com/SciSpark-ai/scispark_wiki" rel="noreferrer">SciSpark wiki</a>, our general research workspace. Published research only: it does not use patient data and does not give medical advice. Under active development.</p>
+      <ul class="points">
+        <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7l1.5 1.5L8 6M4 13l1.5 1.5L8 12M4 19l1.5 1.5L8 18M11 7h9M11 13h9M11 19h9"/></svg></span><strong>Follow your questions</strong><span>New papers on the conditions and treatments you choose.</span></li>
+        <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v16M5 8h14M7 8l-3 6a3 3 0 0 0 6 0zM17 8l-3 6a3 3 0 0 0 6 0z"/></svg></span><strong>Weigh the evidence</strong><span>Study design, sample size and a checked AI summary on every paper.</span></li>
+        <li><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h9l4 4v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM9 10h6M9 14h6M9 17h3"/></svg></span><strong>Turn it into outputs</strong><span>Notes with citations for journal club, teaching and evidence summaries.</span></li>
+      </ul>
+      <p class="fork">Built on <a href="https://github.com/SciSpark-ai/scispark_wiki" rel="noreferrer">SciSpark wiki</a>. Published research only · not medical advice · under active development.</p>
     </div>
   </header>
 
@@ -37,7 +37,7 @@
         <div class="section-head">
           <div>
             <h2 id="preview-title">Interactive preview</h2>
-            <p class="section-lede">A read-only copy of three pages of the app, filled with sample papers from one real feed. Nothing is saved or sent, and no model is called.</p>
+            <p class="section-lede">Three pages of the app with sample papers. Read-only: nothing is saved or sent.</p>
           </div>
           <button type="button" class="btn primary" id="tour-start">Take the short tour</button>
         </div>
@@ -57,7 +57,7 @@
                 <button type="button" data-view="library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M9 4v16M13 6l5 13M13 6l2-1 5 13-2 1"/></svg><span>Library</span></button>
                 <button type="button" data-view="topics"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7l1.500 1.500L8 6M4 13l1.500 1.500L8 12M4 19l1.500 1.500L8 18M11 7h9M11 13h9M11 19h9"/></svg><span>My topics</span></button>
               </nav>
-              <p class="sidebar-note">Ask, Outputs, Library and My topics say what they do; they are not part of this preview.</p>
+              <p class="sidebar-note">Ask, Outputs, Library and My topics are not in this preview.</p>
             </aside>
             <div class="stage">
               <div class="view" id="view" tabindex="-1">
@@ -80,34 +80,34 @@
     <section class="section" id="how" aria-labelledby="how-title">
       <div class="wrap">
         <h2 id="how-title">How it works</h2>
-        <p class="section-lede">The feed is a fixed pipeline. A model is used in four places only (extra queries, grading, the card summary, the topic overview), and code checks what it returns.</p>
+        <p class="section-lede">A fixed pipeline. The model is used in four places, and code checks what it returns.</p>
         <ol class="steps">
-          <li><strong>Plan and retrieve</strong>PubMed queries are built from your topics through a psychiatry term pack. The fixed plan always runs; the model may only add queries. Records are merged and kept locally.</li>
-          <li><strong>Filter</strong>Psychiatric records are kept, by MeSH headings and the pack's words, and every drop is logged with its reason. PubMed's publication type decides the study design when there is one.</li>
-          <li><strong>Grade and select</strong>The model grades how well a paper matches each topic. A quote it gives must appear in the title or abstract. Recency, design and journal band rank the list; places are shared between topics.</li>
-          <li><strong>Summarise</strong>A headline and one summary sentence per paper. A paper whose summary fails its checks is shown with its own title and the authors' conclusion.</li>
-          <li><strong>Evidence pages</strong>The Wiki's three sections (Treatments, Safety, Other research) are built from the papers the feed has listed, with treatments matched to the term pack.</li>
+          <li><strong>Retrieve</strong>PubMed queries built from your topics</li>
+          <li><strong>Filter</strong>Psychiatric papers kept, every drop logged</li>
+          <li><strong>Grade</strong>Model rates each match; quotes checked</li>
+          <li><strong>Summarise</strong>Headline and summary, numbers checked</li>
+          <li><strong>Build the Wiki</strong>Evidence map by condition and treatment</li>
         </ol>
         <div class="two-col">
-          <div>
-            <h3>The checks that keep the model honest</h3>
-            <ul class="bullets">
-              <li><strong>Numbers must be printed in the abstract.</strong> A headline or summary with a number the paper's text does not contain is refused, asked for once more, then dropped.</li>
-              <li><strong>A summary rests on a sentence code looks up.</strong> The model names the number of an abstract sentence; it does not quote.</li>
-              <li><strong>A sample size must be tied to people.</strong> “180 patients” counts; “12 weeks in patients” and “42 of 180” do not.</li>
-              <li><strong>Association wording is not a benefit</strong> outside trials and reviews: “was linked to” or “predicted” shows nothing to have helped.</li>
-              <li><strong>Treatment names are matched to a term pack</strong> (names, synonyms, brands), not taken from the model's wording.</li>
+          <div class="panel">
+            <h3>Checks on the model</h3>
+            <ul class="checks">
+              <li>Numbers must appear in the abstract</li>
+              <li>Summaries rest on a real abstract sentence</li>
+              <li>A sample size must count people</li>
+              <li>Association is not shown as benefit</li>
+              <li>Treatments matched to a term pack</li>
             </ul>
           </div>
-          <div id="status">
-            <h3>Status and limits</h3>
-            <ul class="bullets">
-              <li><strong>An early build used by its author.</strong> For literature awareness only: not medical advice, and not a tool for deciding the care of a patient.</li>
-              <li><strong>Direction is one label per paper</strong> (benefit, no benefit, mixed), an AI reading of the abstract. It can be wrong. There are no effect sizes and no forest plots.</li>
-              <li><strong>Only what your feed listed is counted.</strong> A treatment with no bubble may have a large literature the feed never saw.</li>
-              <li><strong>Most papers are read from the abstract alone.</strong> In one check of 25 recent papers, about one in five had open full text.</li>
-              <li><strong>Do not enter patient information.</strong> No guard against protected health information is built; what you ask is sent to your model provider.</li>
-              <li><strong>Your model key is stored in plain text</strong> in the local vault, and local profiles are not access control. English only; the term pack covers psychiatry only.</li>
+          <div class="panel" id="status">
+            <h3>Limits</h3>
+            <ul class="limits">
+              <li>An early build; not medical advice</li>
+              <li>One direction label per paper; no effect sizes</li>
+              <li>Counts only the papers your feed listed</li>
+              <li>Mostly abstracts, rarely full text</li>
+              <li>Do not enter patient information</li>
+              <li>Your model key is stored in plain text, locally</li>
             </ul>
           </div>
         </div>
@@ -117,12 +117,12 @@
     <section class="section" id="run" aria-labelledby="run-title">
       <div class="wrap">
         <h2 id="run-title">Run it locally</h2>
-        <p class="section-lede">You need Node.js 20.9 or later, npm, and a model provider key of your own.</p>
+        <p class="section-lede">Needs Node.js 20.9+ and your own model provider key.</p>
 <pre><code>git clone https://github.com/SciSpark-ai/scispark-psychiatry.git
 cd scispark-psychiatry
 npm ci
 npm run dev</code></pre>
-        <p class="section-lede" style="margin-top:14px">Open <code>http://127.0.0.1:3000</code>. Then: Settings → Connect your AI, answer the onboarding chat, add the conditions and treatments you follow under My topics, and press Refresh on What's new. Every refresh makes model calls with your key. The README has the rest.</p>
+        <p class="section-lede run-next">Open <code>http://127.0.0.1:3000</code> → connect your AI in Settings → add topics → press Refresh. Each refresh uses your key.</p>
       </div>
     </section>
   </main>
@@ -131,7 +131,7 @@ npm run dev</code></pre>
     <div class="wrap">
       <p class="safety-line">Sample data. For literature awareness only — not medical advice. AI summaries can be wrong.</p>
       <p>Licensed under the Apache License, Version 2.0. Provided “as is”, without warranties or conditions of any kind. SciSpark Psychiatry is part of SciSpark: built on <a href="https://github.com/SciSpark-ai/scispark_wiki" rel="noreferrer">SciSpark wiki</a> by Tong Shan and contributors; psychiatry edition by Linjing Jiang. It includes parts adapted from Ai2 ScholarQA (Allen Institute for AI, Apache-2.0) and pattern cards from Microsoft ResearchStudio (MIT). The records are from PubMed (U.S. National Library of Medicine), which does not endorse this project.</p>
-      <p>The sample shows bibliographic facts and this product's own AI-written headlines, summaries and extracted fields for real papers; it contains no abstracts. The note is invented. <a href="https://github.com/SciSpark-ai/scispark-psychiatry" data-repo-link>Source and README</a></p>
+      <p>Sample papers are real; their headlines, summaries and fields are this product's AI output, with no abstracts. The note is invented. <a href="https://github.com/SciSpark-ai/scispark-psychiatry" data-repo-link>Source and README</a></p>
     </div>
   </footer>
 
